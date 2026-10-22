@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Install screenshot image verifier
+        run: python3 -m pip install 'Pillow==11.3.0'
       - name: Enable KVM
         shell: bash
         run: |
@@ -33,7 +35,7 @@ jobs:
           profile: pixel_5
           emulator-boot-timeout: 600
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
           script: bash scripts/emulator_preflight.sh
       - name: Keep actual emulator boot evidence
         if: always()
