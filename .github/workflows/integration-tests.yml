@@ -89,6 +89,7 @@ jobs:
           set -euo pipefail
           bash -n scripts/emulator_preflight.sh
           bash -n scripts/run_android_smoke.sh
+          bash -n scripts/publish_qa_draft.sh
       - name: Compile and test offline document snapshot core
         shell: bash
         run: |
