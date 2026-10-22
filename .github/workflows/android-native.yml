@@ -84,6 +84,11 @@ jobs:
           set -euo pipefail
           python3 scripts/apply_to_collabora.py --repo collabora --phase source
           python3 scripts/apply_templates.py --repo collabora
+          node --check collabora/browser/src/main.js
+          grep -q 'AQUAWORD_FOCUS_BOOTSTRAP_BEGIN' collabora/browser/src/main.js
+          grep -q 'AQUAWORD_FOCUS_CSS_BEGIN' collabora/browser/css/toolbar.css
+          grep -q 'AQUAWORD_ASYNC_DOCUMENT_CREATE' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
+          grep -q 'AQUAWORD_SAFE_SAF_PERMISSIONS' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           git -C collabora diff --check
       - name: Build LibreOffice native engine for Android arm64
         shell: bash
@@ -120,6 +125,9 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'AQUAWORD_PREEDIT_COPY' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
+          grep -q 'AQUAWORD_ASYNC_DOCUMENT_CREATE' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
+          grep -q 'AQUAWORD_SAFE_SAF_PERMISSIONS' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
+          grep -q 'AQUAWORD_FOCUS_BOOTSTRAP_BEGIN' collabora/browser/src/main.js
           test -s collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java
           test -s collabora/android/app/src/main/res/values-ar/aquaword_strings.xml
           test -s collabora/android/app/src/main/assets/aquaword/research_ar.docx
