@@ -140,11 +140,15 @@ jobs:
           for file in [
               root/'java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java',
               root/'java/org/libreoffice/androidapp/ui/AquaWordHistory.java',
-              Path('upstream-fixture/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java')
+              Path('upstream-fixture/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java'),
+              Path('upstream-fixture/android/app/src/debug/java/org/libreoffice/androidapp/qa/QaOpenDocumentActivity.java')
           ]:
               javalang.parse.parse(file.read_text(encoding='utf-8'))
               print('Java syntax valid:',file)
-          for file in [root/'res/values/strings.xml',root/'res/values-ar/aquaword_strings.xml',root/'res/menu/view_menu.xml']:
+          for file in [root/'res/values/strings.xml',root/'res/values-ar/aquaword_strings.xml',
+                       root/'res/menu/view_menu.xml',
+                       Path('upstream-fixture/android/app/src/debug/AndroidManifest.xml'),
+                       Path('upstream-fixture/android/app/src/debug/res/xml/aquaword_qa_file_paths.xml')]:
               ET.parse(file)
               print('Android resource XML valid:',file)
           PY
