@@ -239,7 +239,9 @@ def patch_writer_only_home(path: Path) -> bool:
             @Override
             public void onClick(View v) {
                 createNewFileInputDialog(getString(R.string.new_textdocument)
-                    + FileUtilities.DEFAULT_WRITER_EXTENSION, "*/*", CREATE_DOCUMENT_REQUEST_CODE);
+                    + FileUtilities.DEFAULT_WRITER_EXTENSION,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    CREATE_DOCUMENT_REQUEST_CODE);
             }
         });"""
     content = require(path).read_text(encoding='utf-8')
