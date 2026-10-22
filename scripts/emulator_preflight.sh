@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time proof Android CI actually boots; not AquaWord app functional testing.
+# Actual Android 15 graphical preflight. Not a test of AquaWord itself.
 set -euo pipefail
 mkdir -p emulator-evidence
 adb wait-for-device
@@ -8,42 +8,41 @@ test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = "35"
 adb shell getprop ro.product.cpu.abilist | tee emulator-evidence/abis.txt
 adb shell getprop ro.dalvik.vm.isa.arm64 | tee emulator-evidence/arm64-translator.txt
 adb shell getprop ro.build.version.release | tee emulator-evidence/android-version.txt
-# A boot-completed VM may have a black/off screen. Explicitly wake and show HOME.
-adb shell input keyevent KEYCODE_WAKEUP
-adb shell wm dismiss-keyguard || true
-adb shell input keyevent KEYCODE_HOME
-adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME || true
-sleep 7
-adb exec-out screencap -p > emulator-evidence/screen.png
-test -s emulator-evidence/screen.png
-python3 - <<'PY'
-from PIL import Image, ImageStat
-image = Image.open('emulator-evidence/screen.png').convert('RGB')
-stat = ImageStat.Stat(image.resize((100, 100)))
-print('Screen:', image.size, 'mean RGB:', stat.mean, 'variance:', stat.var)
-if max(stat.var) < 100 or max(stat.mean) < 10:
-    raise AssertionError('Android emulator framebuffer is black/blank; no visual proof')
-PY
-# Verify the target tablet's 16:10 logical viewport, not just a phone viewport.
-# Xiaomi Pad 5 has a 2560x1600 display. Emulator override is NOT a physical device.
+adb shell settings put system screen_off_timeout 600000 || true
+
+capture() {
+  local filename="$1"
+  local aspect="$2"
+  local attempt
+  for attempt in 1 2 3 4 5 6; do
+    echo "Capture $filename attempt $attempt"
+    adb shell input keyevent KEYCODE_WAKEUP || true
+    adb shell wm dismiss-keyguard || true
+    # Android home can be black if software GPU composition is not ready.
+    # Launch a real Settings Activity to request a visible surface.
+    adb shell am start -a android.settings.SETTINGS >/dev/null 2>&1 || true
+    sleep 5
+    adb exec-out screencap -p > "$filename"
+    if [ -n "$aspect" ]; then
+      if python3 quality/check_screen.py "$filename" --aspect "$aspect"; then return 0; fi
+    else
+      if python3 quality/check_screen.py "$filename"; then return 0; fi
+    fi
+  done
+  echo "Android has no verifiable framebuffer after six attempts" >&2
+  return 1
+}
+
+capture emulator-evidence/screen.png ""
+
+# A 16:10 logical tablet display, matching Xiaomi Pad 5 resolution.
 adb shell wm size 2560x1600
 adb shell wm density 320
 adb shell cmd window set-user-rotation lock 0 || true
-adb shell input keyevent KEYCODE_HOME
-sleep 7
-adb exec-out screencap -p > emulator-evidence/tablet-16x10.png
-python3 - <<'PY'
-from pathlib import Path
-from PIL import Image, ImageStat
-file = Path("emulator-evidence/tablet-16x10.png")
-screen = Image.open(file).convert("RGB")
-w, h = screen.size
-print("Simulated tablet screenshot:", w, "x", h)
-print("Target geometry: 2560x1600, 16:10")
-if w < 1500 or h < 900 or not 1.58 < w/h < 1.62:
-    raise AssertionError(f"Not a visible 16:10 tablet screen: {w}x{h}")
-stats = ImageStat.Stat(screen.resize((100, 100)))
-if max(stats.var) < 100 or max(stats.mean) < 10:
-    raise AssertionError("Tablet screen is black or blank")
-PY
-printf 'PASS: Android 15 phone + tablet-size 16:10 nonblank images. Not app functional proof.\n' | tee emulator-evidence/result.txt
+if ! capture emulator-evidence/tablet-16x10.png 1.6; then
+  # Some images transpose a display override when portrait is locked.
+  adb shell wm size 1600x2560
+  adb shell cmd window set-user-rotation lock 1 || true
+  capture emulator-evidence/tablet-16x10.png 1.6
+fi
+printf 'PASS: Android 15 phone and tablet-size 16:10 UI; AquaWord APK NOT tested.\n' | tee emulator-evidence/result.txt
