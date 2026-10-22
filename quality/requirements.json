@@ -1,0 +1,296 @@
+{
+  "project": "AquaWord Android",
+  "schema_version": 1,
+  "release_policy": "NO_RELEASE_UNTIL_CRITICAL_PASS_AND_MAJOR_ISSUES_REVIEWED",
+  "reference": "Word Android layout + AquaWord Liquid Aurora; Xiaomi Pad 5 is primary device",
+  "requirements": [
+    {
+      "id": "APP-01",
+      "description": "Android APK installation and first launch",
+      "proof_type": "runtime",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "APP-02",
+      "description": "Android tablet 16:10 landscape editing layout",
+      "proof_type": "visual",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "APP-03",
+      "description": "Portrait phone responsive layout",
+      "proof_type": "visual",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-01",
+      "description": "Create editable DOCX using native Writer",
+      "proof_type": "runtime",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-02",
+      "description": "Open Arabic/English mixed DOCX",
+      "proof_type": "runtime",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-03",
+      "description": "Edit a paragraph and save then reopen unchanged",
+      "proof_type": "roundtrip",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-04",
+      "description": "Preserve Arabic RTL, English and page layout after save",
+      "proof_type": "roundtrip",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-05",
+      "description": "Create, edit and retain tables",
+      "proof_type": "roundtrip",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-06",
+      "description": "Insert and preserve an image",
+      "proof_type": "roundtrip",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-07",
+      "description": "Headings, fonts, styles, bullets, paragraph formatting",
+      "proof_type": "roundtrip",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-08",
+      "description": "Open/save ODT RTF TXT as supported by app",
+      "proof_type": "runtime",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-09",
+      "description": "Export PDF and inspect its pages",
+      "proof_type": "runtime",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-10",
+      "description": "Document print via Android print framework",
+      "proof_type": "runtime",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "FILE-11",
+      "description": "Read-only SAF import never corrupts original",
+      "proof_type": "runtime",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "SAFE-01",
+      "description": "Pre-edit safety copy and restore to new file",
+      "proof_type": "roundtrip",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "SAFE-02",
+      "description": "Autosave after changes and relaunch without loss",
+      "proof_type": "roundtrip",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "SAFE-03",
+      "description": "Recovery on killed Android process",
+      "proof_type": "roundtrip",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "SAFE-04",
+      "description": "Local complete document version history",
+      "proof_type": "runtime",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "UI-01",
+      "description": "Liquid Aurora visual match to approved reference",
+      "proof_type": "visual",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "UI-02",
+      "description": "Word Android-inspired tools with working actions",
+      "proof_type": "manual",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "UI-03",
+      "description": "Functional focus mode enter and exit",
+      "proof_type": "runtime",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "UI-04",
+      "description": "No visible dead or placeholder buttons",
+      "proof_type": "manual",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "UI-05",
+      "description": "Arabic UI and RTL navigation readable",
+      "proof_type": "visual",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "UI-06",
+      "description": "Dark/light and orientation transitions",
+      "proof_type": "visual",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "DOC-01",
+      "description": "Open and edit all four academic/medical DOCX templates",
+      "proof_type": "runtime",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "DOC-02",
+      "description": "Comments, tracked changes, footnotes and contents",
+      "proof_type": "roundtrip",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "DOC-03",
+      "description": "PDF annotations inside app",
+      "proof_type": "runtime",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "DOC-04",
+      "description": "Advanced references, citations and bibliography tools",
+      "proof_type": "runtime",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "AI-01",
+      "description": "Optional AI writing features (only with consent)",
+      "proof_type": "runtime",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "SEC-01",
+      "description": "No leaked keys or unintended internet dependency",
+      "proof_type": "manual",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "PERF-01",
+      "description": "Large DOCX usable without UI freezes/crashes",
+      "proof_type": "runtime",
+      "priority": "critical",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "PERF-02",
+      "description": "Tablet memory and battery impact acceptable",
+      "proof_type": "manual",
+      "priority": "major",
+      "verification": "NOT_VERIFIED",
+      "evidence": [],
+      "notes": ""
+    }
+  ]
+}
