@@ -1,7 +1,10 @@
-name: AquaWord Native Android (Manual Build)
+name: AquaWord Native Android (Internal CI)
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/android-native.yml'
 
 permissions:
   contents: read
@@ -12,7 +15,7 @@ concurrency:
 
 jobs:
   native-debug:
-    # Heavy native build; run only manually. Ordinary pushes run integration-tests.yml.
+    # Heavy internal native build; push trigger is limited to edits of this workflow.
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
