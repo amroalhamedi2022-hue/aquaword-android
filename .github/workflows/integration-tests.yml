@@ -49,7 +49,7 @@ jobs:
           set -euo pipefail
           PIN=2333344185931274f9c49d6c12a408cefcef6844
           mkdir -p upstream-fixture/engine
-          for file in browser/css/notebookbar.css browser/css/mobilewizard.css android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/appSettings.gradle.in android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java; do
+          for file in browser/css/notebookbar.css browser/css/mobilewizard.css android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/appSettings.gradle.in android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java android/app/src/main/res/menu/view_menu.xml android/app/src/main/res/values/strings.xml; do
             mkdir -p "upstream-fixture/$(dirname "$file")"
             curl --fail --location --silent --show-error \
               "https://raw.githubusercontent.com/CollaboraOnline/online.mirror/$PIN/$file" \
