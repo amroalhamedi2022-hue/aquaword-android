@@ -55,9 +55,15 @@ fi
 # Open a real, generated Arabic research DOCX; this is not a mock document.
 DOCX="templates/generated/research_ar.docx"
 test -s "$DOCX"
-adb push "$DOCX" /sdcard/Download/aquaword-research-ar.docx >/dev/null
+# The first runtime test should avoid special external-storage grants.
+# Use run-as (only available for the debuggable CI APK) to place the DOCX
+# in AquaWord's own sandbox, then launch its real document editing Activity.
+adb push "$DOCX" /data/local/tmp/aquaword-research-ar.docx >/dev/null
+adb shell run-as "$PKG" mkdir -p files
+adb shell run-as "$PKG" cp /data/local/tmp/aquaword-research-ar.docx files/aquaword-research-ar.docx
+adb shell run-as "$PKG" ls -l files/aquaword-research-ar.docx | tee "$ARTIFACTS/document-inside-app.txt"
 adb shell am start -W -a android.intent.action.VIEW \
-  -d 'file:///sdcard/Download/aquaword-research-ar.docx' \
+  -d "file:///data/user/0/$PKG/files/aquaword-research-ar.docx" \
   -t "$MIME" \
   -n "$PKG/$EDITOR" \
   2>&1 | tee "$ARTIFACTS/editor-start.txt"
@@ -69,8 +75,13 @@ adb shell uiautomator dump /sdcard/aquaword-editor.xml >/dev/null 2>&1 || true
 adb pull /sdcard/aquaword-editor.xml "$ARTIFACTS/editor-ui.xml" >/dev/null 2>&1 || true
 adb logcat -d -v time > "$ARTIFACTS/editor-logcat.txt"
 adb shell dumpsys activity activities > "$ARTIFACTS/editor-activity.txt"
+adb shell dumpsys activity top > "$ARTIFACTS/editor-top.txt"
 adb shell pidof "$PKG" > "$ARTIFACTS/editor-process.txt" || {
   echo "App process terminated during DOCX open" >&2
+  exit 1
+}
+grep -E 'mResumedActivity|topResumedActivity' "$ARTIFACTS/editor-activity.txt" | grep -Fq "$EDITOR" || {
+  echo "Editor Activity is not actually resumed after opening the DOCX" >&2
   exit 1
 }
 grep -Fq "$EDITOR" "$ARTIFACTS/editor-activity.txt" || {
