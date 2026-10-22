@@ -29,6 +29,16 @@ class WebviewProofTests(unittest.TestCase):
             bad[key] = False if key != "docType" else "spreadsheet"
             self.assertFalse(probe.proves_writer_ready(bad),key)
 
+    def test_focus_mode_requires_real_reversible_toggle(self):
+        functional={"focusModeFunctional": True, "entered": True,
+                    "exited": True, "pageKeptVisible": True}
+        self.assertTrue(probe.focus_mode_ready(functional))
+        for key in list(functional):
+            invalid=functional.copy()
+            invalid[key]=False
+            self.assertFalse(probe.focus_mode_ready(invalid),key)
+        self.assertFalse(probe.focus_mode_ready({}))
+
     def test_cdp_errors_are_not_silently_accepted(self):
         with self.assertRaisesRegex(RuntimeError, "failed"):
             probe.result_from_response({"error":{"code":-32000,"message":"target closed"}})
