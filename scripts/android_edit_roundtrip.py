@@ -45,7 +45,10 @@ def check_document(payload: bytes) -> bool:
 
 
 def call(*args, binary=False):
-    result = subprocess.check_output(["adb", *args], stderr=subprocess.STDOUT)
+    result = subprocess.check_output(
+        ["adb", *args],
+        stderr=None if binary else subprocess.STDOUT)
+    # Binary stdout must not be polluted with warnings from adb stderr.
     # Never strip potentially valid trailing bytes from a DOCX ZIP package.
     return result if binary else result.strip()
 
