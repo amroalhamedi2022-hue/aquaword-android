@@ -9,6 +9,9 @@
     var mounted = false;
     var active = false;
     var control = null;
+    // Respect the document UI language without depending on a translation server.
+    var isArabic = /^ar(?:-|$)/i.test(
+        document.documentElement.lang || navigator.language || '');
 
     function redraw() {
         window.requestAnimationFrame(function () {
@@ -22,8 +25,11 @@
         active = !!value;
         document.body.classList.toggle('aquaword-focus-active', active);
         control.setAttribute('aria-pressed', active ? 'true' : 'false');
-        control.setAttribute('aria-label', active ? 'Exit focus mode' : 'Enter focus mode');
-        control.setAttribute('title', active ? 'Exit focus mode' : 'Enter focus mode');
+        var accessibleName = isArabic ?
+            (active ? 'الخروج من وضع التركيز' : 'الدخول إلى وضع التركيز') :
+            (active ? 'Exit focus mode' : 'Enter focus mode');
+        control.setAttribute('aria-label', accessibleName);
+        control.setAttribute('title', accessibleName);
         control.textContent = active ? '\u2715' : '\u2922';
         redraw();
     }
