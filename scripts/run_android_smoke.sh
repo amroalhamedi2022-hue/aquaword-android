@@ -121,3 +121,33 @@ print(f"Visible Android UI difference: {change:.1f} average RGB units")
 PY
 printf '\nPASS: installed AquaWord, launched browser and editor, opened Arabic DOCX without immediate process death.\n' | tee "$ARTIFACTS/smoke-result.txt"
 printf 'NOT PROVEN: text rendering, save/reopen, menus, focus mode, long-term stability or real Xiaomi Pad 5 behavior.\n' >> "$ARTIFACTS/smoke-result.txt"
+
+# Attach first-hand ADB evidence to exactly the gates that this smoke proves.
+# Do not record formatting, visual match, save/reopen or template features as PASS.
+python3 - "$ARTIFACTS" <<'PY'
+import hashlib
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+root = Path(sys.argv[1])
+evidence = []
+for name in ("install.log", "installed-package.txt", "browser-screen.png",
+             "browser-activity.txt", "smoke-result.txt"):
+    path = root / name
+    evidence.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+receipt = {
+    "requirement_id": "APP-01",
+    "result": "PASS",
+    "tester": "GitHub Actions Android runtime harness (automated, NOT a human reviewer)",
+    "device_class": "emulator",
+    "device": "Android API 35 Google APIs x86_64 with arm64 translator",
+    "method": "ADB install, explicit Activity start, process/foreground and screenshot verification",
+    "observed": "Installed and launched an AquaWord browser and editor without immediate termination",
+    "time_utc": datetime.now(timezone.utc).isoformat(),
+    "evidence_files": evidence,
+}
+(root / "receipts.json").write_text(json.dumps([receipt], ensure_ascii=False, indent=2) + "\n")
+PY
+python3 quality/audit.py --evidence-dir "$ARTIFACTS" --report "$ARTIFACTS/required-vs-actual.md"
+
