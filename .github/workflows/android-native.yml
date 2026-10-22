@@ -87,6 +87,8 @@ jobs:
           node --check collabora/browser/src/main.js
           grep -q 'AQUAWORD_FOCUS_BOOTSTRAP_BEGIN' collabora/browser/src/main.js
           grep -q 'AQUAWORD_FOCUS_CSS_BEGIN' collabora/browser/css/toolbar.css
+          grep -q 'AQUAWORD_DEFAULT_DOCX' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java
+          test -s collabora/android/templates/untitled.docx
           grep -q 'AQUAWORD_ASYNC_DOCUMENT_CREATE' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_SAFE_SAF_PERMISSIONS' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           git -C collabora diff --check
