@@ -11,11 +11,11 @@ permissions:
 
 concurrency:
   group: aquaword-native
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   native-debug:
-    # One native build at a time; superseded builds lacking critical fixes are cancelled.
+    # One native build at a time; never cancel hours of native compilation on a push.
     # Heavy internal native build; push trigger is limited to edits of this workflow.
     runs-on: ubuntu-24.04
     timeout-minutes: 360
