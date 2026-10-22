@@ -90,9 +90,28 @@ class AquaWordIntegrationTests(unittest.TestCase):
                 open(uri);
     }
 """)
+        grant=('getContentResolver().takePersistableUriPermission(uri, ' +
+               'Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);')
+        activity.write_text(activity.read_text(encoding='utf-8') +
+                            '\n' + grant + '\n' + grant + '\n', encoding='utf-8')
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+    def test_saf_readonly_or_temporary_provider_supported(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        s=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        self.assertEqual(s.count('AQUAWORD_SAFE_SAF_PERMISSIONS'),1)
+        self.assertEqual(s.count('persistDocumentPermission(uri, data);'),2)
+        self.assertIn('Intent.FLAG_GRANT_READ_URI_PERMISSION',s)
+        self.assertIn('SecurityException | IllegalArgumentException',s)
+
+    def test_saf_upstream_drift_rejected(self):
+        p=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
+        p.write_text('class Changed {}',encoding='utf-8')
+        with self.assertRaises(M.PatchError):
+            M.patch_saf_permission_handling(p)
+
     def test_async_document_creation(self):
         self.run_phase('source')
         self.run_phase('source')
