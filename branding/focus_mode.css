@@ -1,0 +1,42 @@
+/* AQUAWORD_FOCUS_CSS_BEGIN
+   Keep the canvas interactive and a visible, accessible exit at all times. */
+#aquaword-focus-toggle {
+    position: fixed;
+    z-index: 2600;
+    inset-block-start: max(8px, env(safe-area-inset-top));
+    inset-inline-end: max(8px, env(safe-area-inset-right));
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(20, 128, 157, .2);
+    border-radius: 13px;
+    background: rgba(223, 247, 249, .9);
+    color: #0c4257;
+    font-size: 22px;
+    line-height: 1;
+    box-shadow: 0 4px 13px rgba(7, 57, 89, .12);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    touch-action: manipulation;
+}
+#aquaword-focus-toggle:focus-visible {
+    outline: 3px solid #007e9a;
+    outline-offset: 2px;
+}
+body.aquaword-focus-active #aquaword-focus-toggle {
+    background: rgba(9, 57, 80, .9);
+    color: #f3feff;
+}
+body.aquaword-focus-active #toolbar-up,
+body.aquaword-focus-active #toolbar-down,
+body.aquaword-focus-active #toolbar-wrapper,
+body.aquaword-focus-active #toolbar-hamburger,
+body.aquaword-focus-active #toolbar-mobile-back,
+body.aquaword-focus-active #document-titlebar,
+body.aquaword-focus-active #statusbar,
+body.aquaword-focus-active .cool-ruler {
+    display: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    #aquaword-focus-toggle { transition: none !important; }
+}
+/* AQUAWORD_FOCUS_CSS_END */
