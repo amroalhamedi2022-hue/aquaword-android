@@ -5,8 +5,8 @@
     z-index: 2600;
     inset-block-start: max(8px, env(safe-area-inset-top));
     inset-inline-end: max(8px, env(safe-area-inset-right));
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     border: 1px solid rgba(20, 128, 157, .2);
     border-radius: 13px;
     background: rgba(223, 247, 249, .9);
@@ -17,6 +17,8 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     touch-action: manipulation;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
 }
 #aquaword-focus-toggle:focus-visible {
     outline: 3px solid #007e9a;
