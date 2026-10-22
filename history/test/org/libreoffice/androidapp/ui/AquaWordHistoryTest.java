@@ -31,6 +31,17 @@ public class AquaWordHistoryTest {
                 root, new ByteArrayInputStream("saved writer revision".getBytes("UTF-8")),
                 "قصتي.docx", "content://new/document", "saved");
             check("saved".equals(savedVersion.kind), "saved checkpoint metadata lost");
+            AquaWordHistory.Snapshot matchingPreEdit = AquaWordHistory.capture(
+                root, new ByteArrayInputStream("saved writer revision".getBytes("UTF-8")),
+                "قصتي.docx", "content://new/document", "pre-edit");
+            check(!matchingPreEdit.file.equals(savedVersion.file),
+                    "saved and pre-edit versions must remain separately labeled");
+            AquaWordHistory.Snapshot matchingSavedAgain = AquaWordHistory.capture(
+                root, new ByteArrayInputStream("saved writer revision".getBytes("UTF-8")),
+                "قصتي.docx", "content://new/document", "saved");
+            check(matchingSavedAgain.file.equals(savedVersion.file),
+                    "matching saved revision should safely deduplicate");
+
             check("saved".equals(AquaWordHistory.list(root).stream()
                     .filter(x -> x.file.equals(savedVersion.file)).findFirst().get().kind),
                     "saved checkpoint not reloaded");
