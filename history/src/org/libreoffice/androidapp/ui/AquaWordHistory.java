@@ -99,7 +99,8 @@ public final class AquaWordHistory {
             for (Snapshot previous : readAll(dir)) {
                 if (!previous.displayName.equals(safeName) || !previous.sourceHash.equals(sourceHash))
                     continue;
-                if (previous.sizeBytes == length && previous.sha256.equals(newHash))
+                if (previous.sizeBytes == length && previous.sha256.equals(newHash)
+                        && verifyBytes(previous))
                     return previous;
                 break; // A changed document needs its own point-in-time copy.
             }
@@ -184,6 +185,21 @@ public final class AquaWordHistory {
                     total -= entry.sizeBytes;
                 }
             }
+        }
+    }
+
+    /** Do not deduplicate against a corrupted on-disk safety copy. */
+    private static boolean verifyBytes(Snapshot snapshot) {
+        if (!snapshot.file.isFile() || snapshot.file.length() != snapshot.sizeBytes)
+            return false;
+        MessageDigest checksum = digest();
+        try (DigestInputStream in = new DigestInputStream(
+                new FileInputStream(snapshot.file), checksum)) {
+            byte[] buffer = new byte[64 * 1024];
+            while (in.read(buffer) != -1) { /* verify stored original */ }
+            return hex(checksum.digest()).equals(snapshot.sha256);
+        } catch (IOException unreadable) {
+            return false;
         }
     }
 
