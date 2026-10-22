@@ -107,6 +107,177 @@ def patch_writer_only_home(path: Path) -> bool:
         raise PatchError(f'Unexpected Android New-document handler: {path}')
     return store(path, content)
 
+
+def patch_history_menu(path: Path) -> bool:
+    original = '<item android:id="@+id/action_open_file"'
+    marker = 'AQUAWORD_HISTORY_MENU'
+    content = require(path).read_text(encoding='utf-8')
+    if marker in content: return False
+    if content.count(original) != 1: raise PatchError('Upstream menu anchor changed')
+    injected = '''<!-- AQUAWORD_HISTORY_MENU -->
+    <item android:id="@+id/action_aquaword_history"
+        android:title="@string/aquaword_safety_copies"
+        app:showAsAction="never"/>
+    '''
+    return store(path, content.replace(original, injected + original))
+
+def patch_history_strings(path: Path) -> bool:
+    content = require(path).read_text(encoding='utf-8')
+    if 'name="aquaword_safety_copies"' in content: return False
+    if content.count('</resources>') != 1: raise PatchError('Upstream strings.xml unexpected format')
+    additions = '''    <!-- AquaWord local pre-edit recovery -->
+    <string name="aquaword_safety_copies">Safety copies</string>
+    <string name="aquaword_creating_safety_copy">Saving a safety copy before editing…</string>
+    <string name="aquaword_copy_failed">Safety copy could not be created</string>
+    <string name="aquaword_copy_failed_body">The original file can still be opened, but editing without a safety copy could risk losing previous content.</string>
+    <string name="aquaword_open_anyway">Open without backup</string>
+    <string name="aquaword_no_copies">No safety copies yet. A copy is created before opening a document for editing.</string>
+    <string name="aquaword_choose_snapshot">Choose a copy to restore as a new document</string>
+    <string name="aquaword_restore_success">Safety copy restored to a new file</string>
+    <string name="aquaword_restore_failure">Could not restore the selected safety copy</string>
+'''
+    return store(path, content.replace('</resources>', additions + '</resources>'))
+
+def patch_history_activity(path: Path) -> bool:
+    content = require(path).read_text(encoding='utf-8')
+    if 'AQUAWORD_PREEDIT_COPY' in content:
+        return False
+    field = '    private static final int OPEN_FILE_REQUEST_CODE = 43;'
+    if content.count(field) != 1: raise PatchError('Upstream activity field anchor changed')
+    content = content.replace(field, field + '''
+    // AQUAWORD_PREEDIT_COPY: recoverable pre-edit copies, not continuous autosave.
+    private static final int AQUAWORD_RESTORE_REQUEST_CODE = 4477;
+    private AquaWordHistory.Snapshot pendingAquaWordRestore;
+''')
+    original = '''        addDocumentToRecents(uri);
+
+        Intent i = getIntentToEdit(uri);
+        startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);'''
+    replacement = '''        addDocumentToRecents(uri);
+
+        final Intent i = getIntentToEdit(uri);
+        final String name = RecentFilesAdapter.getUriFilename(this, uri);
+        final AlertDialog progress = new AlertDialog.Builder(this)
+                .setTitle(R.string.aquaword_safety_copies)
+                .setMessage(R.string.aquaword_creating_safety_copy)
+                .setCancelable(false).create();
+        progress.show();
+        new Thread(() -> {
+            String problem = null;
+            try (InputStream data = getContentResolver().openInputStream(uri)) {
+                AquaWordHistory.capture(getFilesDir(), data, name);
+            } catch (Exception failure) {
+                problem = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
+            }
+            final String message = problem;
+            runOnUiThread(() -> {
+                progress.dismiss();
+                if (isFinishing() || isDestroyed()) return;
+                if (message == null) {
+                    startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
+                } else {
+                    new AlertDialog.Builder(this)
+                        .setTitle(R.string.aquaword_copy_failed)
+                        .setMessage(getString(R.string.aquaword_copy_failed_body) + "\\\\n" + message)
+                        .setPositiveButton(R.string.aquaword_open_anyway,
+                            (dialog, which) -> startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE))
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+                }
+            });
+        }, "AquaWordSafetyCopy").start();'''
+    if content.count(original) != 1: raise PatchError('Upstream editor open() anchor changed')
+    content = content.replace(original, replacement)
+    menu = '''        if (item.getItemId() == R.id.action_open_file) {
+            openDocument();
+            return true;
+        }'''
+    if content.count(menu) != 1: raise PatchError('Upstream menu handling anchor changed')
+    content = content.replace(menu, menu + '''
+        if (item.getItemId() == R.id.action_aquaword_history) {
+            showAquaWordHistory();
+            return true;
+        }''')
+    before = '    /** File name extensions for which an empty document template is bundled in the assets. */'
+    if content.count(before) != 1: raise PatchError('Upstream insertion anchor changed')
+    methods = '''    /** Lists app-private pre-edit safety copies; restore always creates a new file. */
+    private void showAquaWordHistory() {
+        final List<AquaWordHistory.Snapshot> snapshots;
+        try {
+            snapshots = AquaWordHistory.list(getFilesDir());
+        } catch (IOException failure) {
+            Toast.makeText(this, R.string.aquaword_restore_failure, Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (snapshots.isEmpty()) {
+            Toast.makeText(this, R.string.aquaword_no_copies, Toast.LENGTH_LONG).show();
+            return;
+        }
+        final String[] names = new String[snapshots.size()];
+        final java.text.DateFormat timeFormat = java.text.DateFormat.getDateTimeInstance();
+        for (int n = 0; n < snapshots.size(); ++n) {
+            AquaWordHistory.Snapshot snapshot = snapshots.get(n);
+            names[n] = snapshot.displayName + " — " +
+                timeFormat.format(new java.util.Date(snapshot.createdMillis));
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.aquaword_choose_snapshot)
+            .setItems(names, (dialog, which) -> {
+                pendingAquaWordRestore = snapshots.get(which);
+                Intent destination = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                destination.addCategory(Intent.CATEGORY_OPENABLE);
+                destination.setType("*/*");
+                destination.putExtra(Intent.EXTRA_TITLE, pendingAquaWordRestore.displayName);
+                startActivityForResult(destination, AQUAWORD_RESTORE_REQUEST_CODE);
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+'''
+    content = content.replace(before, methods + before)
+    activity_result = '''        switch (requestCode) {
+            case LO_ACTIVITY_REQUEST_CODE: {'''
+    restore = '''        switch (requestCode) {
+            case AQUAWORD_RESTORE_REQUEST_CODE: {
+                final AquaWordHistory.Snapshot item = pendingAquaWordRestore;
+                pendingAquaWordRestore = null;
+                if (resultCode != RESULT_OK || data == null || item == null || data.getData() == null)
+                    break;
+                final Uri target = data.getData();
+                new Thread(() -> {
+                    boolean success;
+                    try (OutputStream output = getContentResolver().openOutputStream(target, "w")) {
+                        AquaWordHistory.restore(item, output);
+                        success = true;
+                    } catch (Exception failure) {
+                        Log.e(LOGTAG, "AquaWord safety copy restore failed", failure);
+                        success = false;
+                    }
+                    final boolean finished = success;
+                    runOnUiThread(() -> {
+                        if (!isFinishing() && !isDestroyed())
+                            Toast.makeText(this, finished ? R.string.aquaword_restore_success :
+                                R.string.aquaword_restore_failure, Toast.LENGTH_LONG).show();
+                    });
+                }, "AquaWordRestore").start();
+                break;
+            }
+            case LO_ACTIVITY_REQUEST_CODE: {'''
+    if content.count(activity_result) != 1: raise PatchError('Upstream onActivityResult switch changed')
+    content = content.replace(activity_result, restore)
+    return store(path, content)
+
+def copy_history_source(repo: Path) -> bool:
+    src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
+    target = repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file():
+        if target.read_bytes() == src.read_bytes(): return False
+        raise PatchError('Conflicting pre-existing AquaWordHistory.java in upstream')
+    shutil.copyfile(src, target)
+    return True
+
 def copy_icons(repo: Path) -> int:
     icons = list(sorted((ROOT / 'branding/icons').rglob('aquaword_launcher.png')))
     if len(icons) != 5:
@@ -131,7 +302,9 @@ def source(repo: Path) -> None:
         repo/'android/app/build.gradle',
         repo/'android/app/src/main/AndroidManifest.xml',
         repo/'android/app/appSettings.gradle.in',
-        repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
+        repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java',
+        repo/'android/app/src/main/res/menu/view_menu.xml',
+        repo/'android/app/src/main/res/values/strings.xml'
     ]
     for item in targets:
         require(item)
@@ -141,6 +314,10 @@ def source(repo: Path) -> None:
     print('App icon:', patch_manifest_icon(targets[3]))
     print('App ID:', patch_app_settings_template(targets[4]))
     print('Writer-only new-document flow:', patch_writer_only_home(targets[5]))
+    print('Safety copy menu:', patch_history_menu(targets[6]))
+    print('Safety copy strings:', patch_history_strings(targets[7]))
+    print('Safety copy activity:', patch_history_activity(targets[5]))
+    print('History storage class:', copy_history_source(repo))
     print('Icons copied:', copy_icons(repo))
 
 def configured(repo: Path) -> None:
