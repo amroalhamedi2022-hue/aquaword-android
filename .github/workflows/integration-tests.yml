@@ -14,7 +14,7 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Avoid burning scarce private-repository runner minutes on superseded commits.
+# Avoid obsolete CI runs; this project now uses free public-repository runners.
 concurrency:
   group: aquaword-integration-${{ github.ref }}
   cancel-in-progress: true
@@ -88,14 +88,17 @@ jobs:
             history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java \
             history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java
           java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordHistoryTest
-      - name: Upload required-vs-verified audit
+      # Show acceptance report in the run itself; the account's
+      # Actions artifact storage is full, so avoid upload-artifact entirely.
+      - name: Attach acceptance matrix to GitHub run summary
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: AquaWord-Requirements-Audit
-          path: quality/actual-vs-required.md
-          if-no-files-found: warn
-          retention-days: 1
+        shell: bash
+        run: |
+          if test -f quality/actual-vs-required.md; then
+            cat quality/actual-vs-required.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'AquaWord acceptance matrix could not be generated.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Verify five launcher icons
         shell: bash
         run: |
