@@ -28,6 +28,10 @@ def run_test():
     paths=list(SOURCES.glob("*.docx"))
     if {p.stem for p in paths} != EXPECTED:
         raise AssertionError("Exactly four known AquaWord DOCX assets required")
+    rich=ROOT/"quality/fixtures/qa_rich_arabic.docx"
+    if not rich.is_file():
+        raise AssertionError("Rich Arabic/English/image/table fixture must be generated first")
+    paths.append(rich)
     with TemporaryDirectory(prefix="aquaword-libreoffice-test-") as directory:
         tmp=Path(directory)
         profile=(tmp/"lo-profile").as_uri()
@@ -57,6 +61,9 @@ def run_test():
                     raise AssertionError("Arabic text was lost on DOCX re-save")
                 if "البحث الأكاديمي" not in converted_arabic:
                     raise AssertionError("Arabic document title changed unexpectedly")
+            if original.stem=="qa_rich_arabic":
+                from check_rich_docx import validate_document
+                validate_document(converted.read_bytes())
             report.append({"name":original.name,
                            "size_input":original.stat().st_size,
                            "size_roundtrip":converted.stat().st_size,
