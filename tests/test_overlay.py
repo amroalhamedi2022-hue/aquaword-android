@@ -25,6 +25,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         make('browser/css/mobilewizard.css','.mobile-wizard {color: blue}')
         make('browser/src/main.js', "window.addEventListener('beforeunload', function () { });")
         make('browser/css/toolbar.css', '.toolbar { display: flex; }')
+        make('android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java',
+             'public static final String DEFAULT_WRITER_EXTENSION = ".odt";')
         make('android/app/build.gradle','''android {
  defaultConfig { resValue "string", "app_name", "${coAppName}" }
  buildTypes { debug { resValue "string", "app_name", "${coAppName} Debug" } }
@@ -93,10 +95,29 @@ class AquaWordIntegrationTests(unittest.TestCase):
         grant=('getContentResolver().takePersistableUriPermission(uri, ' +
                'Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);')
         activity.write_text(activity.read_text(encoding='utf-8') +
+                            '\n    extension = (requestCode == CREATE_DOCUMENT_REQUEST_CODE) ? "odt" : ((requestCode == CREATE_SPREADSHEET_REQUEST_CODE) ? "ods" : "odp");\n', encoding='utf-8')
+        activity.write_text(activity.read_text(encoding='utf-8') +
                             '\n' + grant + '\n' + grant + '\n', encoding='utf-8')
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+    def test_docx_is_default_without_disabling_odt_open(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        base=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui'
+        util=(base/'FileUtilities.java').read_text()
+        activity=(base/'LibreOfficeUIActivity.java').read_text()
+        self.assertIn('DEFAULT_WRITER_EXTENSION = ".docx"',util)
+        self.assertIn('AQUAWORD_DEFAULT_DOCX',util)
+        self.assertIn('CREATE_DOCUMENT_REQUEST_CODE) ? "docx"',activity)
+        self.assertNotIn('CREATE_DOCUMENT_REQUEST_CODE) ? "odt"',activity)
+
+    def test_docx_default_upstream_change_is_rejected(self):
+        base=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui'
+        (base/'FileUtilities.java').write_text('class NewFileUtilities {}')
+        with self.assertRaises(M.PatchError):
+            M.patch_default_docx(base/'FileUtilities.java',base/'LibreOfficeUIActivity.java')
+
     def test_saf_readonly_or_temporary_provider_supported(self):
         self.run_phase('source')
         self.run_phase('source')
