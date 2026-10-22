@@ -164,6 +164,7 @@ def patch_history_strings(path: Path) -> bool:
     <string name="aquaword_choose_snapshot">Choose a copy to restore as a new document</string>
     <string name="aquaword_restore_success">Safety copy restored to a new file</string>
     <string name="aquaword_restore_failure">Could not restore the selected safety copy</string>
+    <string name="aquaword_new_file_failed">Could not create the document. The file was not opened.</string>
 '''
     return store(path, content.replace('</resources>', additions + '</resources>'))
 
@@ -318,6 +319,62 @@ def copy_arabic_recovery_strings(repo: Path) -> bool:
     shutil.copyfile(src, target)
     return True
 
+
+def patch_async_new_document_creation(path: Path) -> bool:
+    """Never write SAF documents synchronously or open failed, empty templates.
+
+    Replaces the upstream Thread.run() (which executes on the UI thread) with
+    a real worker and opens the document only after a successful stream close.
+    """
+    body = require(path).read_text(encoding='utf-8')
+    marker = 'AQUAWORD_ASYNC_DOCUMENT_CREATE'
+    if marker in body:
+        if 'AquaWordCreateBlank' not in body or '                open(uri);\n                break;' in body:
+            raise PatchError('Unexpected partial async-create patch')
+        return False
+    start = '    private void createNewFile(final Uri uri, final String extension) {'
+    end = '    /** Context menu item handling. */'
+    old_call = '                createNewFile(uri, extension);\n\n                open(uri);'
+    if body.count(start) != 1 or body.count(end) != 2 or body.count(old_call) != 1:
+        raise PatchError('Upstream new-document creation flow changed')
+    offset = body.index(start)
+    limit = body.index(end, offset)
+    replacement = '''    // AQUAWORD_ASYNC_DOCUMENT_CREATE: open only when SAF write completes.
+    private void createNewFile(final Uri uri, final String extension) {
+        new Thread(() -> {
+            boolean saved = false;
+            try (InputStream template = getAssets().open("templates/untitled." + extension);
+                 OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
+                if (output == null)
+                    throw new IOException("No writable document URI");
+                byte[] buffer = new byte[64 * 1024];
+                int bytesRead;
+                while ((bytesRead = template.read(buffer)) != -1) {
+                    if (bytesRead > 0)
+                        output.write(buffer, 0, bytesRead);
+                }
+                output.flush();
+                saved = true;
+            } catch (Exception error) {
+                Log.e(LOGTAG, "AquaWord document creation failed", error);
+            }
+            final boolean completed = saved;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed())
+                    return;
+                if (completed)
+                    open(uri);
+                else
+                    Toast.makeText(this, R.string.aquaword_new_file_failed, Toast.LENGTH_LONG).show();
+            });
+        }, "AquaWordCreateBlank").start();
+    }
+
+'''
+    body = body[:offset] + replacement + body[limit:]
+    body = body.replace(old_call, '                createNewFile(uri, extension);', 1)
+    return store(path, body)
+
 def copy_history_source(repo: Path) -> bool:
     src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
     target = repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java'
@@ -371,6 +428,7 @@ def source(repo: Path) -> None:
     print('Safety copy menu:', patch_history_menu(targets[6]))
     print('Safety copy strings:', patch_history_strings(targets[7]))
     print('Safety copy activity:', patch_history_activity(targets[5]))
+    print('Async safe new-file creation:', patch_async_new_document_creation(targets[5]))
     print('History storage class:', copy_history_source(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Icons copied:', copy_icons(repo))
