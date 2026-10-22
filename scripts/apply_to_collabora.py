@@ -226,7 +226,18 @@ def patch_history_activity(path: Path) -> bool:
                 pendingAquaWordRestore = snapshots.get(which);
                 Intent destination = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                 destination.addCategory(Intent.CATEGORY_OPENABLE);
-                destination.setType("*/*");
+                final String lowerName = pendingAquaWordRestore.displayName.toLowerCase(java.util.Locale.ROOT);
+                if (lowerName.endsWith(".docx")) {
+                    destination.setType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                } else if (lowerName.endsWith(".odt")) {
+                    destination.setType("application/vnd.oasis.opendocument.text");
+                } else if (lowerName.endsWith(".rtf")) {
+                    destination.setType("application/rtf");
+                } else if (lowerName.endsWith(".txt")) {
+                    destination.setType("text/plain");
+                } else {
+                    destination.setType("application/octet-stream");
+                }
                 destination.putExtra(Intent.EXTRA_TITLE, pendingAquaWordRestore.displayName);
                 startActivityForResult(destination, AQUAWORD_RESTORE_REQUEST_CODE);
             })
@@ -267,6 +278,16 @@ def patch_history_activity(path: Path) -> bool:
     if content.count(activity_result) != 1: raise PatchError('Upstream onActivityResult switch changed')
     content = content.replace(activity_result, restore)
     return store(path, content)
+
+def copy_arabic_recovery_strings(repo: Path) -> bool:
+    src = require(ROOT/'branding/aquaword_strings_ar.xml')
+    target = repo/'android/app/src/main/res/values-ar/aquaword_strings.xml'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file():
+        if target.read_bytes() == src.read_bytes(): return False
+        raise PatchError('Conflicting upstream AquaWord Arabic resources')
+    shutil.copyfile(src, target)
+    return True
 
 def copy_history_source(repo: Path) -> bool:
     src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
@@ -318,6 +339,7 @@ def source(repo: Path) -> None:
     print('Safety copy strings:', patch_history_strings(targets[7]))
     print('Safety copy activity:', patch_history_activity(targets[5]))
     print('History storage class:', copy_history_source(repo))
+    print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Icons copied:', copy_icons(repo))
 
 def configured(repo: Path) -> None:
