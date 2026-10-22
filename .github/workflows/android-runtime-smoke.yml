@@ -14,13 +14,15 @@ permissions:
 jobs:
   android-runtime:
     # A manual dispatch has no upstream APK id. Require a successful parent run.
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
+      # Check out exactly the code that generated this APK, never mutable HEAD.
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -38,6 +40,12 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
           path: native-artifact
+      - name: Match downloaded artifact to original source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.workflow_run.head_sha }}"
+          printf 'Built from %s\n' "$(git rev-parse HEAD)" | tee native-artifact/runtime-source-commit.txt
       - name: Choose actual AquaWord debug APK
         shell: bash
         run: |
