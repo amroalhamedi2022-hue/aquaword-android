@@ -93,6 +93,13 @@ def evaluate_on_real_editor(port: int) -> dict:
 
 def run(directory: Path, timeout: int) -> None:
     directory.mkdir(parents=True, exist_ok=True)
+    # Keep proof that the marker did NOT already exist in the original file.
+    original = call("exec-out", "run-as", PKG, "cat", FILE, binary=True)
+    if check_document(original):
+        raise RuntimeError("Fixture already contains QA edit text; this would be a false positive")
+    original_checksum = hashlib.sha256(original).hexdigest()
+    (directory/"original-docx-sha256.txt").write_text(
+        original_checksum + "\n", encoding="utf-8")
     pid = call("shell", "pidof", PKG).decode().split()[0]
     port=9223
     call("forward", f"tcp:{port}", f"localabstract:webview_devtools_remote_{pid}")
@@ -114,6 +121,8 @@ def run(directory: Path, timeout: int) -> None:
         try:
             payload=call("exec-out","run-as",PKG,"cat",FILE,binary=True)
             if check_document(payload):
+                if hashlib.sha256(payload).hexdigest() == original_checksum:
+                    raise AssertionError("DOCX saved bytes did not change")
                 (directory/"roundtrip-hash.txt").write_text(
                     hashlib.sha256(payload).hexdigest()+"\n", encoding="utf-8")
                 (directory/"roundtrip-result.txt").write_text(
