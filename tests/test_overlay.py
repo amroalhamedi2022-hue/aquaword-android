@@ -23,6 +23,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         make('engine/README','native')
         make('browser/css/notebookbar.css','.notebookbar {color: blue}')
         make('browser/css/mobilewizard.css','.mobile-wizard {color: blue}')
+        make('browser/src/main.js', "window.addEventListener('beforeunload', function () { });")
+        make('browser/css/toolbar.css', '.toolbar { display: flex; }')
         make('android/app/build.gradle','''android {
  defaultConfig { resValue "string", "app_name", "${coAppName}" }
  buildTypes { debug { resValue "string", "app_name", "${coAppName} Debug" } }
@@ -69,6 +71,24 @@ class AquaWordIntegrationTests(unittest.TestCase):
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+    def test_focus_source_is_idempotent(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        main=(self.path/'browser/src/main.js').read_text(encoding='utf-8')
+        css=(self.path/'browser/css/toolbar.css').read_text(encoding='utf-8')
+        self.assertEqual(main.count('AQUAWORD_FOCUS_BOOTSTRAP_BEGIN'),1)
+        self.assertEqual(css.count('AQUAWORD_FOCUS_CSS_BEGIN'),1)
+        self.assertIn('ThisIsTheAndroidApp',main)
+        self.assertIn('aquaword-focus-active',css)
+        self.assertNotIn('body.aquaword-focus-active #map',css)
+        self.assertNotIn('body.aquaword-focus-active #document-container',css)
+
+    def test_focus_upstream_drift_is_rejected(self):
+        main=self.path/'browser/src/main.js'
+        main.write_text('console.log("new upstream entrypoint")',encoding='utf-8')
+        with self.assertRaises(M.PatchError):
+            M.patch_focus_bootstrap(main)
+
     def test_idempotent_source(self):
         self.run_phase('source')
         self.run_phase('source')
