@@ -33,3 +33,21 @@ jobs:
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             test -s "branding/icons/mipmap-$d/aquaword_launcher.png"
           done
+
+      - name: Smoke-test pinned real Collabora source layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN=2333344185931274f9c49d6c12a408cefcef6844
+          mkdir -p upstream-fixture/engine
+          for file in browser/css/notebookbar.css browser/css/mobilewizard.css android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/appSettings.gradle.in; do
+            mkdir -p "upstream-fixture/$(dirname "$file")"
+            curl --fail --location --silent --show-error \
+              "https://raw.githubusercontent.com/CollaboraOnline/online.mirror/$PIN/$file" \
+              --output "upstream-fixture/$file"
+            test -s "upstream-fixture/$file"
+          done
+          python3 scripts/apply_to_collabora.py --repo upstream-fixture --phase source
+          grep -q 'AQUAWORD_AURORA_BEGIN' upstream-fixture/browser/css/notebookbar.css
+          grep -Fq "applicationId 'com.aquaword.app'" upstream-fixture/android/app/appSettings.gradle.in
+          echo 'PASS: AquaWord integration applies cleanly to pinned upstream source files'
