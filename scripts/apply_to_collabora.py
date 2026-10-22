@@ -115,7 +115,7 @@ def patch_native_save_checkpoints(path: Path) -> bool:
         }
         new Thread(() -> {
             try (java.io.InputStream stream = saved) {
-                AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity);
+                AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved");
             } catch (Exception failure) {
                 Log.e(TAG, "AquaWord post-save recovery checkpoint failed", failure);
             }
@@ -355,6 +355,8 @@ def patch_history_strings(path: Path) -> bool:
     <string name="aquaword_restore_success">Safety copy restored to a new file</string>
     <string name="aquaword_restore_failure">Could not restore the selected safety copy</string>
     <string name="aquaword_new_file_failed">Could not create the document. The file was not opened.</string>
+    <string name="aquaword_snapshot_preedit">Before editing</string>
+    <string name="aquaword_snapshot_saved">Saved revision</string>
 '''
     return store(path, content.replace('</resources>', additions + '</resources>'))
 
@@ -447,7 +449,9 @@ def patch_history_activity(path: Path) -> bool:
         final java.text.DateFormat timeFormat = java.text.DateFormat.getDateTimeInstance();
         for (int n = 0; n < snapshots.size(); ++n) {
             AquaWordHistory.Snapshot snapshot = snapshots.get(n);
-            names[n] = snapshot.displayName + " — " +
+            names[n] = getString("saved".equals(snapshot.kind) ?
+                R.string.aquaword_snapshot_saved : R.string.aquaword_snapshot_preedit)
+                + " · " + snapshot.displayName + " — " +
                 timeFormat.format(new java.util.Date(snapshot.createdMillis));
         }
         new AlertDialog.Builder(this)
