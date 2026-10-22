@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
+      - uses: actions/checkout@v4
       - name: Enable KVM
         shell: bash
         run: |
@@ -33,19 +34,7 @@ jobs:
           emulator-boot-timeout: 600
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
-          script: |
-            bash -euo pipefail <<'BASH'
-            mkdir -p emulator-evidence
-            adb wait-for-device
-            adb shell getprop sys.boot_completed | tr -d '\r' | grep -qx 1
-            adb shell getprop ro.build.version.sdk | tr -d '\r' | grep -qx 35
-            adb shell getprop ro.product.cpu.abilist | tee emulator-evidence/abis.txt
-            adb shell getprop ro.dalvik.vm.isa.arm64 | tee emulator-evidence/arm64-translator.txt
-            adb shell getprop ro.build.version.release | tee emulator-evidence/android-version.txt
-            adb exec-out screencap -p > emulator-evidence/screen.png
-            test -s emulator-evidence/screen.png
-            echo 'PASS: Android API35 emulator booted; does not establish ARM translation or APK functionality' | tee emulator-evidence/result.txt
-            BASH
+          script: bash scripts/emulator_preflight.sh
       - name: Keep actual emulator boot evidence
         if: always()
         uses: actions/upload-artifact@v4
