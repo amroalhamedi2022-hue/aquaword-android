@@ -271,6 +271,11 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('qa-documents',manifest)
         self.assertIn('android:exported="false"',manifest)
         self.assertIn('files-path name="fixtures"',paths)
+        launch=(debug/'java/org/libreoffice/androidapp/qa/QaOpenDocumentActivity.java').read_text(encoding='utf-8')
+        self.assertIn('FileProvider.getUriForFile',launch)
+        self.assertIn('FLAG_GRANT_WRITE_URI_PERMISSION',launch)
+        self.assertIn('LOActivity.class',launch)
+        self.assertIn('QaOpenDocumentActivity',manifest)
         self.assertFalse((self.path/'android/app/src/main/res/xml/aquaword_qa_file_paths.xml').exists())
 
     def test_five_icons(self):
