@@ -10,4 +10,6 @@
     <string name="aquaword_restore_success">تمت استعادة النسخة في ملف جديد</string>
     <string name="aquaword_restore_failure">تعذّرت استعادة نسخة الأمان المحددة</string>
     <string name="aquaword_new_file_failed">تعذّر إنشاء المستند، ولم يتم فتح ملف غير مكتمل.</string>
+    <string name="aquaword_snapshot_preedit">قبل التحرير</string>
+    <string name="aquaword_snapshot_saved">نسخة محفوظة</string>
 </resources>
