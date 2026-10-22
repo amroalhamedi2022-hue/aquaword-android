@@ -25,6 +25,8 @@ adb install -r "$APK" 2>&1 | tee "$ARTIFACTS/install.log"
 adb shell pm path "$PKG" | tee "$ARTIFACTS/installed-package.txt" | grep -Fq 'package:'
 
 adb logcat -c || true
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell wm dismiss-keyguard || true
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/$BROWSER" \
   2>&1 | tee "$ARTIFACTS/browser-start.txt"
