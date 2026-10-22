@@ -29,6 +29,15 @@ class AquaWordIntegrationTests(unittest.TestCase):
              'public static final String DEFAULT_WRITER_EXTENSION = ".odt";')
 
         make('android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java', '''
+    // Real LOActivity native SAVE hook fixture.
+    void handleMessage(String[] messageAndParam) {
+        switch (messageAndParam[0]) {
+            case "SAVE":
+                copyTempBackToIntent();
+                sendBroadcast(messageAndParam[0], messageAndParam[1]);
+                return;
+        }
+    }
     private boolean documentLoaded = false;
     protected void onResume() {
         super.onResume();
@@ -120,6 +129,25 @@ class AquaWordIntegrationTests(unittest.TestCase):
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+    def test_save_callbacks_create_real_history_checkpoints(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        browser=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        self.assertEqual(lib.count('AQUAWORD_NATIVE_SAVE_CHECKPOINT'),1)
+        self.assertIn('captureNativeSaveCheckpoint();',lib)
+        self.assertIn('AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity)',lib)
+        self.assertIn('AquaWordNativeSaveCheckpoint',lib)
+        self.assertIn('org.libreoffice.androidlib.AquaWordHistory',browser)
+        self.assertTrue((self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').is_file())
+        self.assertFalse((self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java').exists())
+
+    def test_save_callback_drift_rejected(self):
+        path=self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java'
+        path.write_text('private boolean documentLoaded = false;',encoding='utf-8')
+        with self.assertRaises(M.PatchError):
+            M.patch_native_save_checkpoints(path)
+
     def test_periodic_autosave_lifecycle(self):
         self.run_phase('source')
         self.run_phase('source')
@@ -236,7 +264,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('AquaWordHistory.capture(',activity)
         self.assertIn('AquaWordHistory.restore(',activity)
         self.assertIn('R.id.action_aquaword_history',activity)
-        self.assertTrue((self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java').is_file())
+        self.assertTrue((self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').is_file())
         menu=(self.path/'android/app/src/main/res/menu/view_menu.xml').read_text()
         self.assertEqual(menu.count('AQUAWORD_HISTORY_MENU'),1)
         ar=(self.path/'android/app/src/main/res/values-ar/aquaword_strings.xml')
