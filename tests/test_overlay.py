@@ -68,9 +68,49 @@ class AquaWordIntegrationTests(unittest.TestCase):
         }
     }
 """)
+        activity.write_text(activity.read_text() + """
+    private void createNewFile(final Uri uri, final String extension) {
+        // old UI-thread behavior:
+        class CreateThread extends Thread {
+            @Override public void run() {
+            }
+        }
+        CreateThread thread = new CreateThread();
+        thread.run();
+        try {
+            thread.join();
+        } catch (Exception e) {
+        }
+    }
+
+    /** Context menu item handling. */
+    void doCreate() {
+                createNewFile(uri, extension);
+
+                open(uri);
+    }
+""")
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+    def test_async_document_creation(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        self.assertEqual(activity.count('AQUAWORD_ASYNC_DOCUMENT_CREATE'),1)
+        self.assertIn('AquaWordCreateBlank', activity)
+        self.assertIn('OutputStream output = getContentResolver().openOutputStream(uri, "w")', activity)
+        self.assertNotIn('thread.run();', activity)
+        self.assertNotIn('thread.join();', activity)
+        self.assertIn('if (completed)\n                    open(uri);', activity)
+        self.assertNotIn('createNewFile(uri, extension);\n\n                open(uri);', activity)
+
+    def test_async_create_rejects_changed_upstream(self):
+        path=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
+        path.write_text('public class Changed {}', encoding='utf-8')
+        with self.assertRaises(M.PatchError):
+            M.patch_async_new_document_creation(path)
+
     def test_focus_source_is_idempotent(self):
         self.run_phase('source')
         self.run_phase('source')
