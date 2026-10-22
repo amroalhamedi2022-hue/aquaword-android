@@ -136,6 +136,12 @@ jobs:
           while IFS= read -r apk; do
             unzip -t "$apk" >/dev/null
             "$AAPT" dump badging "$apk" | grep -q "package: name='com.aquaword.app.debug'"
+            for template in research_en research_ar clinical_case study_notes; do
+              unzip -p "$apk" "assets/aquaword/$template.docx" > "output/$template.package.docx"
+              test -s "output/$template.package.docx"
+              cmp -s "templates/generated/$template.docx" "output/$template.package.docx"
+              rm -f "output/$template.package.docx"
+            done
             cp "$apk" "output/AquaWord-$(basename "$apk")"
           done < output/apk-paths.txt
           (cd output && sha256sum -- *.apk > SHA256SUMS)
