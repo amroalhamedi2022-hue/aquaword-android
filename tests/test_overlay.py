@@ -38,6 +38,34 @@ class AquaWordIntegrationTests(unittest.TestCase):
                     expandFabMenu();
             }
         });""")
+        make('android/app/src/main/res/menu/view_menu.xml', '''<menu>
+    <item android:id="@+id/action_open_file" android:title="Open" />
+</menu>''')
+        make('android/app/src/main/res/values/strings.xml', '<resources></resources>')
+        # The production patch also requires activity menu, open(), and result handlers.
+        activity=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
+        activity.write_text(activity.read_text() + """
+    private static final int OPEN_FILE_REQUEST_CODE = 43;
+    void open(Uri uri) {
+        addDocumentToRecents(uri);
+
+        Intent i = getIntentToEdit(uri);
+        startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
+    }
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_open_file) {
+            openDocument();
+            return true;
+        }
+    }
+    /** File name extensions for which an empty document template is bundled in the assets. */
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        switch (requestCode) {
+            case LO_ACTIVITY_REQUEST_CODE: {
+            }
+        }
+    }
+""")
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
@@ -58,6 +86,30 @@ class AquaWordIntegrationTests(unittest.TestCase):
         path.write_text('class Changed {}',encoding='utf-8')
         with self.assertRaises(M.PatchError):
             M.patch_writer_only_home(path)
+    def test_history_integration(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        self.assertEqual(activity.count('AQUAWORD_PREEDIT_COPY'),1)
+        self.assertIn('AquaWordHistory.capture(',activity)
+        self.assertIn('AquaWordHistory.restore(',activity)
+        self.assertIn('R.id.action_aquaword_history',activity)
+        self.assertTrue((self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java').is_file())
+        menu=(self.path/'android/app/src/main/res/menu/view_menu.xml').read_text()
+        self.assertEqual(menu.count('AQUAWORD_HISTORY_MENU'),1)
+
+    def test_missing_safety_copy_menu_aborts(self):
+        path=self.path/'android/app/src/main/res/menu/view_menu.xml'
+        path.write_text('<menu />',encoding='utf-8')
+        with self.assertRaises(M.PatchError):
+            M.patch_history_menu(path)
+
+    def test_missing_activity_handler_aborts(self):
+        path=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
+        path.write_text('class Changed {}',encoding='utf-8')
+        with self.assertRaises(M.PatchError):
+            M.patch_history_activity(path)
+
     def test_gradle_labels(self):
         self.run_phase('source')
         s=(self.path/'android/app/build.gradle').read_text()
