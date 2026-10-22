@@ -135,6 +135,7 @@ jobs:
           node --check upstream-fixture/browser/src/main.js
           grep -q 'AQUAWORD_DEFAULT_DOCX' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java
           grep -q 'AQUAWORD_PERIODIC_NATIVE_AUTOSAVE' upstream-fixture/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -q 'AQUAWORD_NATIVE_SAVE_CHECKPOINT' upstream-fixture/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           grep -q 'AQUAWORD_FOCUS_CSS_BEGIN' upstream-fixture/browser/css/toolbar.css
           python3 scripts/apply_templates.py --repo upstream-fixture
           python3 scripts/apply_templates.py --repo upstream-fixture
@@ -150,7 +151,7 @@ jobs:
           root=Path('upstream-fixture/android/app/src/main')
           for file in [
               root/'java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java',
-              root/'java/org/libreoffice/androidapp/ui/AquaWordHistory.java',
+              Path('upstream-fixture/android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java'),
               Path('upstream-fixture/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java'),
               Path('upstream-fixture/android/app/src/debug/java/org/libreoffice/androidapp/qa/QaOpenDocumentActivity.java')
           ]:
