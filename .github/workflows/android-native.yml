@@ -91,6 +91,7 @@ jobs:
           test -s collabora/android/templates/untitled.docx
           grep -q 'AQUAWORD_ASYNC_DOCUMENT_CREATE' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_SAFE_SAF_PERMISSIONS' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
+          grep -q 'AQUAWORD_PERIODIC_NATIVE_AUTOSAVE' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           git -C collabora diff --check
       - name: Check build interpreter dependencies before expensive compilation
         shell: bash
