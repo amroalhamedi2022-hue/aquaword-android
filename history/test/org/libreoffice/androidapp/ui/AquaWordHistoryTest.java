@@ -25,6 +25,17 @@ public class AquaWordHistoryTest {
                 root, new ByteArrayInputStream("تغيير جديد".getBytes("UTF-8")), "قصتي.docx");
             check(!changed.file.equals(s.file), "edited document must receive new snapshot");
             check(AquaWordHistory.list(root).size() == 2, "new revision not captured");
+            // Different files can share both name and exact content.
+            // They must remain distinct recovery histories.
+            byte[] sameBytes = "another identical draft".getBytes("UTF-8");
+            AquaWordHistory.Snapshot sourceA = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(sameBytes), "duplicate-name.docx", "content://provider-a/123");
+            AquaWordHistory.Snapshot sourceB = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(sameBytes), "duplicate-name.docx", "content://provider-b/789");
+            check(!sourceA.file.equals(sourceB.file), "distinct source identities were incorrectly merged");
+            AquaWordHistory.Snapshot sourceAAgain = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(sameBytes), "duplicate-name.docx", "content://provider-a/123");
+            check(sourceAAgain.file.equals(sourceA.file), "unchanged same-source duplicate not deduplicated");
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             AquaWordHistory.restore(s, out);
             check(Arrays.equals(unicode, out.toByteArray()), "roundtrip");
@@ -44,7 +55,7 @@ public class AquaWordHistoryTest {
                 AquaWordHistory.capture(root, new ByteArrayInputStream(huge), "sample"+i+".odt");
             }
             check(AquaWordHistory.list(root).size() <= 60, "retention count");
-            System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, unchanged-file deduplication, changed revisions, retention");
+            System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, unchanged-file deduplication, separate source histories, changed revisions, retention");
         } finally {
             delete(root);
         }
