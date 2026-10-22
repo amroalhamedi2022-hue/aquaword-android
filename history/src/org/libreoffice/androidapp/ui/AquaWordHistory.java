@@ -40,14 +40,16 @@ public final class AquaWordHistory {
         public final long sizeBytes;
         private final String sha256;
         private final String sourceHash;
+        public final String kind;
         private Snapshot(File file, String displayName, long createdMillis,
-                         long sizeBytes, String sha256, String sourceHash) {
+                         long sizeBytes, String sha256, String sourceHash, String kind) {
             this.file = file;
             this.displayName = displayName;
             this.createdMillis = createdMillis;
             this.sizeBytes = sizeBytes;
             this.sha256 = sha256;
             this.sourceHash = sourceHash;
+            this.kind = kind;
         }
     }
 
@@ -66,6 +68,15 @@ public final class AquaWordHistory {
     /** Source identity separates two distinct documents that share a file name. */
     public static synchronized Snapshot capture(File appFilesDir, InputStream input,
                                                 String name, String sourceIdentity) throws IOException {
+        return capture(appFilesDir, input, name, sourceIdentity, "pre-edit");
+    }
+
+    /** Saved revisions and pre-edit recovery versions use the same validated format. */
+    public static synchronized Snapshot capture(File appFilesDir, InputStream input,
+                                                String name, String sourceIdentity,
+                                                String kind) throws IOException {
+        if (!"pre-edit".equals(kind) && !"saved".equals(kind))
+            throw new IOException("Unknown snapshot type");
         if (input == null) throw new IOException("No readable input stream");
         if (sourceIdentity == null || sourceIdentity.isEmpty())
             throw new IOException("Document source identity is required");
@@ -111,6 +122,7 @@ public final class AquaWordHistory {
             props.setProperty("sha256", newHash);
             // Store only the SHA of the document URI, never the original URI.
             props.setProperty("source_sha256", sourceHash);
+            props.setProperty("kind", kind);
             try (FileOutputStream metaOut = new FileOutputStream(pendingMeta)) {
                 props.store(metaOut, "AquaWord private document snapshot");
                 metaOut.getFD().sync();
@@ -146,12 +158,15 @@ public final class AquaWordHistory {
             String sourceHash = props.getProperty("source_sha256",
                     hex(digest().digest("legacy-unspecified-source".getBytes(StandardCharsets.UTF_8))));
             String name = sanitizeName(props.getProperty("name"));
+            String kind = props.getProperty("kind", "pre-edit");
+            if (!"pre-edit".equals(kind) && !"saved".equals(kind))
+                return null;
             long length = Long.parseLong(props.getProperty("size", "-1"));
             long when = Long.parseLong(props.getProperty("timestamp", "0"));
             if (hash.length() != 64 || sourceHash.length() != 64 ||
                     length != data.length() || when <= 0L)
                 return null;
-            return new Snapshot(data, name, when, length, hash, sourceHash);
+            return new Snapshot(data, name, when, length, hash, sourceHash, kind);
         } catch (IOException | IllegalArgumentException e) {
             return null;
         }
