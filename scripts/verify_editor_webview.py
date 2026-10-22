@@ -29,6 +29,34 @@ EXPRESSION = r"""(() => {
     });
 })()"""
 
+FOCUS_EXPRESSION = r"""(() => {
+    const button = document.getElementById('aquaword-focus-toggle');
+    const page = document.getElementById('document-container');
+    if (!button || !page) return JSON.stringify({focusModeFunctional: false});
+    const initial = document.body.classList.contains('aquaword-focus-active');
+    const initialPressed = button.getAttribute('aria-pressed');
+    button.click();
+    const entered = document.body.classList.contains('aquaword-focus-active') &&
+                    button.getAttribute('aria-pressed') === 'true';
+    const pageKeptVisible = getComputedStyle(page).display !== 'none';
+    button.click();
+    const exited = !document.body.classList.contains('aquaword-focus-active') &&
+                   button.getAttribute('aria-pressed') === 'false';
+    return JSON.stringify({
+        focusModeFunctional: !initial && initialPressed === 'false' &&
+                             entered && exited && pageKeptVisible,
+        entered, exited, pageKeptVisible
+    });
+})()"""
+
+
+def focus_mode_ready(result):
+    return (result.get("focusModeFunctional") is True
+            and result.get("entered") is True
+            and result.get("exited") is True
+            and result.get("pageKeptVisible") is True)
+
+
 def result_from_response(response):
     if "error" in response:
         raise RuntimeError("WebView CDP call failed: " + str(response["error"]))
@@ -76,14 +104,26 @@ def inspect_webview(port, timeout_s):
                             result = result_from_response(payload)
                             attempts.append(result)
                             if proves_writer_ready(result):
-                                return result, attempts
+                                socket.send(json.dumps({
+                                    "id": 42, "method": "Runtime.evaluate",
+                                    "params": {"expression": FOCUS_EXPRESSION,
+                                               "returnByValue": True}
+                                }))
+                                while True:
+                                    focus_payload = json.loads(socket.recv())
+                                    if focus_payload.get("id") == 42:
+                                        focus_result = result_from_response(focus_payload)
+                                        attempts.append(focus_result)
+                                        if focus_mode_ready(focus_result):
+                                            return {**result, **focus_result}, attempts
+                                        break
                             break
                 finally:
                     socket.close()
-        except (OSError, URLError, RuntimeError, ValueError) as exc:
+        except (OSError, URLError, RuntimeError, ValueError, EOFError) as exc:
             attempts.append({"diagnostic": str(exc)})
         time.sleep(3)
-    raise TimeoutError("Real Collabora Writer document layer never became ready: " +
+    raise TimeoutError("Collabora Writer layer or reversible Focus Mode never became ready: " +
                        json.dumps(attempts[-6:], ensure_ascii=False))
 
 
