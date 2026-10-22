@@ -17,6 +17,14 @@ public class AquaWordHistoryTest {
             check(s.displayName.equals("قصتي.docx"), "Unicode metadata");
             check(s.sizeBytes == unicode.length, "size mismatched");
             check(AquaWordHistory.list(root).size() == 1, "list missing");
+            AquaWordHistory.Snapshot same = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(unicode), "قصتي.docx");
+            check(same.file.equals(s.file), "unchanged document should reuse snapshot");
+            check(AquaWordHistory.list(root).size() == 1, "duplicate copy incorrectly created");
+            AquaWordHistory.Snapshot changed = AquaWordHistory.capture(
+                root, new ByteArrayInputStream("تغيير جديد".getBytes("UTF-8")), "قصتي.docx");
+            check(!changed.file.equals(s.file), "edited document must receive new snapshot");
+            check(AquaWordHistory.list(root).size() == 2, "new revision not captured");
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             AquaWordHistory.restore(s, out);
             check(Arrays.equals(unicode, out.toByteArray()), "roundtrip");
@@ -36,7 +44,7 @@ public class AquaWordHistoryTest {
                 AquaWordHistory.capture(root, new ByteArrayInputStream(huge), "sample"+i+".odt");
             }
             check(AquaWordHistory.list(root).size() <= 60, "retention count");
-            System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, retention");
+            System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, unchanged-file deduplication, changed revisions, retention");
         } finally {
             delete(root);
         }
