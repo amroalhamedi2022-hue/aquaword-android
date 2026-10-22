@@ -73,4 +73,13 @@ windowShim.ThisIsTheAndroidApp = false;
 run();
 assert.equal(body.child, original);
 
-console.log('PASS: native-only focus toggle, reversible, Escape, resize, ARIA and no duplicate');
+// Locale-aware labels: keep a large touch target usable in Arabic UI as well.
+documentShim.documentElement = { lang: 'ar' };
+windowShim.ThisIsTheAndroidApp = true;
+run();
+assert.equal(body.child.attributes['aria-label'], 'الدخول إلى وضع التركيز');
+handlers.click();
+assert.equal(body.child.attributes['aria-label'], 'الخروج من وضع التركيز');
+handlers.click();
+
+console.log('PASS: native-only focus toggle, reversible, Escape, resize, English/Arabic ARIA and no duplicate');
