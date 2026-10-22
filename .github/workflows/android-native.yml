@@ -189,9 +189,41 @@ jobs:
           done < output/apk-paths.txt
           (cd output && sha256sum -- *.apk > SHA256SUMS)
           cp upstream-version.txt output/
-      - uses: actions/upload-artifact@v4
+      # The account's Actions artifact quota is full. Keep generated files on
+      # this runner for runtime verification, rather than a doomed artifact upload.
+      - name: Record real APK metadata and source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '## AquaWord native APK build evidence' >> "$GITHUB_STEP_SUMMARY"
+          echo "Source commit: \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pinned Collabora: \`$UPSTREAM_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          cat output/SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
+          df -h . | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Verify installation and Arabic DOCX on a real Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
         with:
-          name: AquaWord-Android-arm64-Debug
-          path: output/
-          if-no-files-found: error
-          retention-days: 3
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          script: bash scripts/run_android_smoke.sh "$(find output -type f -name 'AquaWord-*.apk' -print -quit)" "$PWD/smoke-evidence"
+      - name: Record runtime result without consuming Actions artifact storage
+        if: always()
+        shell: bash
+        run: |
+          if [ -s smoke-evidence/smoke-result.txt ]; then
+            echo '## Android runtime evidence' >> "$GITHUB_STEP_SUMMARY"
+            cat smoke-evidence/smoke-result.txt >> "$GITHUB_STEP_SUMMARY"
+            if [ -s smoke-evidence/required-vs-actual.md ]; then
+              cat smoke-evidence/required-vs-actual.md >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo 'Android runtime smoke not verified; no release is authorized.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # Do not upload APK to Actions Artifacts until the storage quota resets.
+      # Do not publish unfinished APK as a public GitHub Release.
