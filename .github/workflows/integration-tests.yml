@@ -56,6 +56,12 @@ jobs:
               assert any(p.style.name.startswith('Heading') for p in d.paragraphs),path
               print(path, len(d.paragraphs), 'paragraphs')
           PY
+      - name: Validate rich Arabic Word table-image-bidi source fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 quality/build_rich_fixture.py
+          python3 quality/check_rich_docx.py
       - name: Real LibreOffice DOCX import and re-save roundtrip (not Android)
         shell: bash
         run: |
