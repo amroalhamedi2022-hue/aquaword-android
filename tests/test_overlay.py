@@ -27,6 +27,25 @@ class AquaWordIntegrationTests(unittest.TestCase):
         make('browser/css/toolbar.css', '.toolbar { display: flex; }')
         make('android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java',
              'public static final String DEFAULT_WRITER_EXTENSION = ".odt";')
+
+        make('android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java', '''
+    private boolean documentLoaded = false;
+    protected void onResume() {
+        super.onResume();
+        Log.i(TAG, "onResume..");
+    }
+    protected void onPause() {
+        // A Save similar to an autosave
+        if (documentLoaded)
+            postMobileMessageNative("save dontTerminateEdit=1 dontSaveIfUnmodified=1");
+        super.onPause();
+    }
+    protected void onDestroy() {
+        stopWatchingForHardwareKeyboard();
+        super.onDestroy();
+    }
+''')
+
         make('android/app/build.gradle','''android {
  defaultConfig { resValue "string", "app_name", "${coAppName}" }
  buildTypes { debug { resValue "string", "app_name", "${coAppName} Debug" } }
@@ -101,6 +120,23 @@ class AquaWordIntegrationTests(unittest.TestCase):
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+    def test_periodic_autosave_lifecycle(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        text=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        self.assertEqual(text.count('AQUAWORD_PERIODIC_NATIVE_AUTOSAVE'),1)
+        self.assertIn('AQUAWORD_AUTOSAVE_MS = 120_000L',text)
+        self.assertIn('if (documentLoaded && isDocEditable',text)
+        self.assertIn('dontSaveIfUnmodified=1',text)
+        self.assertEqual(text.count('removeCallbacks(mAquaWordSaveTick)'),3)
+        self.assertIn('postDelayed(mAquaWordSaveTick, AQUAWORD_AUTOSAVE_MS)',text)
+
+    def test_periodic_autosave_drift_rejected(self):
+        path=self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java'
+        path.write_text('public class Changed {}',encoding='utf-8')
+        with self.assertRaises(M.PatchError):
+            M.patch_periodic_native_autosave(path)
+
     def test_docx_is_default_without_disabling_odt_open(self):
         self.run_phase('source')
         self.run_phase('source')
