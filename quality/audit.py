@@ -100,7 +100,10 @@ def audit(matrix: dict[str, Any], root: Path) -> tuple[list[dict], bool]:
             status = "EMULATOR_ONLY"
         else:
             status = "PASS"
-        if requirement["priority"] == "critical" and status != "PASS":
+        # The user requested a complete application, not a reduced feature set.
+        # Neither an unverified major feature nor an emulator-only critical gate
+        # can silently pass a final release review.
+        if status != "PASS":
             release = False
         result.append({**requirement, "actual_status": status,
                        "verified_devices": sorted(approved_devices),
