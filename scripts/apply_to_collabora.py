@@ -375,6 +375,44 @@ def patch_async_new_document_creation(path: Path) -> bool:
     body = body.replace(old_call, '                createNewFile(uri, extension);', 1)
     return store(path, body)
 
+
+def patch_saf_permission_handling(path: Path) -> bool:
+    """Allow read-only and non-persistable Android document providers safely."""
+    body = require(path).read_text(encoding='utf-8')
+    marker = 'AQUAWORD_SAFE_SAF_PERMISSIONS'
+    if marker in body:
+        if 'persistDocumentPermission(uri, data);' not in body:
+            raise PatchError('Partial SAF permission patch detected')
+        return False
+    original = ('getContentResolver().takePersistableUriPermission(uri, '
+                'Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);')
+    if body.count(original) != 2:
+        raise PatchError('Expected two native file-picker URI permission calls')
+    anchor = '    /** File name extensions for which an empty document template is bundled in the assets. */'
+    if body.count(anchor) != 1:
+        raise PatchError('Expected unique SAF helper insertion point')
+    helper = '''    // AQUAWORD_SAFE_SAF_PERMISSIONS: do not crash on read-only or GET_CONTENT providers.
+    private void persistDocumentPermission(final Uri uri, final Intent returnedIntent) {
+        if (uri == null || returnedIntent == null)
+            return;
+        final int supported = Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                              Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+        final int granted = returnedIntent.getFlags() & supported;
+        if (granted == 0) {
+            Log.w(LOGTAG, "Provider did not grant persistable document access");
+            return;
+        }
+        try {
+            getContentResolver().takePersistableUriPermission(uri, granted);
+        } catch (SecurityException | IllegalArgumentException denied) {
+            Log.w(LOGTAG, "Document grant cannot be persisted; continuing with temporary access", denied);
+        }
+    }
+
+'''
+    body = body.replace(original, 'persistDocumentPermission(uri, data);')
+    return store(path, body.replace(anchor, helper + anchor, 1))
+
 def copy_history_source(repo: Path) -> bool:
     src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
     target = repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java'
@@ -429,6 +467,7 @@ def source(repo: Path) -> None:
     print('Safety copy strings:', patch_history_strings(targets[7]))
     print('Safety copy activity:', patch_history_activity(targets[5]))
     print('Async safe new-file creation:', patch_async_new_document_creation(targets[5]))
+    print('SAF document permission handling:', patch_saf_permission_handling(targets[5]))
     print('History storage class:', copy_history_source(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Icons copied:', copy_icons(repo))
