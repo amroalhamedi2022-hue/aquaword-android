@@ -93,6 +93,15 @@ if grep -E 'FATAL EXCEPTION|UnsatisfiedLinkError|NoClassDefFoundError' "$ARTIFAC
   echo "AquaWord emitted a fatal Java/native load error during DOCX open" >&2
   exit 1
 fi
+# This queries the actual Collabora WebView through Android DevTools,
+# not a mock: require Writer docType, mounted document layer, and focus button.
+python3 -m pip install --quiet 'websocket-client==1.8.0'
+python3 scripts/verify_editor_webview.py \
+  --package "$PKG" \
+  --output "$ARTIFACTS/editor-webview-state.json" \
+  --timeout 80
+test -s "$ARTIFACTS/editor-webview-state.json"
+
 for picture in browser-screen.png editor-screen.png; do
   test "$(stat -c %s "$ARTIFACTS/$picture")" -gt 3000 || {
     echo "Invalid screenshot evidence: $picture" >&2
@@ -120,7 +129,7 @@ if change < 3.0:
     raise AssertionError("Browser and editor screenshots are suspiciously identical")
 print(f"Visible Android UI difference: {change:.1f} average RGB units")
 PY
-printf '\nPASS: installed AquaWord, launched browser and editor, opened Arabic DOCX without immediate process death.\n' | tee "$ARTIFACTS/smoke-result.txt"
+printf '\nPASS: AquaWord install + browser + Arabic Writer document layer confirmed through real WebView inspection.\n' | tee "$ARTIFACTS/smoke-result.txt"
 printf 'NOT PROVEN: editing/save-reopen, advanced layout, tools, visual match, long-term stability or real Xiaomi Pad 5 behavior.\n' >> "$ARTIFACTS/smoke-result.txt"
 
 # Attach first-hand ADB evidence to exactly the gates that this smoke proves.
@@ -134,7 +143,7 @@ from pathlib import Path
 root = Path(sys.argv[1])
 evidence = []
 for name in ("install.log", "installed-package.txt", "browser-screen.png",
-             "browser-activity.txt", "smoke-result.txt"):
+             "browser-activity.txt", "editor-webview-state.json", "smoke-result.txt"):
     path = root / name
     evidence.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
 receipt = {
