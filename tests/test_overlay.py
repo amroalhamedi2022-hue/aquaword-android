@@ -261,6 +261,18 @@ class AquaWordIntegrationTests(unittest.TestCase):
     def test_manifest_icon(self):
         self.run_phase('source')
         self.assertIn('@mipmap/aquaword_launcher',(self.path/'android/app/src/main/AndroidManifest.xml').read_text())
+    def test_content_uri_qa_provider_is_debug_only(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        debug=self.path/'android/app/src/debug'
+        manifest=(debug/'AndroidManifest.xml').read_text(encoding='utf-8')
+        paths=(debug/'res/xml/aquaword_qa_file_paths.xml').read_text(encoding='utf-8')
+        self.assertIn('androidx.core.content.FileProvider',manifest)
+        self.assertIn('qa-documents',manifest)
+        self.assertIn('android:exported="false"',manifest)
+        self.assertIn('files-path name="fixtures"',paths)
+        self.assertFalse((self.path/'android/app/src/main/res/xml/aquaword_qa_file_paths.xml').exists())
+
     def test_five_icons(self):
         self.run_phase('source')
         for density in ['mdpi','hdpi','xhdpi','xxhdpi','xxxhdpi']:
