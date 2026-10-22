@@ -132,8 +132,15 @@ test -s "$ARTIFACTS/editor-tablet-webview-state.json"
 python3 scripts/android_edit_roundtrip.py --evidence-dir "$ARTIFACTS" --timeout 75
 test -s "$ARTIFACTS/roundtrip-result.txt"
 
-# Re-open the persisted document, proving that its actual DOCX bytes remain
-# readable by the native Android document engine.
+# Force-stop the app so reopening is a fresh Android process, not
+# an existing WebView/Activity with in-memory document content.
+adb shell am force-stop "$PKG"
+sleep 3
+if adb shell pidof "$PKG" >/dev/null 2>&1; then
+  echo "AquaWord was not fully stopped before cold-reopen test" >&2
+  exit 1
+fi
+# Re-open persisted DOCX in a genuinely fresh native Writer process.
 adb shell am start -W \
   -n "$PKG/org.libreoffice.androidapp.qa.QaOpenDocumentActivity" \
   2>&1 | tee "$ARTIFACTS/reopen-start.txt"
