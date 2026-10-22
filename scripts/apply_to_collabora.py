@@ -72,6 +72,65 @@ def patch_focus_styles(path: Path) -> bool:
     return store(path, body.rstrip() + '\n\n' + snippet + '\n')
 
 
+
+def patch_native_save_checkpoints(path: Path) -> bool:
+    """Back up the *actually saved* native document after the Writer SAVE event.
+
+    The source identity and properties format are shared with the file-browser
+    pre-edit safety copies, so a single History UI can restore either version.
+    Opens the temp document stream before scheduling a worker to tolerate
+    Activity shutdown; never blocks the main thread for the extra backup.
+    """
+    body = require(path).read_text(encoding='utf-8')
+    marker = 'AQUAWORD_NATIVE_SAVE_CHECKPOINT'
+    if marker in body:
+        if body.count('captureNativeSaveCheckpoint();') != 1:
+            raise PatchError('Partial native save checkpoint integration')
+        return False
+    save_anchor = '''            case "SAVE":
+                copyTempBackToIntent();
+                sendBroadcast(messageAndParam[0], messageAndParam[1]);'''
+    field_anchor = '    private boolean documentLoaded = false;'
+    if body.count(save_anchor) != 1 or body.count(field_anchor) != 1:
+        raise PatchError('Upstream native SAVE callback or LOActivity field anchor changed')
+    method = '''    // AQUAWORD_NATIVE_SAVE_CHECKPOINT:
+    // Store a recoverable revision after native Writer signals SAVE.
+    // The previously captured pre-edit snapshot remains untouched.
+    private void captureNativeSaveCheckpoint() {
+        if (!isDocEditable || mTempFile == null || !mTempFile.isFile())
+            return;
+        final android.net.Uri original = getIntent().getData();
+        if (original == null)
+            return;
+        final String sourceIdentity = original.toString();
+        final String name = original.getLastPathSegment() == null ?
+                "Document.docx" : original.getLastPathSegment();
+        final java.io.InputStream saved;
+        try {
+            // Hold an FD before Activity teardown; backup work is asynchronous.
+            saved = new java.io.FileInputStream(mTempFile);
+        } catch (java.io.IOException failure) {
+            Log.e(TAG, "Cannot open saved Writer document for recovery", failure);
+            return;
+        }
+        new Thread(() -> {
+            try (java.io.InputStream stream = saved) {
+                AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity);
+            } catch (Exception failure) {
+                Log.e(TAG, "AquaWord post-save recovery checkpoint failed", failure);
+            }
+        }, "AquaWordNativeSaveCheckpoint").start();
+    }
+
+'''
+    body = body.replace(field_anchor, method + field_anchor, 1)
+    body = body.replace(save_anchor, '''            case "SAVE":
+                copyTempBackToIntent();
+                captureNativeSaveCheckpoint();
+                sendBroadcast(messageAndParam[0], messageAndParam[1]);''', 1)
+    return store(path, body)
+
+
 def patch_periodic_native_autosave(path: Path) -> bool:
     """Use native save every 2 minutes while foreground editing.
 
@@ -593,6 +652,7 @@ def source(repo: Path) -> None:
     print('SAF document permission handling:', patch_saf_permission_handling(targets[5]))
     print('DOCX default document format:', patch_default_docx(targets[10], targets[5]))
     print('Lifecycle-aware native autosave:', patch_periodic_native_autosave(targets[11]))
+    print('Native post-save recovery checkpoints:', patch_native_save_checkpoints(targets[11]))
     print('History storage class:', copy_history_source(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Debug-only real ContentProvider test route:', copy_debug_qa_file_provider(repo))
