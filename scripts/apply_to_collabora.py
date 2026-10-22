@@ -103,8 +103,23 @@ def patch_native_save_checkpoints(path: Path) -> bool:
         if (original == null)
             return;
         final String sourceIdentity = original.toString();
-        final String name = original.getLastPathSegment() == null ?
+        // SAF document ids are not always filenames (e.g. cloud providers).
+        // Prefer the provider's actual display name for the recovery list.
+        String candidateName = original.getLastPathSegment() == null ?
                 "Document.docx" : original.getLastPathSegment();
+        try (android.database.Cursor cursor = getContentResolver().query(
+                original, new String[] { android.provider.OpenableColumns.DISPLAY_NAME },
+                null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                final int column = cursor.getColumnIndex(
+                        android.provider.OpenableColumns.DISPLAY_NAME);
+                if (column >= 0 && cursor.getString(column) != null)
+                    candidateName = cursor.getString(column);
+            }
+        } catch (Exception queryFailure) {
+            Log.w(TAG, "Using fallback document name for recovery checkpoint", queryFailure);
+        }
+        final String name = candidateName;
         final java.io.InputStream saved;
         try {
             // Hold an FD before Activity teardown; backup work is asynchronous.
