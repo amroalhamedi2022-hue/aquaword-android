@@ -38,6 +38,20 @@ class TemplateContracts(unittest.TestCase):
                 self.assertEqual(round(doc.sections[0].page_width.cm, 1), 21.0)
                 self.assertEqual(round(doc.sections[0].page_height.cm, 1), 29.7)
 
+    def test_editable_tables_and_page_numbers(self):
+        for template in ("research_en", "clinical_case", "study_notes"):
+            with self.subTest(template=template):
+                path=FILES/(template+".docx")
+                d=Document(path)
+                self.assertGreaterEqual(len(d.tables),1)
+                self.assertEqual(len(d.tables[0].columns),3)
+                self.assertGreaterEqual(len(d.tables[0].rows),2)
+        for key in BUILDERS:
+            with ZipFile(FILES/(key+".docx")) as archive:
+                footerfiles=[p for p in archive.namelist() if p.startswith("word/footer") and p.endswith(".xml")]
+                self.assertTrue(footerfiles,key)
+                self.assertIn(b'PAGE',archive.read(footerfiles[0]),key)
+
     def test_arabic_is_true_rtl_not_only_right_aligned(self):
         path = FILES / "research_ar.docx"
         with ZipFile(path) as archive:
