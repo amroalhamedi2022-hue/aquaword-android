@@ -1,4 +1,4 @@
-package org.libreoffice.androidapp.ui;
+package org.libreoffice.androidlib;
 
 /*
  * AquaWord local pre-edit safety copies.
