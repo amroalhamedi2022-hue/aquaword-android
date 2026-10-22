@@ -1,0 +1,42 @@
+"""Test Android edit/save gate accepts only an actual editable DOCX package."""
+import importlib.util
+from io import BytesIO
+from pathlib import Path
+import unittest
+
+from docx import Document
+
+FILE=Path(__file__).resolve().parents[1]/"scripts/android_edit_roundtrip.py"
+SPEC=importlib.util.spec_from_file_location("android_roundtrip", FILE)
+RT=importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(RT)
+
+def word_document(text):
+    f=BytesIO()
+    document=Document()
+    document.add_paragraph("Original paragraph — المستند")
+    document.add_paragraph(text)
+    document.save(f)
+    return f.getvalue()
+
+
+class AndroidEditRoundTripTests(unittest.TestCase):
+    def test_actual_docx_with_inserted_marker(self):
+        self.assertTrue(RT.check_document(word_document(RT.SENTINEL)))
+
+    def test_original_unchanged_docx_must_fail(self):
+        self.assertFalse(RT.check_document(word_document("Original unchanged")))
+
+    def test_plain_log_cannot_be_faked_as_docx(self):
+        with self.assertRaises(Exception):
+            RT.check_document(b"PASS: marker " + RT.SENTINEL.encode())
+
+    def test_qa_calls_actual_uno_commands(self):
+        self.assertIn(".uno:GoToEndOfDoc", RT.EXPRESSION)
+        self.assertIn(".uno:InsertText", RT.EXPRESSION)
+        self.assertIn(".uno:Save", RT.EXPRESSION)
+        self.assertIn(RT.SENTINEL, RT.EXPRESSION)
+
+
+if __name__=="__main__":
+    unittest.main()
