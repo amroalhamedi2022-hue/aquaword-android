@@ -127,6 +127,23 @@ python3 scripts/verify_editor_webview.py \
   --timeout 80
 test -s "$ARTIFACTS/editor-tablet-webview-state.json"
 
+# Perform an actual edit in the native Writer engine and require the saved
+# app-owned DOCX bytes to contain it. A successful UNO command alone does NOT pass.
+python3 scripts/android_edit_roundtrip.py --evidence-dir "$ARTIFACTS" --timeout 75
+test -s "$ARTIFACTS/roundtrip-result.txt"
+
+# Re-open the persisted document, proving that its actual DOCX bytes remain
+# readable by the native Android document engine.
+adb shell am start -W \
+  -n "$PKG/org.libreoffice.androidapp.qa.QaOpenDocumentActivity" \
+  2>&1 | tee "$ARTIFACTS/reopen-start.txt"
+sleep 25
+python3 scripts/verify_editor_webview.py \
+  --package "$PKG" \
+  --output "$ARTIFACTS/reopened-writer-state.json" \
+  --timeout 80
+test -s "$ARTIFACTS/reopened-writer-state.json"
+
 for picture in browser-screen.png editor-screen.png; do
   test "$(stat -c %s "$ARTIFACTS/$picture")" -gt 3000 || {
     echo "Invalid screenshot evidence: $picture" >&2
@@ -154,7 +171,7 @@ if change < 3.0:
     raise AssertionError("Browser and editor screenshots are suspiciously identical")
 print(f"Visible Android UI difference: {change:.1f} average RGB units")
 PY
-printf '\nPASS: Installed AquaWord, opened genuine Arabic Writer in phone + 16:10 simulated tablet, and exercised reversible Focus Mode.\n' | tee "$ARTIFACTS/smoke-result.txt"
+printf '\nPASS: Real AquaWord Writer opened on phone/tablet; Focus Mode worked; UNO edit persisted to DOCX and reopened in Android.\n' | tee "$ARTIFACTS/smoke-result.txt"
 printf 'NOT PROVEN: editing/save-reopen, advanced layout, tools, visual match, long-term stability or real Xiaomi Pad 5 behavior.\n' >> "$ARTIFACTS/smoke-result.txt"
 
 # Attach first-hand ADB evidence to exactly the gates that this smoke proves.
@@ -170,7 +187,8 @@ evidence = []
 for name in ("install.log", "installed-package.txt", "browser-screen.png",
              "browser-activity.txt", "editor-webview-state.json",
              "editor-tablet-16x10.png", "editor-tablet-webview-state.json",
-             "smoke-result.txt"):
+             "roundtrip-result.txt", "roundtrip-hash.txt",
+             "reopened-writer-state.json", "smoke-result.txt"):
     path = root / name
     evidence.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
 receipt = {
