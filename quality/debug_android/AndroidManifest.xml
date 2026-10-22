@@ -11,5 +11,10 @@
           android:name="android.support.FILE_PROVIDER_PATHS"
           android:resource="@xml/aquaword_qa_file_paths" />
     </provider>
+    <!-- Exported only inside a debuggable test APK; never included in release. -->
+    <activity
+        android:name="org.libreoffice.androidapp.qa.QaOpenDocumentActivity"
+        android:exported="true"
+        android:excludeFromRecents="true" />
   </application>
 </manifest>
