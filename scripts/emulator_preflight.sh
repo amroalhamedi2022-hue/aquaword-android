@@ -23,10 +23,14 @@ capture() {
     adb shell am start -a android.settings.SETTINGS >/dev/null 2>&1 || true
     sleep 5
     adb exec-out screencap -p > "$filename"
+    adb shell uiautomator dump /data/local/tmp/aquaword-screen.xml >/dev/null 2>&1 || true
+    adb exec-out cat /data/local/tmp/aquaword-screen.xml > "$filename.ui.xml" || true
     if [ -n "$aspect" ]; then
-      if python3 quality/check_screen.py "$filename" --aspect "$aspect"; then return 0; fi
+      if python3 quality/check_screen.py "$filename" --aspect "$aspect" &&
+         python3 quality/check_android_ui.py "$filename.ui.xml"; then return 0; fi
     else
-      if python3 quality/check_screen.py "$filename"; then return 0; fi
+      if python3 quality/check_screen.py "$filename" &&
+         python3 quality/check_android_ui.py "$filename.ui.xml"; then return 0; fi
     fi
   done
   echo "Android has no verifiable framebuffer after six attempts" >&2
