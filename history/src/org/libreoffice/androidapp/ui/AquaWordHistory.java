@@ -82,11 +82,21 @@ public final class AquaWordHistory {
                 }
                 output.getFD().sync();
             }
+            String newHash = hex(sha.digest());
+            // An unchanged document already has a safety copy; reopening it
+            // should not consume more storage. Compare with its newest entry.
+            for (Snapshot previous : readAll(dir)) {
+                if (!previous.displayName.equals(safeName))
+                    continue;
+                if (previous.sizeBytes == length && previous.sha256.equals(newHash))
+                    return previous;
+                break; // A changed document needs its own point-in-time copy.
+            }
             Properties props = new Properties();
             props.setProperty("name", safeName);
             props.setProperty("timestamp", String.valueOf(System.currentTimeMillis()));
             props.setProperty("size", String.valueOf(length));
-            props.setProperty("sha256", hex(sha.digest()));
+            props.setProperty("sha256", newHash);
             try (FileOutputStream metaOut = new FileOutputStream(pendingMeta)) {
                 props.store(metaOut, "AquaWord private document snapshot");
                 metaOut.getFD().sync();
