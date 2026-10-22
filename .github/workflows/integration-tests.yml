@@ -59,4 +59,20 @@ jobs:
           python3 scripts/apply_to_collabora.py --repo upstream-fixture --phase source
           grep -q 'AQUAWORD_AURORA_BEGIN' upstream-fixture/browser/css/notebookbar.css
           grep -Fq "applicationId 'com.aquaword.app'" upstream-fixture/android/app/appSettings.gradle.in
+          python3 -m pip install 'javalang==0.13.0'
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          import javalang
+          root=Path('upstream-fixture/android/app/src/main')
+          for file in [
+              root/'java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java',
+              root/'java/org/libreoffice/androidapp/ui/AquaWordHistory.java'
+          ]:
+              javalang.parse.parse(file.read_text(encoding='utf-8'))
+              print('Java syntax valid:',file)
+          for file in [root/'res/values/strings.xml',root/'res/menu/view_menu.xml']:
+              ET.parse(file)
+              print('Android resource XML valid:',file)
+          PY
           echo 'PASS: AquaWord integration applies cleanly to pinned upstream source files'
