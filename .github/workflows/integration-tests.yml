@@ -26,6 +26,15 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Syntax check
         run: python3 -m py_compile scripts/apply_to_collabora.py scripts/make_icons.py tests/test_overlay.py
+      - name: Compile and test offline document snapshot core
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/history-classes
+          javac -encoding UTF-8 -d build/history-classes \
+            history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java \
+            history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java
+          java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordHistoryTest
       - name: Verify five launcher icons
         shell: bash
         run: |
