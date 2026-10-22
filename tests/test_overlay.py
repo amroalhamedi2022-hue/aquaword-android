@@ -97,6 +97,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertTrue((self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java').is_file())
         menu=(self.path/'android/app/src/main/res/menu/view_menu.xml').read_text()
         self.assertEqual(menu.count('AQUAWORD_HISTORY_MENU'),1)
+        ar=(self.path/'android/app/src/main/res/values-ar/aquaword_strings.xml')
+        self.assertTrue(ar.is_file())
+        self.assertIn('نسخ الأمان',ar.read_text(encoding='utf-8'))
+        self.assertIn('wordprocessingml.document',activity)
 
     def test_missing_safety_copy_menu_aborts(self):
         path=self.path/'android/app/src/main/res/menu/view_menu.xml'
