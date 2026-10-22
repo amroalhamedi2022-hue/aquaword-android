@@ -37,10 +37,9 @@ if [ -z "$pid" ]; then
 fi
 echo "$pid" > "$ARTIFACTS/browser-process.txt"
 
-adb shell screencap -p /sdcard/aquaword-home.png
-adb pull /sdcard/aquaword-home.png "$ARTIFACTS/browser-screen.png" >/dev/null
-adb shell uiautomator dump /sdcard/aquaword-browser.xml >/dev/null 2>&1 || true
-adb pull /sdcard/aquaword-browser.xml "$ARTIFACTS/browser-ui.xml" >/dev/null 2>&1 || true
+adb exec-out screencap -p > "$ARTIFACTS/browser-screen.png"
+adb shell uiautomator dump /data/local/tmp/aquaword-browser.xml >/dev/null 2>&1 || true
+adb pull /data/local/tmp/aquaword-browser.xml "$ARTIFACTS/browser-ui.xml" >/dev/null 2>&1 || true
 adb logcat -d -v time > "$ARTIFACTS/browser-logcat.txt"
 adb shell dumpsys activity activities > "$ARTIFACTS/browser-activity.txt"
 grep -Fq "$BROWSER" "$ARTIFACTS/browser-activity.txt" || {
@@ -69,10 +68,9 @@ adb shell am start -W -a android.intent.action.VIEW \
   2>&1 | tee "$ARTIFACTS/editor-start.txt"
 sleep 35
 
-adb shell screencap -p /sdcard/aquaword-editor.png
-adb pull /sdcard/aquaword-editor.png "$ARTIFACTS/editor-screen.png" >/dev/null
-adb shell uiautomator dump /sdcard/aquaword-editor.xml >/dev/null 2>&1 || true
-adb pull /sdcard/aquaword-editor.xml "$ARTIFACTS/editor-ui.xml" >/dev/null 2>&1 || true
+adb exec-out screencap -p > "$ARTIFACTS/editor-screen.png"
+adb shell uiautomator dump /data/local/tmp/aquaword-editor.xml >/dev/null 2>&1 || true
+adb pull /data/local/tmp/aquaword-editor.xml "$ARTIFACTS/editor-ui.xml" >/dev/null 2>&1 || true
 adb logcat -d -v time > "$ARTIFACTS/editor-logcat.txt"
 adb shell dumpsys activity activities > "$ARTIFACTS/editor-activity.txt"
 adb shell dumpsys activity top > "$ARTIFACTS/editor-top.txt"
