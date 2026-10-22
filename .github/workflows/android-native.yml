@@ -238,3 +238,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/publish_qa_draft.sh
       # Publishing a draft is NOT a completed user-facing release.
+      - name: Explain and preserve native build failure evidence in run summary
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo '## AquaWord native build failed — NO verified APK'
+            echo ''
+            echo "Source commit: \`$(git rev-parse HEAD)\`"
+            echo "Upstream Collabora commit: \`$UPSTREAM_SHA\`"
+            echo ''
+            echo '### Runner storage at failure'
+            df -h .
+            echo ''
+            echo '### Build filesystem footprint'
+            if test -d collabora/engine; then du -sh collabora/engine || true; fi
+            if test -d collabora/android; then du -sh collabora/android || true; fi
+            echo ''
+            echo '### APK candidates (not verified)'
+            find collabora/android -type f -name '*.apk' -print 2>/dev/null || true
+            echo ''
+            echo 'Failed job steps and the full compiler error remain in the GitHub Actions logs. No artifact was labeled as a release.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
