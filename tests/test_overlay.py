@@ -29,6 +29,15 @@ class AquaWordIntegrationTests(unittest.TestCase):
 }''')
         make('android/app/src/main/AndroidManifest.xml','<application android:icon="${appIcon}" />')
         make('android/app/appSettings.gradle.in',"android.defaultConfig { applicationId '@APP_PACKAGE_NAME@' }")
+        make('android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java', """editFAB.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (isFabMenuOpen)
+                    collapseFabMenu();
+                else
+                    expandFabMenu();
+            }
+        });""")
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
@@ -37,6 +46,18 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.run_phase('source')
         self.assertEqual((self.path/'browser/css/notebookbar.css').read_text().count('AQUAWORD_AURORA_BEGIN'),1)
         self.assertEqual((self.path/'browser/css/mobilewizard.css').read_text().count('AQUAWORD_AURORA_BEGIN'),1)
+    def test_new_document_native_writer_only(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        c=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        self.assertEqual(c.count('AQUAWORD_WRITER_ONLY_NEW'),1)
+        self.assertIn('CREATE_DOCUMENT_REQUEST_CODE',c)
+        self.assertNotIn('expandFabMenu();',c)
+    def test_reject_missing_new_document_handler(self):
+        path=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
+        path.write_text('class Changed {}',encoding='utf-8')
+        with self.assertRaises(M.PatchError):
+            M.patch_writer_only_home(path)
     def test_gradle_labels(self):
         self.run_phase('source')
         s=(self.path/'android/app/build.gradle').read_text()
