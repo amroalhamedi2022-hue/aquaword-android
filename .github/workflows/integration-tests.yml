@@ -1,0 +1,35 @@
+name: AquaWord Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  overlay-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install image tool
+        run: python3 -m pip install 'Pillow==11.3.0'
+      - name: Generate AquaWord icons
+        run: python3 scripts/make_icons.py
+      - name: Run integration tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Syntax check
+        run: python3 -m py_compile scripts/apply_to_collabora.py scripts/make_icons.py tests/test_overlay.py
+      - name: Verify five launcher icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            test -s "branding/icons/mipmap-$d/aquaword_launcher.png"
+          done

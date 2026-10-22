@@ -1,0 +1,128 @@
+name: AquaWord Native Android (Manual Build)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aquaword-native
+  cancel-in-progress: false
+
+jobs:
+  native-debug:
+    # Heavy native build; run only manually. Ordinary pushes run integration-tests.yml.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      UPSTREAM_SHA: 2333344185931274f9c49d6c12a408cefcef6844
+      NDK_VERSION: 29.0.14206865
+      ABI: arm64-v8a
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Prepare integration files and run tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'Pillow==11.3.0'
+          python3 scripts/make_icons.py
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Check available Linux resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          nproc
+          free -h
+          df -h .
+          echo 'Warning: the Collabora/LibreOffice native engine may exceed a standard GitHub runner disk/time allowance.'
+      - name: Install native prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             git ca-certificates autoconf automake libtool gettext pkg-config             g++ make cmake ninja-build python3 python3-lxml             python3-polib python3-setuptools gperf bison flex nasm             zip unzip rsync curl patch libxml2-utils libxml2-dev libxslt1-dev             zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev             libx11-dev libxext-dev libxrender-dev libxinerama-dev libxt-dev             libxrandr-dev libxdamage-dev libxfixes-dev libxft-dev libsm-dev             libice-dev libcups2-dev libdbus-1-dev libssl-dev libzstd-dev             libglib2.0-dev libkrb5-dev libpam0g-dev libcap-dev libcairo2-dev             libgtk-3-dev libnss3-dev libnspr4-dev libicu-dev             nodejs npm
+      - name: Install matching Android components
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platform-tools' 'platforms;android-37' 'build-tools;37.0.0' "ndk;$NDK_VERSION"
+          test -d "$ANDROID_SDK_ROOT/ndk/$NDK_VERSION"
+      - name: Clone pinned Collabora monorepo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/CollaboraOnline/online.mirror.git collabora
+          git -C collabora -c advice.detachedHead=false checkout --detach "$UPSTREAM_SHA"
+          test "$(git -C collabora rev-parse HEAD)" = "$UPSTREAM_SHA"
+          test -d collabora/engine
+          test -d collabora/browser
+          test -d collabora/android
+          git -C collabora show -s --format='%H %cs %s' HEAD > upstream-version.txt
+      - name: Apply AquaWord branding before native configure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/apply_to_collabora.py --repo collabora --phase source
+          git -C collabora diff --check
+      - name: Build LibreOffice native engine for Android arm64
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd collabora/engine
+          cat > autogen.input <<EOF
+          --build=x86_64-unknown-linux-gnu
+          --with-android-ndk=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION
+          --with-android-sdk=$ANDROID_SDK_ROOT
+          --with-distro=CPAndroidAarch64
+          EOF
+          ./autogen.sh
+          make -j2
+      - name: Configure and compile Collabora Android app sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd collabora
+          ./autogen.sh
+          ./configure --enable-androidapp --with-lo-builddir="$PWD/engine" --with-android-abi="$ABI"
+          cd ..
+          python3 scripts/apply_to_collabora.py --repo collabora --phase postconfigure
+          make -C collabora -j2
+      - name: Build AquaWord APK with Gradle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd collabora/android
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify Android artifact and package ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          find collabora/android -type f -name '*debug*.apk' -print > output/apk-paths.txt
+          test -s output/apk-paths.txt
+          AAPT="$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt"
+          while IFS= read -r apk; do
+            unzip -t "$apk" >/dev/null
+            "$AAPT" dump badging "$apk" | grep -q "package: name='com.aquaword.app.debug'"
+            cp "$apk" "output/AquaWord-$(basename "$apk")"
+          done < output/apk-paths.txt
+          (cd output && sha256sum -- *.apk > SHA256SUMS)
+          cp upstream-version.txt output/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AquaWord-Android-arm64-Debug
+          path: output/
+          if-no-files-found: error
+          retention-days: 14
