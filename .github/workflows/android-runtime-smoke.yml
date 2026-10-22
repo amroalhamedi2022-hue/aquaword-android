@@ -64,7 +64,7 @@ jobs:
           profile: pixel_5
           disable-animations: true
           emulator-boot-timeout: 600
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
           script: bash scripts/run_android_smoke.sh "$APK" "$PWD/smoke-evidence"
       - name: Upload honest runtime evidence including screenshots/logcat
         if: always()
