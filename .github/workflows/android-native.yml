@@ -7,7 +7,7 @@ on:
       - '.github/workflows/android-native.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: aquaword-native
@@ -43,6 +43,8 @@ jobs:
           python3 -m pip install 'Pillow==11.3.0' 'python-docx==1.2.0' 'lxml==6.0.2' 'polib==1.2.0'
           python3 scripts/make_icons.py
           python3 scripts/generate_templates.py
+          python3 quality/build_rich_fixture.py
+          python3 quality/check_rich_docx.py
           python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Check available Linux resources
         shell: bash
@@ -93,6 +95,8 @@ jobs:
           grep -q 'AQUAWORD_ASYNC_DOCUMENT_CREATE' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_SAFE_SAF_PERMISSIONS' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_PERIODIC_NATIVE_AUTOSAVE' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -q 'AQUAWORD_NATIVE_SAVE_CHECKPOINT' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -q 'AQUAWORD_NATIVE_SAF_SAVE_BACK' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           git -C collabora diff --check
       - name: Check build interpreter dependencies before expensive compilation
         shell: bash
@@ -163,7 +167,7 @@ jobs:
           grep -q 'AQUAWORD_ASYNC_DOCUMENT_CREATE' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_SAFE_SAF_PERMISSIONS' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_FOCUS_BOOTSTRAP_BEGIN' collabora/browser/src/main.js
-          test -s collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java
+          test -s collabora/android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java
           test -s collabora/android/app/src/main/res/values-ar/aquaword_strings.xml
           test -s collabora/android/app/src/main/assets/aquaword/research_ar.docx
           test -s collabora/android/app/src/main/assets/aquaword/clinical_case.docx
@@ -225,5 +229,12 @@ jobs:
           else
             echo 'Android runtime smoke not verified; no release is authorized.' >> "$GITHUB_STEP_SUMMARY"
           fi
-      # Do not upload APK to Actions Artifacts until the storage quota resets.
-      # Do not publish unfinished APK as a public GitHub Release.
+      # Only after real Android edit-save-reopen succeeds, store as UNPUBLISHED
+      # draft Release to avoid exhausted Actions artifact storage.
+      - name: Preserve emulator-verified APK in an unpublished QA draft
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_qa_draft.sh
+      # Publishing a draft is NOT a completed user-facing release.
