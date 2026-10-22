@@ -3,8 +3,21 @@ name: AquaWord Integration Tests
 on:
   push:
     branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - 'history/**'
+      - 'branding/**'
+      - 'quality/**'
+      - 'templates/**'
+      - '.github/workflows/integration-tests.yml'
   pull_request:
   workflow_dispatch:
+
+# Avoid burning scarce private-repository runner minutes on superseded commits.
+concurrency:
+  group: aquaword-integration-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
