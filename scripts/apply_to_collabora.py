@@ -42,6 +42,35 @@ def append_css(target: Path, skin: Path) -> bool:
         return False
     return store(target, original.rstrip() + '\n\n' + block + '\n')
 
+
+def patch_focus_bootstrap(path: Path) -> bool:
+    """Install an accessible native-only focus toggle after app.map is initialized."""
+    body = require(path).read_text(encoding='utf-8')
+    marker = 'AQUAWORD_FOCUS_BOOTSTRAP_BEGIN'
+    snippet = require(ROOT/'branding/focus_mode.js').read_text(encoding='utf-8').strip()
+    if marker in body:
+        if snippet not in body:
+            raise PatchError('Existing focus bootstrap differs from checked-in source')
+        return False
+    anchor = "window.addEventListener('beforeunload', function () {"
+    if body.count(anchor) != 1:
+        raise PatchError('Upstream main.js bootstrap anchor changed')
+    block = ('/* AQUAWORD_FOCUS_BOOTSTRAP_BEGIN */\n' + snippet +
+             '\n/* AQUAWORD_FOCUS_BOOTSTRAP_END */\n\n')
+    return store(path, body.replace(anchor, block + anchor, 1))
+
+
+def patch_focus_styles(path: Path) -> bool:
+    """Hide editor chrome only while focus mode is on, never the canvas."""
+    body = require(path).read_text(encoding='utf-8')
+    marker = 'AQUAWORD_FOCUS_CSS_BEGIN'
+    snippet = require(ROOT/'branding/focus_mode.css').read_text(encoding='utf-8').strip()
+    if marker in body:
+        if snippet not in body:
+            raise PatchError('Existing focus CSS differs from checked-in source')
+        return False
+    return store(path, body.rstrip() + '\n\n' + snippet + '\n')
+
 def patch_app_settings_template(path: Path) -> bool:
     original = "applicationId '@APP_PACKAGE_NAME@'"
     branded = "applicationId '" + APP_ID + "'"
@@ -325,12 +354,16 @@ def source(repo: Path) -> None:
         repo/'android/app/appSettings.gradle.in',
         repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java',
         repo/'android/app/src/main/res/menu/view_menu.xml',
-        repo/'android/app/src/main/res/values/strings.xml'
+        repo/'android/app/src/main/res/values/strings.xml',
+        repo/'browser/src/main.js',
+        repo/'browser/css/toolbar.css'
     ]
     for item in targets:
         require(item)
     print('Notebookbar style:', append_css(targets[0], ROOT/'branding/notebookbar.aurora.css'))
     print('Mobile style:', append_css(targets[1], ROOT/'branding/mobilewizard.aurora.css'))
+    print('Focus bootstrap:', patch_focus_bootstrap(targets[8]))
+    print('Focus styles:', patch_focus_styles(targets[9]))
     print('Android display name:', patch_gradle_labels(targets[2]))
     print('App icon:', patch_manifest_icon(targets[3]))
     print('App ID:', patch_app_settings_template(targets[4]))
