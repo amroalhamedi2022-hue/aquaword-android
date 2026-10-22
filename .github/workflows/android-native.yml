@@ -102,7 +102,7 @@ jobs:
           set -euo pipefail
           cd collabora
           ./autogen.sh
-          ./configure --enable-androidapp --with-lo-builddir="$PWD/engine" --with-android-abi="$ABI"
+          ./configure --enable-androidapp --disable-setcap --with-lo-builddir="$PWD/engine" --with-android-abi="$ABI" --with-app-name=AquaWord --with-app-package-name=com.aquaword.app
           cd ..
           python3 scripts/apply_to_collabora.py --repo collabora --phase postconfigure
           make -C collabora -j2
@@ -113,6 +113,13 @@ jobs:
           cd collabora/android
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify AquaWord native Android UI integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'AQUAWORD_PREEDIT_COPY' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
+          test -s collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java
+          test -s collabora/android/app/src/main/res/values-ar/aquaword_strings.xml
       - name: Verify Android artifact and package ID
         shell: bash
         run: |
