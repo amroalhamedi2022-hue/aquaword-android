@@ -102,6 +102,31 @@ python3 scripts/verify_editor_webview.py \
   --timeout 80
 test -s "$ARTIFACTS/editor-webview-state.json"
 
+# Second independent live runtime check: approximate Xiaomi Pad 5 landscape
+# geometry using the SAME running Android app. This is a simulated viewport,
+# NOT a claim to have tested a physical Pad 5.
+adb shell wm size 2560x1600
+adb shell wm density 320
+adb shell cmd window set-user-rotation lock 0 || true
+sleep 15
+adb exec-out screencap -p > "$ARTIFACTS/editor-tablet-16x10.png"
+if ! python3 quality/check_screen.py "$ARTIFACTS/editor-tablet-16x10.png" --aspect 1.6; then
+  adb shell wm size 1600x2560
+  adb shell cmd window set-user-rotation lock 1 || true
+  sleep 15
+  adb exec-out screencap -p > "$ARTIFACTS/editor-tablet-16x10.png"
+  python3 quality/check_screen.py "$ARTIFACTS/editor-tablet-16x10.png" --aspect 1.6
+fi
+adb shell pidof "$PKG" >/dev/null || {
+  echo "AquaWord crashed during 16:10 landscape transition" >&2
+  exit 1
+}
+python3 scripts/verify_editor_webview.py \
+  --package "$PKG" \
+  --output "$ARTIFACTS/editor-tablet-webview-state.json" \
+  --timeout 80
+test -s "$ARTIFACTS/editor-tablet-webview-state.json"
+
 for picture in browser-screen.png editor-screen.png; do
   test "$(stat -c %s "$ARTIFACTS/$picture")" -gt 3000 || {
     echo "Invalid screenshot evidence: $picture" >&2
@@ -129,7 +154,7 @@ if change < 3.0:
     raise AssertionError("Browser and editor screenshots are suspiciously identical")
 print(f"Visible Android UI difference: {change:.1f} average RGB units")
 PY
-printf '\nPASS: AquaWord install + browser + Arabic Writer document layer confirmed through real WebView inspection.\n' | tee "$ARTIFACTS/smoke-result.txt"
+printf '\nPASS: Installed AquaWord, opened genuine Arabic Writer in phone + 16:10 simulated tablet, and exercised reversible Focus Mode.\n' | tee "$ARTIFACTS/smoke-result.txt"
 printf 'NOT PROVEN: editing/save-reopen, advanced layout, tools, visual match, long-term stability or real Xiaomi Pad 5 behavior.\n' >> "$ARTIFACTS/smoke-result.txt"
 
 # Attach first-hand ADB evidence to exactly the gates that this smoke proves.
@@ -143,7 +168,9 @@ from pathlib import Path
 root = Path(sys.argv[1])
 evidence = []
 for name in ("install.log", "installed-package.txt", "browser-screen.png",
-             "browser-activity.txt", "editor-webview-state.json", "smoke-result.txt"):
+             "browser-activity.txt", "editor-webview-state.json",
+             "editor-tablet-16x10.png", "editor-tablet-webview-state.json",
+             "smoke-result.txt"):
     path = root / name
     evidence.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
 receipt = {
