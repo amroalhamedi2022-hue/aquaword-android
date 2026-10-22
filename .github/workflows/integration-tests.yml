@@ -49,6 +49,13 @@ jobs:
           set -euo pipefail
           node --check branding/focus_mode.js
           node tests/test_focus_mode.cjs
+      - name: Generate mandatory honest feature comparison report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 quality/audit.py --evidence-dir quality/no-runtime-evidence --report quality/actual-vs-required.md
+          test -s quality/actual-vs-required.md
+          grep -q 'NOT_VERIFIED' quality/actual-vs-required.md
       - name: Run integration tests
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Syntax check
@@ -68,6 +75,14 @@ jobs:
             history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java \
             history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java
           java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordHistoryTest
+      - name: Upload required-vs-verified audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AquaWord-Requirements-Audit
+          path: quality/actual-vs-required.md
+          if-no-files-found: warn
+          retention-days: 14
       - name: Verify five launcher icons
         shell: bash
         run: |
