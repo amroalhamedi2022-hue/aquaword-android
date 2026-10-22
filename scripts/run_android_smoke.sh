@@ -96,5 +96,26 @@ for picture in browser-screen.png editor-screen.png; do
     exit 1
   }
 done
+# Fail visibly empty or identical screenshots; this prevents a background
+# Activity and non-rendering document from being counted as a full UI pass.
+python3 - "$ARTIFACTS" <<'PY'
+from pathlib import Path
+import sys
+from PIL import Image, ImageChops, ImageStat
+folder = Path(sys.argv[1])
+home = Image.open(folder / "browser-screen.png").convert("RGB")
+editor = Image.open(folder / "editor-screen.png").convert("RGB")
+if home.size != editor.size or home.width < 480 or home.height < 640:
+    raise AssertionError(f"Unexpected Android screenshot geometry: {home.size}, {editor.size}")
+for name, photo in (("browser", home), ("editor", editor)):
+    detail = ImageStat.Stat(photo.resize((100, 100)))
+    if max(detail.var) < 100.0:
+        raise AssertionError(f"{name} appears to be an empty or nearly blank screen")
+difference = ImageChops.difference(home, editor)
+change = sum(ImageStat.Stat(difference.resize((100, 100))).mean) / 3.0
+if change < 3.0:
+    raise AssertionError("Browser and editor screenshots are suspiciously identical")
+print(f"Visible Android UI difference: {change:.1f} average RGB units")
+PY
 printf '\nPASS: installed AquaWord, launched browser and editor, opened Arabic DOCX without immediate process death.\n' | tee "$ARTIFACTS/smoke-result.txt"
 printf 'NOT PROVEN: text rendering, save/reopen, menus, focus mode, long-term stability or real Xiaomi Pad 5 behavior.\n' >> "$ARTIFACTS/smoke-result.txt"
