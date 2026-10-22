@@ -129,6 +129,12 @@ class AquaWordIntegrationTests(unittest.TestCase):
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+    def test_writer_creation_uses_real_docx_mime(self):
+        self.run_phase('source')
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        self.assertIn('application/vnd.openxmlformats-officedocument.wordprocessingml.document',activity)
+        self.assertNotIn('FileUtilities.DEFAULT_WRITER_EXTENSION, "*/*"',activity)
+
     def test_save_callbacks_create_real_history_checkpoints(self):
         self.run_phase('source')
         self.run_phase('source')
