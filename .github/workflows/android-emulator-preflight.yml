@@ -34,7 +34,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
           script: |
-            set -euo pipefail
+            bash -euo pipefail <<'BASH'
             mkdir -p emulator-evidence
             adb wait-for-device
             adb shell getprop sys.boot_completed | tr -d '\r' | grep -qx 1
@@ -46,6 +46,7 @@ jobs:
             adb pull /sdcard/emulator-first-boot.png emulator-evidence/screen.png
             test -s emulator-evidence/screen.png
             echo 'PASS: Android API35 emulator booted; does not establish ARM translation or APK functionality' | tee emulator-evidence/result.txt
+            BASH
       - name: Keep actual emulator boot evidence
         if: always()
         uses: actions/upload-artifact@v4
