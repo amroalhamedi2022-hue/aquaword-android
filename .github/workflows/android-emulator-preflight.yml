@@ -42,8 +42,7 @@ jobs:
             adb shell getprop ro.product.cpu.abilist | tee emulator-evidence/abis.txt
             adb shell getprop ro.dalvik.vm.isa.arm64 | tee emulator-evidence/arm64-translator.txt
             adb shell getprop ro.build.version.release | tee emulator-evidence/android-version.txt
-            adb shell screencap -p /sdcard/emulator-first-boot.png
-            adb pull /sdcard/emulator-first-boot.png emulator-evidence/screen.png
+            adb exec-out screencap -p > emulator-evidence/screen.png
             test -s emulator-evidence/screen.png
             echo 'PASS: Android API35 emulator booted; does not establish ARM translation or APK functionality' | tee emulator-evidence/result.txt
             BASH
