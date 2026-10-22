@@ -249,7 +249,7 @@ def patch_history_activity(path: Path) -> bool:
         new Thread(() -> {
             String problem = null;
             try (InputStream data = getContentResolver().openInputStream(uri)) {
-                AquaWordHistory.capture(getFilesDir(), data, name);
+                AquaWordHistory.capture(getFilesDir(), data, name, uri.toString());
             } catch (Exception failure) {
                 problem = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
             }
