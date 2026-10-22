@@ -63,10 +63,11 @@ adb push "$DOCX" /data/local/tmp/aquaword-research-ar.docx >/dev/null
 adb shell run-as "$PKG" mkdir -p files
 adb shell run-as "$PKG" cp /data/local/tmp/aquaword-research-ar.docx files/aquaword-research-ar.docx
 adb shell run-as "$PKG" ls -l files/aquaword-research-ar.docx | tee "$ARTIFACTS/document-inside-app.txt"
-adb shell am start -W -a android.intent.action.VIEW \
-  -d "file:///data/user/0/$PKG/files/aquaword-research-ar.docx" \
-  -t "$MIME" \
-  -n "$PKG/$EDITOR" \
+# Launch an app-owned debug-only trampoline that creates a real writable
+# content:// FileProvider URI and passes SAF grants to native LOActivity.
+# The old file:// intent skipped Collabora's content-copy editor initialization.
+adb shell am start -W \
+  -n "$PKG/org.libreoffice.androidapp.qa.QaOpenDocumentActivity" \
   2>&1 | tee "$ARTIFACTS/editor-start.txt"
 sleep 35
 
@@ -120,7 +121,7 @@ if change < 3.0:
 print(f"Visible Android UI difference: {change:.1f} average RGB units")
 PY
 printf '\nPASS: installed AquaWord, launched browser and editor, opened Arabic DOCX without immediate process death.\n' | tee "$ARTIFACTS/smoke-result.txt"
-printf 'NOT PROVEN: text rendering, save/reopen, menus, focus mode, long-term stability or real Xiaomi Pad 5 behavior.\n' >> "$ARTIFACTS/smoke-result.txt"
+printf 'NOT PROVEN: editing/save-reopen, advanced layout, tools, visual match, long-term stability or real Xiaomi Pad 5 behavior.\n' >> "$ARTIFACTS/smoke-result.txt"
 
 # Attach first-hand ADB evidence to exactly the gates that this smoke proves.
 # Do not record formatting, visual match, save/reopen or template features as PASS.
