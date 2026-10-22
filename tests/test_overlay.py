@@ -179,6 +179,12 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertNotIn('thread.run();', activity)
         self.assertNotIn('thread.join();', activity)
         self.assertIn('if (completed)\n                    open(uri);', activity)
+        self.assertIn('boolean failed = false;',activity)
+        self.assertIn('failed = true;',activity)
+        self.assertIn('final boolean completed = !failed;',activity)
+        self.assertNotIn('saved = true;',activity)
+        self.assertIn('output.flush();',activity)
+        self.assertLess(activity.index('output.flush();'), activity.index('final boolean completed = !failed;'))
         self.assertNotIn('createNewFile(uri, extension);\n\n                open(uri);', activity)
 
     def test_async_create_rejects_changed_upstream(self):
