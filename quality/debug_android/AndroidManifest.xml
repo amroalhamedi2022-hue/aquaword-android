@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- QA-only content Uri fixture provider. Only packaged into debug APKs. -->
+  <application>
+    <provider
+        android:name="androidx.core.content.FileProvider"
+        android:authorities="${applicationId}.qa-documents"
+        android:exported="false"
+        android:grantUriPermissions="true">
+      <meta-data
+          android:name="android.support.FILE_PROVIDER_PATHS"
+          android:resource="@xml/aquaword_qa_file_paths" />
+    </provider>
+  </application>
+</manifest>
