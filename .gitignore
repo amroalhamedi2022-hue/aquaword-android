@@ -1,0 +1,14 @@
+# Generated AquaWord assets
+branding/icons/
+__pycache__/
+*.pyc
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+*.keystore
+*.jks
+collabora/
+output/
+.DS_Store
