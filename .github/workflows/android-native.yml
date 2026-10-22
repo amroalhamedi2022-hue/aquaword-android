@@ -110,6 +110,20 @@ jobs:
           command -v node
           command -v npm
           command -v javac
+      - name: Validate real Collabora configure flags before expensive engine build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd collabora
+          ./autogen.sh
+          ./configure --help > /tmp/aquaword-collabora-configure-help.txt
+          for flag in --enable-androidapp --with-lo-builddir --with-android-abi --with-app-name --with-app-package-name; do
+            grep -F -- "$flag" /tmp/aquaword-collabora-configure-help.txt >/dev/null || {
+              echo "Missing required Collabora configure option: $flag" >&2
+              exit 1
+            }
+          done
+          echo 'PASS: pinned Collabora source supports required AquaWord Android flags'
       - name: Build LibreOffice native engine for Android arm64
         shell: bash
         run: |
