@@ -56,6 +56,16 @@ jobs:
               assert any(p.style.name.startswith('Heading') for p in d.paragraphs),path
               print(path, len(d.paragraphs), 'paragraphs')
           PY
+      - name: Real LibreOffice DOCX import and re-save roundtrip (not Android)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v soffice >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends libreoffice-writer
+          fi
+          soffice --version
+          python3 quality/template_roundtrip.py
       - name: Run native Android focus-mode behavior tests
         shell: bash
         run: |
