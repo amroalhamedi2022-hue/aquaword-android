@@ -3,6 +3,7 @@ package org.libreoffice.androidapp.ui;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import org.libreoffice.androidlib.AquaWordHistory;
 public class AquaWordHistoryTest {
     private static void check(boolean okay, String msg) {
         if (!okay) throw new AssertionError(msg);
