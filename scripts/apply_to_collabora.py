@@ -396,7 +396,7 @@ def patch_async_new_document_creation(path: Path) -> bool:
     replacement = '''    // AQUAWORD_ASYNC_DOCUMENT_CREATE: open only when SAF write completes.
     private void createNewFile(final Uri uri, final String extension) {
         new Thread(() -> {
-            boolean saved = false;
+            boolean failed = false;
             try (InputStream template = getAssets().open("templates/untitled." + extension);
                  OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
                 if (output == null)
@@ -408,11 +408,12 @@ def patch_async_new_document_creation(path: Path) -> bool:
                         output.write(buffer, 0, bytesRead);
                 }
                 output.flush();
-                saved = true;
+                // Successful close of both streams is required before opening.
             } catch (Exception error) {
+                failed = true;
                 Log.e(LOGTAG, "AquaWord document creation failed", error);
             }
-            final boolean completed = saved;
+            final boolean completed = !failed;
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed())
                     return;
