@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - '.github/workflows/android-emulator-preflight.yml'
+      - 'scripts/emulator_preflight.sh'
   workflow_dispatch:
 
 permissions:
