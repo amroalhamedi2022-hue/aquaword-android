@@ -71,6 +71,60 @@ def patch_focus_styles(path: Path) -> bool:
         return False
     return store(path, body.rstrip() + '\n\n' + snippet + '\n')
 
+
+def patch_periodic_native_autosave(path: Path) -> bool:
+    """Use native save every 2 minutes while foreground editing.
+
+    Existing upstream onPause save stays intact; lifecycle cancels callbacks.
+    """
+    body = require(path).read_text(encoding='utf-8')
+    marker = 'AQUAWORD_PERIODIC_NATIVE_AUTOSAVE'
+    if marker in body:
+        if 'mAquaWordSaveHandler.removeCallbacks(mAquaWordSaveTick);' not in body:
+            raise PatchError('Partial periodic autosave integration')
+        return False
+    field_anchor = '    private boolean documentLoaded = false;'
+    resume_anchor = '''    protected void onResume() {
+        super.onResume();
+        Log.i(TAG, "onResume..");
+    }'''
+    pause_anchor = '''    protected void onPause() {
+        // A Save similar to an autosave'''
+    destroy_anchor = '''    protected void onDestroy() {
+        stopWatchingForHardwareKeyboard();'''
+    for anchor in (field_anchor, resume_anchor, pause_anchor, destroy_anchor):
+        if body.count(anchor) != 1:
+            raise PatchError('Upstream LOActivity lifecycle changed: ' + anchor[:55])
+    fields = '''    // AQUAWORD_PERIODIC_NATIVE_AUTOSAVE: save unmodified documents efficiently.
+    private static final long AQUAWORD_AUTOSAVE_MS = 120_000L;
+    private final Handler mAquaWordSaveHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mAquaWordSaveTick = new Runnable() {
+        @Override
+        public void run() {
+            if (documentLoaded && isDocEditable && !isFinishing() && !isDestroyed()) {
+                postMobileMessageNative("save dontTerminateEdit=1 dontSaveIfUnmodified=1");
+            }
+            if (!isFinishing() && !isDestroyed()) {
+                mAquaWordSaveHandler.postDelayed(this, AQUAWORD_AUTOSAVE_MS);
+            }
+        }
+    };
+'''
+    body = body.replace(field_anchor, field_anchor + '\n' + fields, 1)
+    body = body.replace(resume_anchor, '''    protected void onResume() {
+        super.onResume();
+        mAquaWordSaveHandler.removeCallbacks(mAquaWordSaveTick);
+        mAquaWordSaveHandler.postDelayed(mAquaWordSaveTick, AQUAWORD_AUTOSAVE_MS);
+        Log.i(TAG, "onResume..");
+    }''', 1)
+    body = body.replace(pause_anchor, '''    protected void onPause() {
+        mAquaWordSaveHandler.removeCallbacks(mAquaWordSaveTick);
+        // A Save similar to an autosave''', 1)
+    body = body.replace(destroy_anchor, '''    protected void onDestroy() {
+        mAquaWordSaveHandler.removeCallbacks(mAquaWordSaveTick);
+        stopWatchingForHardwareKeyboard();''', 1)
+    return store(path, body)
+
 def patch_app_settings_template(path: Path) -> bool:
     original = "applicationId '@APP_PACKAGE_NAME@'"
     branded = "applicationId '" + APP_ID + "'"
@@ -480,7 +534,8 @@ def source(repo: Path) -> None:
         repo/'android/app/src/main/res/values/strings.xml',
         repo/'browser/src/main.js',
         repo/'browser/css/toolbar.css',
-        repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java'
+        repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java',
+        repo/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java'
     ]
     for item in targets:
         require(item)
@@ -498,6 +553,7 @@ def source(repo: Path) -> None:
     print('Async safe new-file creation:', patch_async_new_document_creation(targets[5]))
     print('SAF document permission handling:', patch_saf_permission_handling(targets[5]))
     print('DOCX default document format:', patch_default_docx(targets[10], targets[5]))
+    print('Lifecycle-aware native autosave:', patch_periodic_native_autosave(targets[11]))
     print('History storage class:', copy_history_source(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Icons copied:', copy_icons(repo))
