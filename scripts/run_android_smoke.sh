@@ -54,7 +54,7 @@ if grep -E 'FATAL EXCEPTION|UnsatisfiedLinkError|NoClassDefFoundError' "$ARTIFAC
 fi
 
 # Open a real, generated Arabic research DOCX; this is not a mock document.
-DOCX="templates/generated/research_ar.docx"
+DOCX="quality/fixtures/qa_rich_arabic.docx"
 test -s "$DOCX"
 # The first runtime test should avoid special external-storage grants.
 # Use run-as (only available for the debuggable CI APK) to place the DOCX
