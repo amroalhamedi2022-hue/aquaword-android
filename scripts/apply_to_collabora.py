@@ -413,6 +413,34 @@ def patch_saf_permission_handling(path: Path) -> bool:
     body = body.replace(original, 'persistDocumentPermission(uri, data);')
     return store(path, body.replace(anchor, helper + anchor, 1))
 
+
+def patch_default_docx(file_utilities: Path, activity: Path) -> bool:
+    """New AquaWord documents use Microsoft's interoperable DOCX container by default.
+
+    All existing ODT documents remain supported by the native Collabora engine.
+    """
+    utilities = require(file_utilities).read_text(encoding='utf-8')
+    original = 'public static final String DEFAULT_WRITER_EXTENSION = ".odt";'
+    branded = 'public static final String DEFAULT_WRITER_EXTENSION = ".docx"; // AQUAWORD_DEFAULT_DOCX'
+    if utilities.count(original) == 1:
+        changed_util = utilities.replace(original, branded, 1)
+    elif utilities.count(branded) == 1:
+        changed_util = utilities
+    else:
+        raise PatchError('Default Writer extension anchor changed')
+    body = require(activity).read_text(encoding='utf-8')
+    original_fallback = '(requestCode == CREATE_DOCUMENT_REQUEST_CODE) ? "odt" :'
+    branded_fallback = '(requestCode == CREATE_DOCUMENT_REQUEST_CODE) ? "docx" :'
+    if body.count(original_fallback) == 1:
+        changed_body = body.replace(original_fallback, branded_fallback, 1)
+    elif body.count(branded_fallback) == 1:
+        changed_body = body
+    else:
+        raise PatchError('Default document extension fallback anchor changed')
+    change1 = store(file_utilities, changed_util)
+    change2 = store(activity, changed_body)
+    return change1 or change2
+
 def copy_history_source(repo: Path) -> bool:
     src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
     target = repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java'
@@ -451,7 +479,8 @@ def source(repo: Path) -> None:
         repo/'android/app/src/main/res/menu/view_menu.xml',
         repo/'android/app/src/main/res/values/strings.xml',
         repo/'browser/src/main.js',
-        repo/'browser/css/toolbar.css'
+        repo/'browser/css/toolbar.css',
+        repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java'
     ]
     for item in targets:
         require(item)
@@ -468,6 +497,7 @@ def source(repo: Path) -> None:
     print('Safety copy activity:', patch_history_activity(targets[5]))
     print('Async safe new-file creation:', patch_async_new_document_creation(targets[5]))
     print('SAF document permission handling:', patch_saf_permission_handling(targets[5]))
+    print('DOCX default document format:', patch_default_docx(targets[10], targets[5]))
     print('History storage class:', copy_history_source(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Icons copied:', copy_icons(repo))
