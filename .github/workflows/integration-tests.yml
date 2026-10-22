@@ -53,6 +53,12 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Syntax check
         run: python3 -m py_compile scripts/apply_to_collabora.py scripts/make_icons.py tests/test_overlay.py
+      - name: Validate real Android emulator and APK runtime test scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/emulator_preflight.sh
+          bash -n scripts/run_android_smoke.sh
       - name: Compile and test offline document snapshot core
         shell: bash
         run: |
