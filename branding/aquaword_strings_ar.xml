@@ -9,4 +9,5 @@
     <string name="aquaword_choose_snapshot">اختر نسخة لاستعادتها كملف جديد</string>
     <string name="aquaword_restore_success">تمت استعادة النسخة في ملف جديد</string>
     <string name="aquaword_restore_failure">تعذّرت استعادة نسخة الأمان المحددة</string>
+    <string name="aquaword_new_file_failed">تعذّر إنشاء المستند، ولم يتم فتح ملف غير مكتمل.</string>
 </resources>
