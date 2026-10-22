@@ -36,6 +36,21 @@ public class AquaWordHistoryTest {
             AquaWordHistory.Snapshot sourceAAgain = AquaWordHistory.capture(
                 root, new ByteArrayInputStream(sameBytes), "duplicate-name.docx", "content://provider-a/123");
             check(sourceAAgain.file.equals(sourceA.file), "unchanged same-source duplicate not deduplicated");
+            // A matching metadata SHA does not prove existing bytes are healthy.
+            // If a previously saved file suffered bit rot, recapture from the
+            // still-readable input instead of reusing the corrupted backup.
+            try (RandomAccessFile flip = new RandomAccessFile(sourceA.file, "rw")) {
+                flip.seek(0);
+                flip.write(0x7e);
+            }
+            AquaWordHistory.Snapshot repaired = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(sameBytes), "duplicate-name.docx",
+                "content://provider-a/123");
+            check(!repaired.file.equals(sourceA.file), "bit-rot backup was incorrectly reused");
+            ByteArrayOutputStream repairedData = new ByteArrayOutputStream();
+            AquaWordHistory.restore(repaired, repairedData);
+            check(Arrays.equals(sameBytes, repairedData.toByteArray()), "fresh copy must be readable");
+
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             AquaWordHistory.restore(s, out);
             check(Arrays.equals(unicode, out.toByteArray()), "roundtrip");
@@ -55,7 +70,7 @@ public class AquaWordHistoryTest {
                 AquaWordHistory.capture(root, new ByteArrayInputStream(huge), "sample"+i+".odt");
             }
             check(AquaWordHistory.list(root).size() <= 60, "retention count");
-            System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, unchanged-file deduplication, separate source histories, changed revisions, retention");
+            System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, verified deduplication, bit-rot recovery, separate source histories, changed revisions, retention");
         } finally {
             delete(root);
         }
