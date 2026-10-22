@@ -1,0 +1,77 @@
+name: AquaWord Android Runtime Smoke
+
+# A native build passing is only a prerequisite. This job must install it,
+# open the real document browser, and load an actual Arabic DOCX.
+on:
+  workflow_run:
+    workflows: ["AquaWord Native Android (Internal CI)"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  android-runtime:
+    # A manual dispatch has no upstream APK id. Require a successful parent run.
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate genuine Arabic DOCX for runtime opening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'python-docx==1.2.0'
+          python3 scripts/generate_templates.py
+          bash -n scripts/run_android_smoke.sh
+      - name: Download APK from successful native run
+        uses: actions/download-artifact@v4
+        with:
+          name: AquaWord-Android-arm64-Debug
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: native-artifact
+      - name: Choose actual AquaWord debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' matches < <(find native-artifact -type f -name 'AquaWord-*.apk' -print0)
+          test "${#matches[@]}" = "1" || {
+            echo "Expected exactly one AquaWord APK; found ${#matches[@]}" >&2
+            exit 1
+          }
+          echo "APK=$(realpath "${matches[0]}")" >> "$GITHUB_ENV"
+      - name: Enable Linux KVM for Android emulator
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
+      - name: Run actual Android install/browser/DOCX smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          script: bash scripts/run_android_smoke.sh "$APK" "$PWD/smoke-evidence"
+      - name: Upload honest runtime evidence including screenshots/logcat
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AquaWord-Android-Runtime-Evidence
+          path: smoke-evidence/
+          if-no-files-found: warn
+          retention-days: 14
