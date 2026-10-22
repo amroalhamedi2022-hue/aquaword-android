@@ -150,6 +150,23 @@ python3 scripts/verify_editor_webview.py \
   --output "$ARTIFACTS/reopened-writer-state.json" \
   --timeout 80
 test -s "$ARTIFACTS/reopened-writer-state.json"
+# Confirm cold-reopened process still owns precisely the saved DOCX bytes.
+adb exec-out run-as "$PKG" cat files/aquaword-research-ar.docx > "$ARTIFACTS/cold-reopened-document.docx"
+python3 - "$ARTIFACTS" <<'PY'
+import hashlib
+import sys
+from pathlib import Path
+root=Path(sys.argv[1])
+payload=(root/"cold-reopened-document.docx").read_bytes()
+expected=(root/"roundtrip-hash.txt").read_text().strip()
+if hashlib.sha256(payload).hexdigest()!=expected:
+    raise AssertionError("Saved DOCX changed during cold process restart")
+sys.path.insert(0,str(Path.cwd()/"scripts"))
+from android_edit_roundtrip import check_document
+if not check_document(payload):
+    raise AssertionError("Reopened DOCX missing edits or original Arabic/table/image")
+print("PASS: cold Android app restart retained exact enriched DOCX")
+PY
 
 for picture in browser-screen.png editor-screen.png; do
   test "$(stat -c %s "$ARTIFACTS/$picture")" -gt 3000 || {
@@ -223,7 +240,7 @@ receipts=[
           "Focus Mode entered and exited; editor page remained visible"),
     proof("FILE-03",
           ("edit-command.json","roundtrip-result.txt","original-docx-sha256.txt","roundtrip-hash.txt",
-           "reopened-writer-state.json","smoke-result.txt"),
+           "reopened-writer-state.json","cold-reopened-document.docx","smoke-result.txt"),
           "UNO InsertText + native Save + read actual DOCX bytes + reopen",
           "Inserted QA text survived save to app-owned DOCX and Android reopen")
 ]
