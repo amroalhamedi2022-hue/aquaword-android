@@ -495,6 +495,32 @@ def patch_default_docx(file_utilities: Path, activity: Path) -> bool:
     change2 = store(activity, changed_body)
     return change1 or change2
 
+
+def copy_debug_qa_file_provider(repo: Path) -> int:
+    """Add Android FileProvider fixture ONLY to debug variant (never release).
+
+    The runtime harness must open a real content:// Uri, the same code path
+    used by Android's Storage Access Framework and other document providers.
+    """
+    source_dir = ROOT / 'quality/debug_android'
+    pairs = [
+        (source_dir / 'AndroidManifest.xml',
+         repo / 'android/app/src/debug/AndroidManifest.xml'),
+        (source_dir / 'aquaword_qa_file_paths.xml',
+         repo / 'android/app/src/debug/res/xml/aquaword_qa_file_paths.xml')
+    ]
+    for src, dst in pairs:
+        require(src)
+        if dst.exists() and dst.read_bytes() != src.read_bytes():
+            raise PatchError(f'Conflicting upstream debug-provider file: {dst}')
+    changed = 0
+    for src, dst in pairs:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if not dst.is_file():
+            shutil.copyfile(src, dst)
+            changed += 1
+    return changed
+
 def copy_history_source(repo: Path) -> bool:
     src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
     target = repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java'
@@ -556,6 +582,7 @@ def source(repo: Path) -> None:
     print('Lifecycle-aware native autosave:', patch_periodic_native_autosave(targets[11]))
     print('History storage class:', copy_history_source(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
+    print('Debug-only real ContentProvider test route:', copy_debug_qa_file_provider(repo))
     print('Icons copied:', copy_icons(repo))
 
 def configured(repo: Path) -> None:
