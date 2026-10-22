@@ -1,0 +1,56 @@
+name: AquaWord Android Emulator Preflight
+
+# One-time proof that our private-repository GitHub runner can boot an
+# Android 15 emulator before the expensive native APK build completes.
+on:
+  push:
+    paths:
+      - '.github/workflows/android-emulator-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Enable KVM
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -c /dev/kvm
+      - name: Boot an actual Android 15 API 35 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          script: |
+            set -euo pipefail
+            mkdir -p emulator-evidence
+            adb wait-for-device
+            adb shell getprop sys.boot_completed | tr -d '\r' | grep -qx 1
+            adb shell getprop ro.build.version.sdk | tr -d '\r' | grep -qx 35
+            adb shell getprop ro.product.cpu.abilist | tee emulator-evidence/abis.txt
+            adb shell getprop ro.dalvik.vm.isa.arm64 | tee emulator-evidence/arm64-translator.txt
+            adb shell getprop ro.build.version.release | tee emulator-evidence/android-version.txt
+            adb shell screencap -p /sdcard/emulator-first-boot.png
+            adb pull /sdcard/emulator-first-boot.png emulator-evidence/screen.png
+            test -s emulator-evidence/screen.png
+            echo 'PASS: Android API35 emulator booted; does not establish ARM translation or APK functionality' | tee emulator-evidence/result.txt
+      - name: Keep actual emulator boot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AquaWord-Emulator-Boot-Evidence
+          path: emulator-evidence/
+          if-no-files-found: warn
+          retention-days: 7
