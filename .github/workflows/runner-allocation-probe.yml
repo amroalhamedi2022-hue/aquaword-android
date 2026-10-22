@@ -1,0 +1,24 @@
+name: AquaWord Runner Allocation Probe
+
+# Minimal isolated probe; distinguishes a broken app test from failure to
+# allocate any GitHub-hosted Runner in this private repository.
+on:
+  push:
+    paths:
+      - '.github/workflows/runner-allocation-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runner-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Show real runner initialization
+        run: |
+          echo "AquaWord PRIVATE RUNNER READY"
+          uname -a
+          date -u +%FT%TZ
+          df -h .
