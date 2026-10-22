@@ -131,6 +131,81 @@ def patch_native_save_checkpoints(path: Path) -> bool:
     return store(path, body)
 
 
+
+def patch_native_saf_saveback(path: Path) -> bool:
+    """Make native Android document writeback errors visible and verifiable.
+
+    Keep Collabora's existing resolved-file path. A failed/empty stream is never
+    logged as successful. The separate post-save recovery copy remains available.
+    """
+    body = require(path).read_text(encoding='utf-8')
+    marker = 'AQUAWORD_NATIVE_SAF_SAVE_BACK'
+    if marker in body:
+        if 'SAF writeback failed' not in body:
+            raise PatchError('Partial native SAF save patch')
+        return False
+    start = '    private void copyTempBackToIntent() {'
+    end = '    /** Copy the temp file back to the document. */'
+    if body.count(start) != 1 or body.count(end) != 1:
+        raise PatchError('Upstream native SAF copy method changed')
+    a = body.index(start)
+    b = body.index(end, a)
+    original = body[a:b]
+    if ('copyThread.join();' not in original or
+            'contentResolver.openOutputStream(uri, "wt")' not in original):
+        raise PatchError('Upstream native copy semantics changed')
+    replacement = '''    // AQUAWORD_NATIVE_SAF_SAVE_BACK: never silently report incomplete writes.
+    private void copyTempBackToIntent() {
+        if (!isDocEditable || mTempFile == null ||
+                getIntent().getData() == null ||
+                !ContentResolver.SCHEME_CONTENT.equals(getIntent().getData().getScheme()))
+            return;
+        if (mResolvedFile != null) {
+            copyTempBackToFile();
+            return;
+        }
+        final Uri destination = getIntent().getData();
+        try (InputStream input = new FileInputStream(mTempFile)) {
+            if (mTempFile.length() <= 0L)
+                throw new IOException("Refusing to replace document with empty Writer temp file");
+            OutputStream opened;
+            try {
+                opened = getContentResolver().openOutputStream(destination, "wt");
+            } catch (FileNotFoundException noTruncateMode) {
+                Log.w(TAG, "Provider did not support wt; trying default output mode", noTruncateMode);
+                opened = getContentResolver().openOutputStream(destination);
+            }
+            if (opened == null)
+                throw new IOException("Document provider returned no writable stream");
+            long bytes = 0L;
+            try (OutputStream output = opened) {
+                byte[] buffer = new byte[64 * 1024];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    if (count > 0) {
+                        output.write(buffer, 0, count);
+                        bytes += count;
+                    }
+                }
+                output.flush();
+            }
+            // Stream closed successfully before any success log.
+            if (bytes != mTempFile.length())
+                throw new IOException("SAF copy size differs from native saved document");
+            Log.i(TAG, "AquaWord safely copied " + bytes + " bytes to the document provider");
+        } catch (Exception error) {
+            Log.e(TAG, "AquaWord SAF writeback failed — recovery snapshot is retained", error);
+            runOnUiThread(() -> {
+                if (!isFinishing() && !isDestroyed())
+                    Toast.makeText(this, R.string.failed_to_save_file, Toast.LENGTH_LONG).show();
+            });
+        }
+    }
+
+'''
+    return store(path, body[:a] + replacement + body[b:])
+
+
 def patch_periodic_native_autosave(path: Path) -> bool:
     """Use native save every 2 minutes while foreground editing.
 
@@ -655,6 +730,7 @@ def source(repo: Path) -> None:
     print('DOCX default document format:', patch_default_docx(targets[10], targets[5]))
     print('Lifecycle-aware native autosave:', patch_periodic_native_autosave(targets[11]))
     print('Native post-save recovery checkpoints:', patch_native_save_checkpoints(targets[11]))
+    print('SAF native saveback error detection:', patch_native_saf_saveback(targets[11]))
     print('History storage class:', copy_history_source(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Debug-only real ContentProvider test route:', copy_debug_qa_file_provider(repo))
