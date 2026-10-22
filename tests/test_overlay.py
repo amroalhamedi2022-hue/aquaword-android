@@ -38,6 +38,30 @@ class AquaWordIntegrationTests(unittest.TestCase):
                 return;
         }
     }
+    private void copyTempBackToIntent() {
+        if (!isDocEditable || mTempFile == null || getIntent().getData() == null || !getIntent().getData().getScheme().equals(ContentResolver.SCHEME_CONTENT))
+            return;
+        if (mResolvedFile != null) {
+            copyTempBackToFile();
+            return;
+        }
+        final ContentResolver contentResolver = getContentResolver();
+        try {
+            Thread copyThread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    Uri uri = getIntent().getData();
+                    try {
+                        OutputStream outputStream = contentResolver.openOutputStream(uri, "wt");
+                    } catch (Exception e) { }
+                }
+            });
+            copyThread.start();
+            copyThread.join();
+        } catch (Exception e) { }
+    }
+
+    /** Copy the temp file back to the document. */
     private boolean documentLoaded = false;
     protected void onResume() {
         super.onResume();
@@ -134,6 +158,17 @@ class AquaWordIntegrationTests(unittest.TestCase):
         activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
         self.assertIn('application/vnd.openxmlformats-officedocument.wordprocessingml.document',activity)
         self.assertNotIn('FileUtilities.DEFAULT_WRITER_EXTENSION, "*/*"',activity)
+
+    def test_native_saveback_reports_error_and_rejects_empty_files(self):
+        self.run_phase('source')
+        self.run_phase('source')
+        lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        self.assertEqual(lib.count('AQUAWORD_NATIVE_SAF_SAVE_BACK'),1)
+        self.assertIn('mTempFile.length() <= 0L',lib)
+        self.assertIn('R.string.failed_to_save_file',lib)
+        self.assertIn('output.flush();',lib)
+        self.assertIn('bytes != mTempFile.length()',lib)
+        self.assertNotIn('copyThread.join();',lib)
 
     def test_save_callbacks_create_real_history_checkpoints(self):
         self.run_phase('source')
