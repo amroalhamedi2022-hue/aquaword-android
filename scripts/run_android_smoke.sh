@@ -44,7 +44,7 @@ adb shell uiautomator dump /data/local/tmp/aquaword-browser.xml >/dev/null 2>&1 
 adb pull /data/local/tmp/aquaword-browser.xml "$ARTIFACTS/browser-ui.xml" >/dev/null 2>&1 || true
 adb logcat -d -v time > "$ARTIFACTS/browser-logcat.txt"
 adb shell dumpsys activity activities > "$ARTIFACTS/browser-activity.txt"
-grep -Fq "$BROWSER" "$ARTIFACTS/browser-activity.txt" || {
+grep -E 'mResumedActivity|topResumedActivity|ResumedActivity' "$ARTIFACTS/browser-activity.txt" | grep -Fq "$BROWSER" || {
   echo "Document browser did not reach foreground Activity" >&2
   exit 1
 }
@@ -81,7 +81,7 @@ adb shell pidof "$PKG" > "$ARTIFACTS/editor-process.txt" || {
   echo "App process terminated during DOCX open" >&2
   exit 1
 }
-grep -E 'mResumedActivity|topResumedActivity' "$ARTIFACTS/editor-activity.txt" | grep -Fq "$EDITOR" || {
+grep -E 'mResumedActivity|topResumedActivity|ResumedActivity' "$ARTIFACTS/editor-activity.txt" | grep -Fq "$EDITOR" || {
   echo "Editor Activity is not actually resumed after opening the DOCX" >&2
   exit 1
 }
@@ -172,7 +172,7 @@ if change < 3.0:
 print(f"Visible Android UI difference: {change:.1f} average RGB units")
 PY
 printf '\nPASS: Real AquaWord Writer opened on phone/tablet; Focus Mode worked; UNO edit persisted to DOCX and reopened in Android.\n' | tee "$ARTIFACTS/smoke-result.txt"
-printf 'NOT PROVEN: editing/save-reopen, advanced layout, tools, visual match, long-term stability or real Xiaomi Pad 5 behavior.\n' >> "$ARTIFACTS/smoke-result.txt"
+printf 'NOT PROVEN: general interactive tools, PDF workflows, full visual match, long-term stability, real Xiaomi Pad 5 behavior, or arbitrary user document compatibility.\n' >> "$ARTIFACTS/smoke-result.txt"
 
 # Report only the actual features exercised on Android; untested rows stay NOT_VERIFIED.
 # Every receipt references checksummed files, never just a developer's assertion.
