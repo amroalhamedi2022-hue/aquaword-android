@@ -77,6 +77,36 @@ def patch_manifest_icon(path: Path) -> bool:
         raise PatchError(f'Unexpected manifest icon format: {path}')
     return store(path, content)
 
+
+def patch_writer_only_home(path: Path) -> bool:
+    """AquaWord's New document FAB opens the native Writer flow directly.
+
+    Avoids advertising Calc/Impress creation in a Word-specific editor.
+    """
+    original = """editFAB.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (isFabMenuOpen)
+                    collapseFabMenu();
+                else
+                    expandFabMenu();
+            }
+        });"""
+    branded = """// AQUAWORD_WRITER_ONLY_NEW
+        editFAB.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                createNewFileInputDialog(getString(R.string.new_textdocument)
+                    + FileUtilities.DEFAULT_WRITER_EXTENSION, "*/*", CREATE_DOCUMENT_REQUEST_CODE);
+            }
+        });"""
+    content = require(path).read_text(encoding='utf-8')
+    if content.count(original) == 1:
+        content = content.replace(original, branded)
+    elif content.count(branded) != 1:
+        raise PatchError(f'Unexpected Android New-document handler: {path}')
+    return store(path, content)
+
 def copy_icons(repo: Path) -> int:
     icons = list(sorted((ROOT / 'branding/icons').rglob('aquaword_launcher.png')))
     if len(icons) != 5:
@@ -100,7 +130,8 @@ def source(repo: Path) -> None:
         repo/'browser/css/mobilewizard.css',
         repo/'android/app/build.gradle',
         repo/'android/app/src/main/AndroidManifest.xml',
-        repo/'android/app/appSettings.gradle.in'
+        repo/'android/app/appSettings.gradle.in',
+        repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
     ]
     for item in targets:
         require(item)
@@ -109,6 +140,7 @@ def source(repo: Path) -> None:
     print('Android display name:', patch_gradle_labels(targets[2]))
     print('App icon:', patch_manifest_icon(targets[3]))
     print('App ID:', patch_app_settings_template(targets[4]))
+    print('Writer-only new-document flow:', patch_writer_only_home(targets[5]))
     print('Icons copied:', copy_icons(repo))
 
 def configured(repo: Path) -> None:
