@@ -44,8 +44,10 @@ def check_document(payload: bytes) -> bool:
     return SENTINEL in text
 
 
-def call(*args):
-    return subprocess.check_output(["adb", *args], stderr=subprocess.STDOUT).strip()
+def call(*args, binary=False):
+    result = subprocess.check_output(["adb", *args], stderr=subprocess.STDOUT)
+    # Never strip potentially valid trailing bytes from a DOCX ZIP package.
+    return result if binary else result.strip()
 
 
 def evaluate_on_real_editor(port: int) -> dict:
@@ -99,7 +101,7 @@ def run(directory: Path, timeout: int) -> None:
     last_error=None
     while time.monotonic()<deadline:
         try:
-            payload=call("exec-out","run-as",PKG,"cat",FILE)
+            payload=call("exec-out","run-as",PKG,"cat",FILE,binary=True)
             if check_document(payload):
                 (directory/"roundtrip-hash.txt").write_text(
                     hashlib.sha256(payload).hexdigest()+"\n", encoding="utf-8")
