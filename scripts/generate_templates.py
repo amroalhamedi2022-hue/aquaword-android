@@ -61,6 +61,22 @@ def heading(doc: Document, text: str, level: int = 1, rtl: bool = False):
     return p
 
 
+def comparison_table(doc: Document, labels: tuple[str, str, str], rtl: bool = False):
+    table = doc.add_table(rows=2, cols=3)
+    table.style = "Table Grid"
+    for i, label in enumerate(labels):
+        cell = table.rows[0].cells[i]
+        cell.text = label
+        for run in cell.paragraphs[0].runs:
+            run.bold = True
+        if rtl:
+            direction(cell.paragraphs[0])
+        table.rows[1].cells[i].text = "—"
+        if rtl:
+            direction(table.rows[1].cells[i].paragraphs[0])
+    return table
+
+
 def document_base(arabic: bool = False) -> Document:
     doc = Document()
     section = doc.sections[0]
@@ -79,6 +95,15 @@ def document_base(arabic: bool = False) -> Document:
         st.font.name = "Arial" if arabic else "Aptos Display"
         st.font.size = Pt(size)
         st.font.color.rgb = RGBColor(16, 98, 137)
+    # Editable PAGE field, not a hard-coded number.
+    footer = section.footer.paragraphs[0]
+    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    footer.add_run("الصفحة " if arabic else "Page ")
+    fld = OxmlElement("w:fldSimple")
+    fld.set(qn("w:instr"), "PAGE")
+    footer._p.append(fld)
+    if arabic:
+        direction(footer)
     doc.core_properties.author = "AquaWord"
     doc.core_properties.keywords = "Editable document template"
     return doc
@@ -110,6 +135,8 @@ def research_english() -> Document:
     ]:
         heading(d, section)
         paragraph(d, prompt)
+        if section == "4. Results":
+            comparison_table(d, ("Outcome", "Value", "Interpretation"))
     return d
 
 
@@ -159,6 +186,8 @@ def clinical_case() -> Document:
     ]:
         heading(d, title)
         paragraph(d, body)
+        if title == "Investigations":
+            comparison_table(d, ("Test / imaging", "Result", "Clinical relevance"))
     return d
 
 
@@ -181,6 +210,8 @@ def study_notes() -> Document:
     ]:
         heading(d, title)
         paragraph(d, body)
+        if title == "Comparison table":
+            comparison_table(d, ("Feature", "Concept A", "Concept B"))
     return d
 
 
