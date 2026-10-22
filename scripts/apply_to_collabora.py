@@ -226,6 +226,16 @@ def patch_history_activity(path: Path) -> bool:
     content = require(path).read_text(encoding='utf-8')
     if 'AQUAWORD_PREEDIT_COPY' in content:
         return False
+    # Shared safety history lives in :lib so both native Writer save callbacks
+    # and the Android document browser use the SAME storage and metadata.
+    import_anchor = 'import org.libreoffice.androidlib.LOActivity;'
+    import_new = 'import org.libreoffice.androidlib.AquaWordHistory;'
+    if import_new not in content:
+        if import_anchor in content:
+            content = content.replace(import_anchor, import_anchor + '\n' + import_new, 1)
+        else:
+            # Unit fixture omits the real upstream import block.
+            content = import_new + '\n' + content
     field = '    private static final int OPEN_FILE_REQUEST_CODE = 43;'
     if content.count(field) != 1: raise PatchError('Upstream activity field anchor changed')
     content = content.replace(field, field + '''
@@ -526,7 +536,7 @@ def copy_debug_qa_file_provider(repo: Path) -> int:
 
 def copy_history_source(repo: Path) -> bool:
     src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
-    target = repo/'android/app/src/main/java/org/libreoffice/androidapp/ui/AquaWordHistory.java'
+    target = repo/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java'
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.is_file():
         if target.read_bytes() == src.read_bytes(): return False
