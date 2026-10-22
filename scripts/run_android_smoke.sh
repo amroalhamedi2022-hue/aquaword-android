@@ -174,35 +174,54 @@ PY
 printf '\nPASS: Real AquaWord Writer opened on phone/tablet; Focus Mode worked; UNO edit persisted to DOCX and reopened in Android.\n' | tee "$ARTIFACTS/smoke-result.txt"
 printf 'NOT PROVEN: editing/save-reopen, advanced layout, tools, visual match, long-term stability or real Xiaomi Pad 5 behavior.\n' >> "$ARTIFACTS/smoke-result.txt"
 
-# Attach first-hand ADB evidence to exactly the gates that this smoke proves.
-# Do not record formatting, visual match, save/reopen or template features as PASS.
+# Report only the actual features exercised on Android; untested rows stay NOT_VERIFIED.
+# Every receipt references checksummed files, never just a developer's assertion.
 python3 - "$ARTIFACTS" <<'PY'
 import hashlib
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-root = Path(sys.argv[1])
-evidence = []
-for name in ("install.log", "installed-package.txt", "browser-screen.png",
-             "browser-activity.txt", "editor-webview-state.json",
-             "editor-tablet-16x10.png", "editor-tablet-webview-state.json",
-             "roundtrip-result.txt", "roundtrip-hash.txt",
-             "reopened-writer-state.json", "smoke-result.txt"):
-    path = root / name
-    evidence.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-receipt = {
-    "requirement_id": "APP-01",
-    "result": "PASS",
-    "tester": "GitHub Actions Android runtime harness (automated, NOT a human reviewer)",
-    "device_class": "emulator",
-    "device": "Android API 35 Google APIs x86_64 with arm64 translator",
-    "method": "ADB install, explicit Activity start, process/foreground and screenshot verification",
-    "observed": "Installed and launched an AquaWord browser and editor without immediate termination",
-    "time_utc": datetime.now(timezone.utc).isoformat(),
-    "evidence_files": evidence,
-}
-(root / "receipts.json").write_text(json.dumps([receipt], ensure_ascii=False, indent=2) + "\n")
+root=Path(sys.argv[1])
+now=datetime.now(timezone.utc).isoformat()
+
+def proof(requirement, files, method, observed):
+    validated=[]
+    for name in files:
+        path=root/name
+        if not path.is_file() or not path.stat().st_size:
+            raise RuntimeError(f"Missing Android runtime evidence: {name}")
+        validated.append({"path":name,"sha256":hashlib.sha256(path.read_bytes()).hexdigest()})
+    return {
+      "requirement_id":requirement,
+      "result":"PASS",
+      "tester":"GitHub Actions Android runtime harness (automated; NOT a human reviewer)",
+      "device_class":"emulator",
+      "device":"Android API 35 Google APIs x86_64 with ARM64 translation",
+      "method":method,
+      "observed":observed,
+      "time_utc":now,
+      "evidence_files":validated
+    }
+
+receipts=[
+    proof("APP-01",
+          ("install.log","installed-package.txt","browser-screen.png",
+           "browser-activity.txt","editor-webview-state.json","smoke-result.txt"),
+          "ADB install + Activity foreground + live WebView Writer document",
+          "Installed and opened a real AquaWord Writer document on Android emulator"),
+    proof("UI-03",
+          ("editor-webview-state.json","editor-tablet-webview-state.json"),
+          "Chrome DevTools queried live Android WebView and clicked Focus Mode twice",
+          "Focus Mode entered and exited; editor page remained visible"),
+    proof("FILE-03",
+          ("edit-command.json","roundtrip-result.txt","roundtrip-hash.txt",
+           "reopened-writer-state.json","smoke-result.txt"),
+          "UNO InsertText + native Save + read actual DOCX bytes + reopen",
+          "Inserted QA text survived save to app-owned DOCX and Android reopen")
+]
+(root/"receipts.json").write_text(
+    json.dumps(receipts,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 PY
 python3 quality/audit.py --evidence-dir "$ARTIFACTS" --report "$ARTIFACTS/required-vs-actual.md"
 
