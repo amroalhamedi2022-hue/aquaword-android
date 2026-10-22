@@ -22,6 +22,27 @@ jobs:
         run: python3 -m pip install 'Pillow==11.3.0'
       - name: Generate AquaWord icons
         run: python3 scripts/make_icons.py
+      - name: Create and validate four editable Word templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'python-docx==1.2.0'
+          python3 scripts/generate_templates.py
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          from docx import Document
+          paths=sorted(Path('templates/generated').glob('*.docx'))
+          assert len(paths)==4, paths
+          for path in paths:
+              with ZipFile(path) as z:
+                  assert z.testzip() is None
+                  assert 'word/document.xml' in z.namelist()
+              d=Document(path)
+              assert len(d.paragraphs) >= 8, path
+              assert any(p.style.name.startswith('Heading') for p in d.paragraphs),path
+              print(path, len(d.paragraphs), 'paragraphs')
+          PY
       - name: Run integration tests
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Syntax check
@@ -57,6 +78,10 @@ jobs:
             test -s "upstream-fixture/$file"
           done
           python3 scripts/apply_to_collabora.py --repo upstream-fixture --phase source
+          python3 scripts/apply_templates.py --repo upstream-fixture
+          python3 scripts/apply_templates.py --repo upstream-fixture
+          test -s upstream-fixture/android/app/src/main/assets/aquaword/clinical_case.docx
+          grep -q 'AQUAWORD_TEMPLATES_V1' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_AURORA_BEGIN' upstream-fixture/browser/css/notebookbar.css
           grep -Fq "applicationId 'com.aquaword.app'" upstream-fixture/android/app/appSettings.gradle.in
           python3 -m pip install 'javalang==0.13.0'
@@ -71,7 +96,7 @@ jobs:
           ]:
               javalang.parse.parse(file.read_text(encoding='utf-8'))
               print('Java syntax valid:',file)
-          for file in [root/'res/values/strings.xml',root/'res/menu/view_menu.xml']:
+          for file in [root/'res/values/strings.xml',root/'res/values-ar/aquaword_strings.xml',root/'res/menu/view_menu.xml']:
               ET.parse(file)
               print('Android resource XML valid:',file)
           PY
