@@ -1,10 +1,10 @@
 package org.libreoffice.androidlib;
 
 /*
- * AquaWord local pre-edit safety copies.
- * This independent helper uses only java.io + java.util and works offline.
- * A capture is NOT an autosave: edits made after opening are not snapshotted
- * until another capture. Android UI must describe it accurately.
+ * AquaWord local pre-edit and native post-save recovery checkpoints.
+ * This helper is independent of UI and works offline.
+ * A saved checkpoint is created only after Writer's SAVE notification.
+ * Never present this as continuous recording of every editing action.
  */
 import java.io.File;
 import java.io.FileInputStream;
@@ -108,7 +108,9 @@ public final class AquaWordHistory {
             // An unchanged document already has a safety copy; reopening it
             // should not consume more storage. Compare with its newest entry.
             for (Snapshot previous : readAll(dir)) {
-                if (!previous.displayName.equals(safeName) || !previous.sourceHash.equals(sourceHash))
+                if (!previous.displayName.equals(safeName) ||
+                        !previous.sourceHash.equals(sourceHash) ||
+                        !previous.kind.equals(kind))
                     continue;
                 if (previous.sizeBytes == length && previous.sha256.equals(newHash)
                         && verifyBytes(previous))
