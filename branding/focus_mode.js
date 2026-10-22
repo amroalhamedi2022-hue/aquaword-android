@@ -10,8 +10,11 @@
     var active = false;
     var control = null;
     // Respect the document UI language without depending on a translation server.
-    var isArabic = /^ar(?:-|$)/i.test(
-        document.documentElement.lang || navigator.language || '');
+    var documentLanguage = document.documentElement ?
+        document.documentElement.lang : '';
+    var systemLanguage = (typeof navigator !== 'undefined' && navigator.language) ?
+        navigator.language : '';
+    var isArabic = /^ar(?:-|$)/i.test(documentLanguage || systemLanguage);
 
     function redraw() {
         window.requestAnimationFrame(function () {
