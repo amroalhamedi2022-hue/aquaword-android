@@ -16,6 +16,9 @@ import time
 from pathlib import Path
 from urllib.request import urlopen
 from docx import Document
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "quality"))
+from check_rich_docx import validate_document
 
 PKG = "com.aquaword.app.debug"
 FILE = "files/aquaword-research-ar.docx"
@@ -41,7 +44,12 @@ def check_document(payload: bytes) -> bool:
     """Read the produced DOCX package; don't accept a screenshot or file SHA alone."""
     doc = Document(io.BytesIO(payload))
     text = "\n".join(p.text for p in doc.paragraphs)
-    return SENTINEL in text
+    if SENTINEL not in text:
+        return False
+    # Presence of the inserted marker is insufficient if original tables,
+    # images, Arabic bidirectionality, or second-page content were lost.
+    validate_document(payload, require_saved_text=SENTINEL)
+    return True
 
 
 def call(*args, binary=False):
