@@ -329,13 +329,13 @@ def patch_async_new_document_creation(path: Path) -> bool:
     body = require(path).read_text(encoding='utf-8')
     marker = 'AQUAWORD_ASYNC_DOCUMENT_CREATE'
     if marker in body:
-        if 'AquaWordCreateBlank' not in body or '                open(uri);\n                break;' in body:
+        if 'AquaWordCreateBlank' not in body or 'createNewFile(uri, extension);\n\n                open(uri);' in body:
             raise PatchError('Unexpected partial async-create patch')
         return False
     start = '    private void createNewFile(final Uri uri, final String extension) {'
     end = '    /** Context menu item handling. */'
     old_call = '                createNewFile(uri, extension);\n\n                open(uri);'
-    if body.count(start) != 1 or body.count(end) != 2 or body.count(old_call) != 1:
+    if body.count(start) != 1 or body.count(end) < 1 or body.count(old_call) != 1:
         raise PatchError('Upstream new-document creation flow changed')
     offset = body.index(start)
     limit = body.index(end, offset)
