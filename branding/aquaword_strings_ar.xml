@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="aquaword_safety_copies">نسخ الأمان</string>
+    <string name="aquaword_creating_safety_copy">جاري إنشاء نسخة أمان قبل التحرير…</string>
+    <string name="aquaword_copy_failed">تعذّر إنشاء نسخة أمان</string>
+    <string name="aquaword_copy_failed_body">يمكنك فتح الملف الأصلي، لكن التعديل دون نسخة أمان قد يؤدي لفقدان المحتوى السابق.</string>
+    <string name="aquaword_open_anyway">فتح دون نسخة</string>
+    <string name="aquaword_no_copies">لا توجد نسخ أمان بعد. تُنشأ نسخة عند فتح المستند للتحرير.</string>
+    <string name="aquaword_choose_snapshot">اختر نسخة لاستعادتها كملف جديد</string>
+    <string name="aquaword_restore_success">تمت استعادة النسخة في ملف جديد</string>
+    <string name="aquaword_restore_failure">تعذّرت استعادة نسخة الأمان المحددة</string>
+</resources>
