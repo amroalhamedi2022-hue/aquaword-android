@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install 'Pillow==11.3.0' 'python-docx==1.2.0'
+          python3 -m pip install 'Pillow==11.3.0' 'python-docx==1.2.0' 'lxml==6.0.2' 'polib==1.2.0'
           python3 scripts/make_icons.py
           python3 scripts/generate_templates.py
           python3 -m unittest discover -s tests -p 'test_*.py' -v
@@ -92,6 +92,22 @@ jobs:
           grep -q 'AQUAWORD_ASYNC_DOCUMENT_CREATE' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_SAFE_SAF_PERMISSIONS' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           git -C collabora diff --check
+      - name: Check build interpreter dependencies before expensive compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v python3
+          python3 - <<'PY'
+          import sys
+          import lxml.etree
+          import polib
+          print('Collabora configure Python:', sys.executable)
+          print('lxml:', lxml.etree.LXML_VERSION)
+          print('polib:', polib.__version__)
+          PY
+          command -v node
+          command -v npm
+          command -v javac
       - name: Build LibreOffice native engine for Android arm64
         shell: bash
         run: |
@@ -111,6 +127,7 @@ jobs:
           set -euo pipefail
           cd collabora
           ./autogen.sh
+          python3 -c 'import lxml.etree, polib'
           ./configure --enable-androidapp --disable-setcap --with-lo-builddir="$PWD/engine" --with-android-abi="$ABI" --with-app-name=AquaWord --with-app-package-name=com.aquaword.app
           cd ..
           python3 scripts/apply_to_collabora.py --repo collabora --phase postconfigure
