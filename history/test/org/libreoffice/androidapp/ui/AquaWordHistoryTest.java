@@ -26,6 +26,15 @@ public class AquaWordHistoryTest {
                 root, new ByteArrayInputStream("تغيير جديد".getBytes("UTF-8")), "قصتي.docx");
             check(!changed.file.equals(s.file), "edited document must receive new snapshot");
             check(AquaWordHistory.list(root).size() == 2, "new revision not captured");
+            check("pre-edit".equals(s.kind), "original must be labeled before editing");
+            AquaWordHistory.Snapshot savedVersion = AquaWordHistory.capture(
+                root, new ByteArrayInputStream("saved writer revision".getBytes("UTF-8")),
+                "قصتي.docx", "content://new/document", "saved");
+            check("saved".equals(savedVersion.kind), "saved checkpoint metadata lost");
+            check("saved".equals(AquaWordHistory.list(root).stream()
+                    .filter(x -> x.file.equals(savedVersion.file)).findFirst().get().kind),
+                    "saved checkpoint not reloaded");
+
             // Different files can share both name and exact content.
             // They must remain distinct recovery histories.
             byte[] sameBytes = "another identical draft".getBytes("UTF-8");
@@ -71,7 +80,7 @@ public class AquaWordHistoryTest {
                 AquaWordHistory.capture(root, new ByteArrayInputStream(huge), "sample"+i+".odt");
             }
             check(AquaWordHistory.list(root).size() <= 60, "retention count");
-            System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, verified deduplication, bit-rot recovery, separate source histories, changed revisions, retention");
+            System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, saved revision labels, verified deduplication, bit-rot recovery, separate source histories, changed revisions, retention");
         } finally {
             delete(root);
         }
