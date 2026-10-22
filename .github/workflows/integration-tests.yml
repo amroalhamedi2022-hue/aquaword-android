@@ -76,7 +76,7 @@ jobs:
           set -euo pipefail
           PIN=2333344185931274f9c49d6c12a408cefcef6844
           mkdir -p upstream-fixture/engine
-          for file in browser/css/notebookbar.css browser/css/mobilewizard.css android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/appSettings.gradle.in android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java android/app/src/main/res/menu/view_menu.xml android/app/src/main/res/values/strings.xml browser/src/main.js browser/css/toolbar.css; do
+          for file in browser/css/notebookbar.css browser/css/mobilewizard.css android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/appSettings.gradle.in android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java android/app/src/main/res/menu/view_menu.xml android/app/src/main/res/values/strings.xml browser/src/main.js browser/css/toolbar.css android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java; do
             mkdir -p "upstream-fixture/$(dirname "$file")"
             curl --fail --location --silent --show-error \
               "https://raw.githubusercontent.com/CollaboraOnline/online.mirror/$PIN/$file" \
@@ -85,6 +85,7 @@ jobs:
           done
           python3 scripts/apply_to_collabora.py --repo upstream-fixture --phase source
           node --check upstream-fixture/browser/src/main.js
+          grep -q 'AQUAWORD_DEFAULT_DOCX' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java
           grep -q 'AQUAWORD_FOCUS_CSS_BEGIN' upstream-fixture/browser/css/toolbar.css
           python3 scripts/apply_templates.py --repo upstream-fixture
           python3 scripts/apply_templates.py --repo upstream-fixture
