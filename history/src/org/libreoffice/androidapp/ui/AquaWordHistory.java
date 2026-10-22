@@ -39,13 +39,15 @@ public final class AquaWordHistory {
         public final long createdMillis;
         public final long sizeBytes;
         private final String sha256;
+        private final String sourceHash;
         private Snapshot(File file, String displayName, long createdMillis,
-                         long sizeBytes, String sha256) {
+                         long sizeBytes, String sha256, String sourceHash) {
             this.file = file;
             this.displayName = displayName;
             this.createdMillis = createdMillis;
             this.sizeBytes = sizeBytes;
             this.sha256 = sha256;
+            this.sourceHash = sourceHash;
         }
     }
 
@@ -58,7 +60,16 @@ public final class AquaWordHistory {
 
     public static synchronized Snapshot capture(File appFilesDir, InputStream input,
                                                 String name) throws IOException {
+        return capture(appFilesDir, input, name, "legacy-unspecified-source");
+    }
+
+    /** Source identity separates two distinct documents that share a file name. */
+    public static synchronized Snapshot capture(File appFilesDir, InputStream input,
+                                                String name, String sourceIdentity) throws IOException {
         if (input == null) throw new IOException("No readable input stream");
+        if (sourceIdentity == null || sourceIdentity.isEmpty())
+            throw new IOException("Document source identity is required");
+        String sourceHash = hex(digest().digest(sourceIdentity.getBytes(StandardCharsets.UTF_8)));
         File dir = folder(appFilesDir);
         String safeName = sanitizeName(name);
         String id = System.currentTimeMillis() + "-" + UUID.randomUUID().toString();
@@ -86,7 +97,7 @@ public final class AquaWordHistory {
             // An unchanged document already has a safety copy; reopening it
             // should not consume more storage. Compare with its newest entry.
             for (Snapshot previous : readAll(dir)) {
-                if (!previous.displayName.equals(safeName))
+                if (!previous.displayName.equals(safeName) || !previous.sourceHash.equals(sourceHash))
                     continue;
                 if (previous.sizeBytes == length && previous.sha256.equals(newHash))
                     return previous;
@@ -97,6 +108,8 @@ public final class AquaWordHistory {
             props.setProperty("timestamp", String.valueOf(System.currentTimeMillis()));
             props.setProperty("size", String.valueOf(length));
             props.setProperty("sha256", newHash);
+            // Store only the SHA of the document URI, never the original URI.
+            props.setProperty("source_sha256", sourceHash);
             try (FileOutputStream metaOut = new FileOutputStream(pendingMeta)) {
                 props.store(metaOut, "AquaWord private document snapshot");
                 metaOut.getFD().sync();
@@ -129,12 +142,15 @@ public final class AquaWordHistory {
             Properties props = new Properties();
             props.load(meta);
             String hash = props.getProperty("sha256", "");
+            String sourceHash = props.getProperty("source_sha256",
+                    hex(digest().digest("legacy-unspecified-source".getBytes(StandardCharsets.UTF_8))));
             String name = sanitizeName(props.getProperty("name"));
             long length = Long.parseLong(props.getProperty("size", "-1"));
             long when = Long.parseLong(props.getProperty("timestamp", "0"));
-            if (hash.length() != 64 || length != data.length() || when <= 0L)
+            if (hash.length() != 64 || sourceHash.length() != 64 ||
+                    length != data.length() || when <= 0L)
                 return null;
-            return new Snapshot(data, name, when, length, hash);
+            return new Snapshot(data, name, when, length, hash, sourceHash);
         } catch (IOException | IllegalArgumentException e) {
             return null;
         }
