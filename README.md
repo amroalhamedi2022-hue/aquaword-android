@@ -5,7 +5,8 @@
 ## Current status — 2026-10-22
 - Real GitHub repository, kept private.
 - **Not a completed Word clone**; no working APK has been produced or verified yet.
-- Source overlay and a CI/build workflow are being integrated here. Do not label overlay tests as application/device tests.
+- The source overlay and integration CI are checked in. Native engine assembly is still unverified. Do not label overlay tests as application/device tests.
+- App-private, offline **pre-edit safety copies** with SHA-256 restore verification and an Android restore-as-new-document action have been implemented and JVM/source-tested. These are not continuous autosave or full version history.
 - The prior AquaWord 0.2 prototype is historical reference, not the production editor.
 - Windows is explicitly out of scope.
 
@@ -14,7 +15,7 @@
 - Liquid Aurora / glass accents around an accessible, **white/neutral document page**.
 - Rich offline editing; DOCX/ODT/RTF import/export; RTL Arabic mixed with English.
 - Tables, images, lists, paragraph/page formatting, styles, reviewing, comments, track changes, footnotes, contents and PDF export subject to real native validation.
-- Requested extras: reliable autosave and recovery, private local version history, focus mode, scientific/medical templates, PDF annotation and optional AI tools. Extras are **pending implementation**, not shipping features.
+- Requested extras still pending native build/device acceptance: reliable continuous autosave and crash recovery, complete version history, focus mode, scientific/medical templates, PDF annotations and optional AI tools. Pre-edit safety copies are only a partial recovery feature.
 - **One user-facing delivery after internal CI and device acceptance**, not a sequence of user-requested builds.
 
 ## Engineering approach
@@ -29,3 +30,9 @@ Integration scripts and branding are project-specific. Collabora/LibreOffice sou
 
 ## Security
 Do not commit release keystores, passwords, tokens, personal documents or private data. Native builds must pin upstream refs; check downloaded sources and dependencies.
+
+## Verified CI checkpoints
+- Integration source/JVM/resource checks passed for the native recovery overlay: [GitHub Actions run 39701753640](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/39701753640).
+- Initial native engine build: [run 39699767102](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/39699767102), native compilation in progress at last inspection.
+- Newest full native build queued with recovery integration: [run 39701753667](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/39701753667).
+- No finished AquaWord APK should be advertised or released until native build and on-device quality gates pass.
