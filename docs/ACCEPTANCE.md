@@ -10,14 +10,21 @@
 5. Import/export compatible DOCX, ODT, RTF, TXT; PDF export and print.
 6. Arabic RTL mixed with English, Unicode, tables, images, styles, headers, sections, footnotes, page breaks, comments and tracked edits, if actually supported by the mobile engine.
 
-## User-requested extra features (not implemented as of this commit)
-- Autosave with crash recovery and independently testable safety.
-- Local document version history (safe snapshots).
-- Fullscreen focus/read mode.
-- Scientific/medical document templates, citation styles and bibliography helpers.
-- PDF markup/annotation workflows.
-- Optional AI proofreading, rewriting, summarizing and translation (online AI never silently enabled).
-- Optional backup/sync.
+## Independently implemented and CI-tested (not yet device-certified)
+- Offline **pre-edit safety copies** with restore to a new file and SHA-256 validation. This is not continuous version history or live autosave.
+- Four editable DOCX starter templates: Arabic/English research, medical case report and high-yield study notes.
+- Focus Mode button in Collabora's Android document editor, with keyboard Escape and reversible tool chrome.
+- Async blank-document creation: never block the UI thread while writing the template or launch an incompletely written document.
+- SAF URI permission protection against non-persistable and read-only document providers.
+- Original AquaWord branding overlay, Arabic recovery labels, 5 launcher icon densities and native Writer new-document flow.
+
+## Requested extras still missing or awaiting end-to-end tests
+- Continuous autosave and crash recovery tested under Android process death.
+- Full per-document history and revision controls (pre-edit safety copies do not provide this).
+- AI proofreading, rewriting, summarization and translation (optional, with explicit opt-in).
+- PDF annotations and conversions beyond any native Collabora capabilities, citations/bibliography automation and advanced reference styling.
+- Repeated Android UI/device verification of focus mode, SAF persistence, document round-trips, printing and compatibility.
+- Full feature parity with desktop Microsoft Word is not established and may not be achievable on Android.
 
 ## Verification before a SINGLE user-facing APK handoff
 - Native APK assembles, installs, launches and stays running on real Android.
@@ -29,4 +36,4 @@
 - Check notices/licenses and security status.
 
 ## Current factual state
-Source overlay and GitHub integration tests, not a finished application. Collabora source is pulled at build time. An APK cannot be described as built until the native workflow actually succeeds. Internal CI runs are allowed; the user's preference is to receive one completed build, not every intermediate artifact.
+Source overlay and integration tests, including a real Java pre-edit snapshot test and JavaScript Focus Mode test; not a finished application. Collabora source is pulled at build time. An APK cannot be described as built until the native workflow actually succeeds. Internal CI runs are allowed; the user's preference is to receive one completed build, not every intermediate artifact.
