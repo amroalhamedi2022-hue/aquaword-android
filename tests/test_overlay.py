@@ -435,7 +435,9 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('AquaWordCreateBlank', activity)
         self.assertIn('AQUAWORD_VERIFIED_BLANK_DOCX', activity)
         self.assertIn('"aquaword/blank.docx"', activity)
-        self.assertIn('OutputStream output = getContentResolver().openOutputStream(uri, "w")', activity)
+        self.assertIn('getContentResolver().openOutputStream(uri, "wt")', activity)
+        self.assertIn('getContentResolver().openOutputStream(uri, "rwt")', activity)
+        self.assertNotIn('getContentResolver().openOutputStream(uri, "w")', activity)
         self.assertNotIn('thread.run();', activity)
         self.assertNotIn('thread.join();', activity)
         self.assertIn('if (completed)\n                    open(uri);', activity)
@@ -446,6 +448,32 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('output.flush();',activity)
         self.assertLess(activity.index('output.flush();'), activity.index('final boolean completed = !failed;'))
         self.assertNotIn('createNewFile(uri, extension);\n\n                open(uri);', activity)
+
+    def test_new_document_provider_must_truncate_and_reject_empty_template(self):
+        """Source contract only: no stale ZIP tail or empty Writer launch.
+
+        Providers may return an existing URI from ACTION_CREATE_DOCUMENT;
+        Android documents that plain "w" does not guarantee truncation.
+        """
+        self.run_phase('source')
+        self.run_phase('source')
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        create=activity.split('private void createNewFile(final Uri uri, final String extension) {',1)[1].split(
+            '/** Context menu item handling. */',1)[0]
+        self.assertEqual(create.count('openOutputStream(uri, "wt")'),1)
+        self.assertEqual(create.count('openOutputStream(uri, "rwt")'),1)
+        self.assertLess(create.index('openOutputStream(uri, "wt")'),
+                        create.index('openOutputStream(uri, "rwt")'))
+        self.assertNotIn('openOutputStream(uri, "w")',create)
+        self.assertNotIn('openOutputStream(uri);',create)
+        self.assertIn('catch (java.io.FileNotFoundException | UnsupportedOperationException rejected)',create)
+        self.assertIn('if (opened == null)',create)
+        self.assertIn('throw new IOException("No truncating writable document URI")',create)
+        self.assertIn('if (written <= 0L)',create)
+        self.assertIn('throw new IOException("Empty document template")',create)
+        self.assertLess(create.index('try (OutputStream output = opened)'),
+                        create.index('final boolean completed = !failed;'))
+        self.assertIn('if (completed)\n                    open(uri);',create)
 
     def test_async_create_rejects_changed_upstream(self):
         path=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
