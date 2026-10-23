@@ -279,14 +279,15 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.run_phase('source')
         lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
         self.assertEqual(lib.count('AQUAWORD_NATIVE_SAF_SAVE_BACK'),1)
-        self.assertIn('mTempFile.length() <= 0L',lib)
+        self.assertIn('sourceFile.length() <= 0L',lib)
         self.assertIn('R.string.failed_to_save_file',lib)
         self.assertIn('output.flush();',lib)
-        self.assertIn('bytes != mTempFile.length()',lib)
+        self.assertIn('bytes != sourceFile.length()',lib)
         self.assertNotIn('copyThread.join();',lib)
-        self.assertIn('private boolean copyTempBackToIntent()',lib)
-        self.assertIn('private boolean copyTempBackToFile()',lib)
-        self.assertIn('return copyTempBackToFile();',lib)
+        self.assertIn('private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination)',lib)
+        self.assertIn('private boolean copyTempBackToFile(java.io.File sourceFile)',lib)
+        self.assertIn('return copyTempBackToFile(sourceFile);',lib)
+        self.assertIn('new FileInputStream(sourceFile)',lib)
         self.assertIn('return true;',lib)
         self.assertIn('AquaWord SAVE not acknowledged',lib)
 
@@ -349,7 +350,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.run_phase('source')
         self.run_phase('source')
         native=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
-        save=native.split('private boolean copyTempBackToIntent() {',1)[1].split(
+        save=native.split('private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination) {',1)[1].split(
             '/** Copy the temp file back to the document. */',1)[0]
         self.assertEqual(save.count('openOutputStream(destination, "wt")'),1)
         self.assertEqual(save.count('openOutputStream(destination, "rwt")'),1)
@@ -360,16 +361,11 @@ class AquaWordIntegrationTests(unittest.TestCase):
                         save.index('return true;'))
 
     def test_existing_saf_docx_save_never_uses_nontruncating_w_mode(self):
-        """A shorter edited DOCX must not leave the old ZIP tail behind.
-
-        Android documents that openOutputStream(uri) aliases "w" and that
-        "w" may not truncate. This checks the generated native SAVE path,
-        not an Android-provider runtime execution.
-        """
+        """No ambiguous w writes; source contract, NOT Android provider proof."""
         self.run_phase('source')
-        self.run_phase('source')  # overlay remains idempotent
+        self.run_phase('source')
         source=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
-        save=source.split('private boolean copyTempBackToIntent() {', 1)[1].split(
+        save=source.split('private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination) {', 1)[1].split(
             '/** Copy the temp file back to the document. */', 1)[0]
         self.assertEqual(save.count('openOutputStream(destination, "wt")'), 1)
         self.assertEqual(save.count('openOutputStream(destination, "rwt")'), 1)
@@ -380,57 +376,70 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('catch (FileNotFoundException | UnsupportedOperationException noTruncateMode)', save)
         self.assertIn('SAF writeback failed', save)
         self.assertIn('return false;', save)
-        # A provider rejecting both explicit modes must NOT acknowledge SAVE.
-        callback=source.split('case "SAVE":', 1)[1].split('return;', 1)[0]
-        self.assertIn('if (copyTempBackToIntent())', callback)
-        self.assertIn('AquaWord SAVE not acknowledged', callback)
+        self.assertIn('new FileInputStream(sourceFile)', save)
+        self.assertNotIn('new FileInputStream(mTempFile)', save)
 
     def test_failed_saf_writeback_keeps_native_post_edit_recovery(self):
-        """A provider failure must not discard the only post-edit version.
-
-        This is a generated-source contract, NOT a device/SAF integration test.
-        """
+        """Durable snapshot MUST precede any provider truncation."""
         self.run_phase('source')
-        self.run_phase('source')  # overlay stays idempotent
+        self.run_phase('source')
         lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
-        save_case=lib.split('case "SAVE":', 1)[1].split('return;', 1)[0]
-        self.assertIn('AQUAWORD_RECOVER_FAILED_SAF_SAVE', save_case)
-        self.assertEqual(save_case.count('captureNativeSaveCheckpoint();'), 1)
-        self.assertLess(save_case.index('captureNativeSaveCheckpoint();'),
-                        save_case.index('if (copyTempBackToIntent())'))
-        self.assertIn('sendBroadcast(messageAndParam[0], messageAndParam[1]);', save_case)
-        self.assertIn('AquaWord SAVE not acknowledged', save_case)
-        self.assertNotIn('sendBroadcast(', save_case.split('} else {', 1)[1])
-        # Never archive a zero-byte Writer temp file as a valid revision.
-        guard=lib.split('private void captureNativeSaveCheckpoint()', 1)[1].split(
-            'final android.net.Uri original', 1)[0]
-        self.assertIn('mTempFile.length() <= 0L', guard)
+        callback=lib.split('case "SAVE":', 1)[1].split('return;', 1)[0]
+        self.assertIn('AQUAWORD_RECOVER_FAILED_SAF_SAVE', callback)
+        self.assertEqual(callback.count('captureNativeSaveCheckpoint(messageAndParam.clone());'), 1)
+        self.assertNotIn('sendBroadcast(', callback)
+        method=lib.split('private void captureNativeSaveCheckpoint(final String[] saveMessage)', 1)[1].split(
+            'private boolean documentLoaded', 1)[0]
+        self.assertIn('AQUAWORD_DURABLE_SAVE_BARRIER', method)
+        self.assertLess(method.index('AquaWordHistory.capture('),
+                        method.index('AquaWordHistory.verifyForRestore(checkpoint);'))
+        self.assertLess(method.index('AquaWordHistory.verifyForRestore(checkpoint);'),
+                        method.index('copyTempBackToIntent(checkpoint.file, original)'))
+        self.assertLess(method.index('copyTempBackToIntent(checkpoint.file, original)'),
+                        method.index('sendBroadcast(saveMessage[0], saveMessage[1]);'))
+        self.assertIn('AquaWord SAVE not acknowledged', method)
+        self.assertNotIn('sendBroadcast(', method.split('} else {', 1)[1])
+        self.assertIn('mTempFile.length() <= 0L', method)
 
     def test_native_save_reuses_local_preedit_name_without_cloud_query(self):
-        """Post-edit snapshot must be committed without a provider metadata IPC.
-
-        Source-level contract only: real Android SAF latency remains NOT TESTED.
-        """
+        """No cloud metadata IPC; recovery and provider I/O run off callback."""
         self.run_phase('source')
-        self.run_phase('source')  # stable overlay across repeated application
+        self.run_phase('source')
         source=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
-        checkpoint=source.split('private void captureNativeSaveCheckpoint() {', 1)[1].split(
+        checkpoint=source.split('private void captureNativeSaveCheckpoint(final String[] saveMessage) {', 1)[1].split(
             'private boolean documentLoaded', 1)[0]
-        worker=checkpoint.index('new Thread(() -> {')
+        worker=checkpoint.index('mAquaWordSaveExecutor.execute(() -> {')
         self.assertLess(checkpoint.index('new java.io.FileInputStream(mTempFile)'), worker)
-        self.assertIn('final String fallbackName = candidateName;', checkpoint[:worker])
+        self.assertIn('final String fallbackName', checkpoint[:worker])
         self.assertIn('try (java.io.InputStream stream = saved)', checkpoint[worker:])
         self.assertNotIn('getContentResolver().query(', checkpoint)
         self.assertIn('AQUAWORD_LOCAL_RECOVERY_NAME', checkpoint)
         self.assertIn('AquaWordHistory.preferredDisplayName(', checkpoint[worker:])
         self.assertLess(checkpoint.index('AquaWordHistory.preferredDisplayName('),
                         checkpoint.index('AquaWordHistory.capture('))
-        self.assertIn('AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved")',
-                      checkpoint)
-        # A failure must still be acknowledged as a failed SAVE.
-        callback=source.split('case "SAVE":', 1)[1].split('return;', 1)[0]
-        self.assertLess(callback.index('captureNativeSaveCheckpoint();'),
-                        callback.index('if (copyTempBackToIntent())'))
+        self.assertIn('getFilesDir(), stream, name, sourceIdentity, "saved"', checkpoint)
+        self.assertLess(checkpoint.index('AquaWordHistory.capture('),
+                        checkpoint.index('copyTempBackToIntent(checkpoint.file, original)'))
+
+    def test_native_save_uses_immutable_snapshot_for_both_writeback_paths(self):
+        """Source contract: avoid mutable Writer temp path after async SAVE."""
+        self.run_phase('source')
+        self.run_phase('source')
+        lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        self.assertEqual(lib.count('AQUAWORD_DURABLE_SAVE_BARRIER'),1)
+        self.assertIn('java.util.concurrent.Executors.newSingleThreadExecutor(',lib)
+        self.assertIn('mAquaWordSaveExecutor.shutdown();',lib)
+        self.assertIn('copyTempBackToIntent(checkpoint.file, original)',lib)
+        saf=lib.split('private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination) {',1)[1].split(
+            '/** Copy the temp file back to the document. */',1)[0]
+        direct=lib.split('private boolean copyTempBackToFile(java.io.File sourceFile) {',1)[1].split(
+            'private void reportSaveToFileFailed()',1)[0]
+        self.assertIn('return copyTempBackToFile(sourceFile);',saf)
+        self.assertIn('new FileInputStream(sourceFile)',saf)
+        self.assertIn('new FileInputStream(sourceFile)',direct)
+        self.assertNotIn('new FileInputStream(mTempFile)',saf+direct)
+        self.assertIn('catch (java.util.concurrent.RejectedExecutionException shutdown)',lib)
+        self.assertIn('saved.close()',lib)
 
     def test_save_callbacks_create_real_history_checkpoints(self):
         self.run_phase('source')
@@ -438,14 +447,14 @@ class AquaWordIntegrationTests(unittest.TestCase):
         lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
         browser=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
         self.assertEqual(lib.count('AQUAWORD_NATIVE_SAVE_CHECKPOINT'),1)
-        self.assertIn('captureNativeSaveCheckpoint();',lib)
-        self.assertIn('if (copyTempBackToIntent())',lib)
-        self.assertIn('sendBroadcast(messageAndParam[0], messageAndParam[1])',lib)
-        self.assertIn('AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved")',lib)
+        self.assertIn('captureNativeSaveCheckpoint(messageAndParam.clone());',lib)
+        self.assertIn('copyTempBackToIntent(checkpoint.file, original)',lib)
+        self.assertIn('sendBroadcast(saveMessage[0], saveMessage[1])',lib)
+        self.assertIn('getFilesDir(), stream, name, sourceIdentity, "saved"',lib)
         self.assertIn('AquaWordNativeSaveCheckpoint',lib)
-        # Provider metadata is resolved at pre-edit time, not during native SAVE.
         self.assertIn('AquaWordHistory.preferredDisplayName(',lib)
-        self.assertNotIn('getContentResolver().query(', lib.split('private void captureNativeSaveCheckpoint()', 1)[1].split('private boolean documentLoaded', 1)[0])
+        self.assertNotIn('getContentResolver().query(', lib.split(
+            'private void captureNativeSaveCheckpoint(',1)[1].split('private boolean documentLoaded',1)[0])
         self.assertIn('aquaword_snapshot_saved',browser)
         self.assertIn('aquaword_snapshot_preedit',browser)
         self.assertIn('org.libreoffice.androidlib.AquaWordHistory',browser)
