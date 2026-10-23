@@ -186,6 +186,33 @@ public final class AquaWordHistory {
         return results;
     }
 
+    /**
+     * Name a native post-save checkpoint using the latest pre-edit record.
+     * The pre-edit flow already resolved OpenableColumns on a background
+     * thread. Writer SAVE must never wait for a cloud provider metadata query
+     * before persisting the edited bytes.
+     *
+     * Source SHA-256 keeps identically named documents from being confused.
+     * Missing/corrupt metadata is only a naming failure, not a SAVE failure.
+     */
+    public static synchronized String preferredDisplayName(File appFilesDir,
+            String sourceIdentity, String fallbackName) {
+        final String fallback = sanitizeName(fallbackName);
+        if (sourceIdentity == null || sourceIdentity.isEmpty())
+            return fallback;
+        try {
+            final String sourceHash = hex(digest().digest(
+                    sourceIdentity.getBytes(StandardCharsets.UTF_8)));
+            for (Snapshot entry : readAll(folder(appFilesDir))) {
+                if (entry.sourceHash.equals(sourceHash) && "pre-edit".equals(entry.kind))
+                    return entry.displayName;
+            }
+        } catch (IOException failure) {
+            // A display name must never prevent an otherwise recoverable SAVE.
+        }
+        return fallback;
+    }
+
     public static synchronized List<Snapshot> list(File appFilesDir) throws IOException {
         return Collections.unmodifiableList(readAll(folder(appFilesDir)));
     }

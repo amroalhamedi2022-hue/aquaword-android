@@ -123,19 +123,12 @@ def patch_native_save_checkpoints(path: Path) -> bool:
             // Keep slow/unavailable provider queries off the SAVE callback.
             // The already-open native temp FD is owned by this worker.
             try (java.io.InputStream stream = saved) {
-                String name = fallbackName;
-                try (android.database.Cursor cursor = getContentResolver().query(
-                        original, new String[] { android.provider.OpenableColumns.DISPLAY_NAME },
-                        null, null, null)) {
-                    if (cursor != null && cursor.moveToFirst()) {
-                        final int column = cursor.getColumnIndex(
-                                android.provider.OpenableColumns.DISPLAY_NAME);
-                        if (column >= 0 && cursor.getString(column) != null)
-                            name = cursor.getString(column);
-                    }
-                } catch (Exception queryFailure) {
-                    Log.w(TAG, "Using fallback document name for recovery checkpoint", queryFailure);
-                }
+                // AQUAWORD_LOCAL_RECOVERY_NAME: cloud metadata IPC must never
+                // delay the only post-edit recovery snapshot. The pre-edit
+                // checkpoint already stored the provider's display name.
+                // Look it up from private metadata before copying the bytes.
+                String name = AquaWordHistory.preferredDisplayName(
+                        getFilesDir(), sourceIdentity, fallbackName);
                 AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved");
             } catch (Exception failure) {
                 Log.e(TAG, "AquaWord post-save recovery checkpoint failed", failure);

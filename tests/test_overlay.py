@@ -320,11 +320,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
             'final android.net.Uri original', 1)[0]
         self.assertIn('mTempFile.length() <= 0L', guard)
 
-    def test_slow_saf_provider_metadata_does_not_block_native_save_callback(self):
-        """A remote provider query must run on the checkpoint worker, not SAVE.
+    def test_native_save_reuses_local_preedit_name_without_cloud_query(self):
+        """Post-edit snapshot must be committed without a provider metadata IPC.
 
-        The fixture verifies the generated Java overlay's thread boundaries.
-        It does not claim real Android provider latency was measured.
+        Source-level contract only: real Android SAF latency remains NOT TESTED.
         """
         self.run_phase('source')
         self.run_phase('source')  # stable overlay across repeated application
@@ -333,15 +332,16 @@ class AquaWordIntegrationTests(unittest.TestCase):
             'private boolean documentLoaded', 1)[0]
         worker=checkpoint.index('new Thread(() -> {')
         self.assertLess(checkpoint.index('new java.io.FileInputStream(mTempFile)'), worker)
-        self.assertEqual(checkpoint.count('getContentResolver().query('), 1)
-        self.assertGreater(checkpoint.index('getContentResolver().query('), worker)
         self.assertIn('final String fallbackName = candidateName;', checkpoint[:worker])
-        self.assertIn('String name = fallbackName;', checkpoint[worker:])
         self.assertIn('try (java.io.InputStream stream = saved)', checkpoint[worker:])
-        self.assertIn('catch (Exception queryFailure)', checkpoint[worker:])
-        self.assertLess(checkpoint.index('getContentResolver().query('),
+        self.assertNotIn('getContentResolver().query(', checkpoint)
+        self.assertIn('AQUAWORD_LOCAL_RECOVERY_NAME', checkpoint)
+        self.assertIn('AquaWordHistory.preferredDisplayName(', checkpoint[worker:])
+        self.assertLess(checkpoint.index('AquaWordHistory.preferredDisplayName('),
                         checkpoint.index('AquaWordHistory.capture('))
-        # The existing callback still attempts recovery before SAF writeback.
+        self.assertIn('AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved")',
+                      checkpoint)
+        # A failure must still be acknowledged as a failed SAVE.
         callback=source.split('case "SAVE":', 1)[1].split('return;', 1)[0]
         self.assertLess(callback.index('captureNativeSaveCheckpoint();'),
                         callback.index('if (copyTempBackToIntent())'))
@@ -358,8 +358,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved")',lib)
         self.assertIn('AquaWordNativeSaveCheckpoint',lib)
         self.assertIn('android.provider.OpenableColumns.DISPLAY_NAME',lib)
-        self.assertIn('try (android.database.Cursor cursor',lib)
-        self.assertIn('name = cursor.getString(column)',lib)
+        self.assertIn('AquaWordHistory.preferredDisplayName(',lib)
+        self.assertNotIn('getContentResolver().query(', lib.split('private void captureNativeSaveCheckpoint()', 1)[1].split('private boolean documentLoaded', 1)[0])
         self.assertIn('aquaword_snapshot_saved',browser)
         self.assertIn('aquaword_snapshot_preedit',browser)
         self.assertIn('org.libreoffice.androidlib.AquaWordHistory',browser)

@@ -54,6 +54,25 @@ public class AquaWordHistoryTest {
             AquaWordHistory.Snapshot sourceB = AquaWordHistory.capture(
                 root, new ByteArrayInputStream(sameBytes), "duplicate-name.docx", "content://provider-b/789");
             check(!sourceA.file.equals(sourceB.file), "distinct source identities were incorrectly merged");
+            // Native SAVE obtains its display name locally from the pre-edit
+            // snapshot, never from a possibly hung cloud ContentResolver.
+            check("duplicate-name.docx".equals(AquaWordHistory.preferredDisplayName(
+                    root, "content://provider-a/123", "opaque-a")),
+                    "same-source pre-edit name not recovered");
+            check("duplicate-name.docx".equals(AquaWordHistory.preferredDisplayName(
+                    root, "content://provider-b/789", "opaque-b")),
+                    "second provider source not resolved independently");
+            check("opaque_unknown".equals(AquaWordHistory.preferredDisplayName(
+                    root, "content://missing/0", "opaque/unknown")),
+                    "unknown source must use sanitized fallback");
+            check("Untitled Document".equals(AquaWordHistory.preferredDisplayName(
+                    root, null, null)), "missing source must have safe fallback");
+            AquaWordHistory.capture(root,
+                    new ByteArrayInputStream("later Writer revision".getBytes("UTF-8")),
+                    "wrong-saved-name.docx", "content://provider-a/123", "saved");
+            check("duplicate-name.docx".equals(AquaWordHistory.preferredDisplayName(
+                    root, "content://provider-a/123", "opaque-a")),
+                    "saved checkpoint must not override original pre-edit name");
             AquaWordHistory.Snapshot sourceAAgain = AquaWordHistory.capture(
                 root, new ByteArrayInputStream(sameBytes), "duplicate-name.docx", "content://provider-a/123");
             check(sourceAAgain.file.equals(sourceA.file), "unchanged same-source duplicate not deduplicated");
