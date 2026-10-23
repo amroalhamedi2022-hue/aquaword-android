@@ -7,7 +7,7 @@
   --aquaword-mist: #d7f4f5;
   --aquaword-focus: #008b9a;
 }
-#toolbar-wrapper.hasnotebookbar {
+body #toolbar-wrapper.hasnotebookbar {
   background: linear-gradient(115deg,#edf8fb 0%,#e1f3f8 52%,#effaff 100%);
   border-bottom: 1px solid rgba(19,99,136,.16);
 }

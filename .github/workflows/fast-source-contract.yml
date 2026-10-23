@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           PIN=2333344185931274f9c49d6c12a408cefcef6844
           mkdir -p upstream-fixture/engine
-          for path in browser/css/notebookbar.css browser/css/mobilewizard.css \
+          for path in browser/.stylelintrc.json browser/css/notebookbar.css browser/css/mobilewizard.css \
             android/app/build.gradle android/app/src/main/AndroidManifest.xml \
             android/app/appSettings.gradle.in \
             android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java \
@@ -85,4 +85,10 @@ jobs:
           print('PASS: real pinned native Activity parses and SAF lifecycle guards exist')
           PY
           node --check upstream-fixture/browser/src/main.js
+          # Use the exact Stylelint version/rules from the pinned upstream.
+          npx --yes --package stylelint@13.7.0 -- stylelint \
+            --config upstream-fixture/browser/.stylelintrc.json \
+            upstream-fixture/browser/css/notebookbar.css \
+            upstream-fixture/browser/css/mobilewizard.css \
+            upstream-fixture/browser/css/toolbar.css
           git -C upstream-fixture diff --check 2>/dev/null || true

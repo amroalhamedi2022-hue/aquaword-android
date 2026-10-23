@@ -365,6 +365,14 @@ class AquaWordIntegrationTests(unittest.TestCase):
         with self.assertRaises(M.PatchError):
             M.patch_focus_bootstrap(main)
 
+    def test_aurora_css_has_noncolliding_notebookbar_selector(self):
+        skin=(ROOT/'branding/notebookbar.aurora.css').read_text(encoding='utf-8')
+        self.assertIn('body #toolbar-wrapper.hasnotebookbar {',skin)
+        self.assertNotIn('\\n#toolbar-wrapper.hasnotebookbar {',skin)
+        self.run_phase('source')
+        merged=(self.path/'browser/css/notebookbar.css').read_text()
+        self.assertEqual(merged.count('body #toolbar-wrapper.hasnotebookbar {'),1)
+
     def test_idempotent_source(self):
         self.run_phase('source')
         self.run_phase('source')
