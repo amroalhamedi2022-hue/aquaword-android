@@ -1,0 +1,88 @@
+name: AquaWord Fast Source and SAF Contract
+
+# Lightweight gate independent of desktop LibreOffice apt installation;
+# the separate full integration workflow still tests real DOCX round-trips.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - 'history/**'
+      - 'branding/**'
+      - '.github/workflows/fast-source-contract.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-upstream-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install only pinned source-test dependencies
+        run: python3 -m pip install 'Pillow==11.3.0' 'python-docx==1.2.0' 'javalang==0.13.0'
+      - name: Generate fixtures and exercise changed source
+        run: |
+          set -euo pipefail
+          python3 scripts/make_icons.py
+          python3 scripts/generate_templates.py
+          python3 quality/build_rich_fixture.py
+          python3 quality/check_rich_docx.py
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+          node --check branding/focus_mode.js
+          node tests/test_focus_mode.cjs
+          bash -n scripts/publish_qa_draft.sh scripts/run_android_smoke.sh
+          python3 -m py_compile scripts/apply_templates.py scripts/apply_to_collabora.py
+      - name: Apply native overlay to real immutable Collabora source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN=2333344185931274f9c49d6c12a408cefcef6844
+          mkdir -p upstream-fixture/engine
+          for path in browser/css/notebookbar.css browser/css/mobilewizard.css \
+            android/app/build.gradle android/app/src/main/AndroidManifest.xml \
+            android/app/appSettings.gradle.in \
+            android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java \
+            android/app/src/main/res/menu/view_menu.xml \
+            android/app/src/main/res/values/strings.xml \
+            browser/src/main.js browser/css/toolbar.css \
+            android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java \
+            android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java; do
+            mkdir -p "upstream-fixture/$(dirname "$path")"
+            curl --retry 3 --fail --silent --show-error --location \
+              "https://raw.githubusercontent.com/CollaboraOnline/online.mirror/$PIN/$path" \
+              -o "upstream-fixture/$path"
+          done
+          # The native source overlay must be idempotent BEFORE the additive
+          # template translation strings are applied (they own that resource).
+          python3 scripts/apply_to_collabora.py --repo upstream-fixture --phase source
+          python3 scripts/apply_to_collabora.py --repo upstream-fixture --phase source
+          python3 scripts/apply_templates.py --repo upstream-fixture
+          python3 scripts/apply_templates.py --repo upstream-fixture
+          python3 - <<'PY'
+          from pathlib import Path
+          import javalang
+          java=Path('upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java')
+          source=java.read_text(encoding='utf-8')
+          javalang.parse.parse(source)
+          for required in ('AQUAWORD_PENDING_SAF_RECOVERY',
+                           'AQUAWORD_READONLY_DOCUMENT_GRANTS',
+                           'persistDocumentPermission(destination, data);',
+                           'persistDocumentPermission(target, data);'):
+              assert required in source, required
+          assert source.count('AQUAWORD_PENDING_SAF_RECOVERY') == 1
+          print('PASS: real pinned native Activity parses and SAF lifecycle guards exist')
+          PY
+          node --check upstream-fixture/browser/src/main.js
+          git -C upstream-fixture diff --check 2>/dev/null || true
