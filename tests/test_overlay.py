@@ -218,6 +218,39 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('if (written < 500L)', activity)
         self.assertIn('catch (Exception problem)', activity)
 
+    def test_history_and_preedit_provider_metadata_never_block_ui(self):
+        """UI thread must not query cloud SAF metadata or wait for a large history lock.
+
+        Generated-source regression only; Android ANR and provider tests are
+        still required before device acceptance.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # overlay remains idempotent
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        self.assertEqual(activity.count('AQUAWORD_ASYNC_HISTORY_LIST'), 1)
+        self.assertEqual(activity.count('AQUAWORD_ASYNC_PREEDIT_METADATA'), 1)
+
+        opening=activity.split('final Intent i = getIntentToEdit(uri);', 1)[1].split(
+            '}, "AquaWordSafetyCopy").start();', 1)[0]
+        self.assertLess(opening.index('progress.show();'),
+                        opening.index('new Thread(() -> {'))
+        self.assertLess(opening.index('new Thread(() -> {'),
+                        opening.index('RecentFilesAdapter.getUriFilename(this, uri)'))
+        self.assertIn('String name = uri.getLastPathSegment();', opening)
+        self.assertIn('catch (Exception metadataFailure)', opening)
+        self.assertIn('AquaWordHistory.capture(getFilesDir(), data, name, uri.toString());', opening)
+
+        history=activity.split('private void showAquaWordHistory() {', 1)[1].split(
+            '/** File name extensions for which an empty document template', 1)[0]
+        self.assertLess(history.index('new Thread(() -> {'),
+                        history.index('AquaWordHistory.list(getFilesDir())'))
+        self.assertLess(history.index('AquaWordHistory.list(getFilesDir())'),
+                        history.index('runOnUiThread(() -> {\n                if (isFinishing() || isDestroyed()) return;'))
+        self.assertIn('new AlertDialog.Builder(this)', history.split(
+            'if (isFinishing() || isDestroyed()) return;', 1)[1])
+        self.assertIn('if (!isFinishing() && !isDestroyed())', history)
+        self.assertIn('}, "AquaWordHistoryList").start();', history)
+
     def test_writer_creation_uses_real_docx_mime(self):
         self.run_phase('source')
         activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
