@@ -450,7 +450,7 @@ def patch_history_activity(path: Path) -> bool:
     replacement = '''        addDocumentToRecents(uri);
 
         final Intent i = getIntentToEdit(uri);
-        final String name = RecentFilesAdapter.getUriFilename(this, uri);
+        // Provider metadata can block on cloud/network IPC: resolve it on the worker.
         final AlertDialog progress = new AlertDialog.Builder(this)
                 .setTitle(R.string.aquaword_safety_copies)
                 .setMessage(R.string.aquaword_creating_safety_copy)
@@ -458,6 +458,17 @@ def patch_history_activity(path: Path) -> bool:
         progress.show();
         new Thread(() -> {
             String problem = null;
+            // AQUAWORD_ASYNC_PREEDIT_METADATA: no cloud-backed query on UI.
+            String name = uri.getLastPathSegment();
+            if (name == null || name.trim().isEmpty())
+                name = "Untitled Document";
+            try {
+                final String providerName = RecentFilesAdapter.getUriFilename(this, uri);
+                if (providerName != null && !providerName.trim().isEmpty())
+                    name = providerName;
+            } catch (Exception metadataFailure) {
+                Log.w(LOGTAG, "Using URI-derived name for safety copy", metadataFailure);
+            }
             try (InputStream data = getContentResolver().openInputStream(uri)) {
                 AquaWordHistory.capture(getFilesDir(), data, name, uri.toString());
             } catch (Exception failure) {
@@ -496,49 +507,60 @@ def patch_history_activity(path: Path) -> bool:
     if content.count(before) != 1: raise PatchError('Upstream insertion anchor changed')
     methods = '''    /** Lists app-private pre-edit safety copies; restore always creates a new file. */
     private void showAquaWordHistory() {
-        final List<AquaWordHistory.Snapshot> snapshots;
-        try {
-            snapshots = AquaWordHistory.list(getFilesDir());
-        } catch (IOException failure) {
-            Toast.makeText(this, R.string.aquaword_restore_failure, Toast.LENGTH_LONG).show();
-            return;
-        }
-        if (snapshots.isEmpty()) {
-            Toast.makeText(this, R.string.aquaword_no_copies, Toast.LENGTH_LONG).show();
-            return;
-        }
-        final String[] names = new String[snapshots.size()];
-        final java.text.DateFormat timeFormat = java.text.DateFormat.getDateTimeInstance();
-        for (int n = 0; n < snapshots.size(); ++n) {
-            AquaWordHistory.Snapshot snapshot = snapshots.get(n);
-            names[n] = getString("saved".equals(snapshot.kind) ?
-                R.string.aquaword_snapshot_saved : R.string.aquaword_snapshot_preedit)
-                + " · " + snapshot.displayName + " — " +
-                timeFormat.format(new java.util.Date(snapshot.createdMillis));
-        }
-        new AlertDialog.Builder(this)
-            .setTitle(R.string.aquaword_choose_snapshot)
-            .setItems(names, (dialog, which) -> {
-                pendingAquaWordRestore = snapshots.get(which);
-                Intent destination = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                destination.addCategory(Intent.CATEGORY_OPENABLE);
-                final String lowerName = pendingAquaWordRestore.displayName.toLowerCase(java.util.Locale.ROOT);
-                if (lowerName.endsWith(".docx")) {
-                    destination.setType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-                } else if (lowerName.endsWith(".odt")) {
-                    destination.setType("application/vnd.oasis.opendocument.text");
-                } else if (lowerName.endsWith(".rtf")) {
-                    destination.setType("application/rtf");
-                } else if (lowerName.endsWith(".txt")) {
-                    destination.setType("text/plain");
-                } else {
-                    destination.setType("application/octet-stream");
+        // AQUAWORD_ASYNC_HISTORY_LIST: a concurrent large snapshot capture
+        // holds AquaWordHistory's lock. Never wait for it on the UI thread.
+        new Thread(() -> {
+            final List<AquaWordHistory.Snapshot> snapshots;
+            try {
+                snapshots = AquaWordHistory.list(getFilesDir());
+            } catch (IOException failure) {
+                Log.e(LOGTAG, "AquaWord history listing failed", failure);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed())
+                        Toast.makeText(this, R.string.aquaword_restore_failure, Toast.LENGTH_LONG).show();
+                });
+                return;
+            }
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (snapshots.isEmpty()) {
+                    Toast.makeText(this, R.string.aquaword_no_copies, Toast.LENGTH_LONG).show();
+                    return;
                 }
-                destination.putExtra(Intent.EXTRA_TITLE, pendingAquaWordRestore.displayName);
-                startActivityForResult(destination, AQUAWORD_RESTORE_REQUEST_CODE);
-            })
-            .setNegativeButton(android.R.string.cancel, null)
-            .show();
+                final String[] names = new String[snapshots.size()];
+                final java.text.DateFormat timeFormat = java.text.DateFormat.getDateTimeInstance();
+                for (int n = 0; n < snapshots.size(); ++n) {
+                    AquaWordHistory.Snapshot snapshot = snapshots.get(n);
+                    names[n] = getString("saved".equals(snapshot.kind) ?
+                        R.string.aquaword_snapshot_saved : R.string.aquaword_snapshot_preedit)
+                        + " · " + snapshot.displayName + " — " +
+                        timeFormat.format(new java.util.Date(snapshot.createdMillis));
+                }
+                new AlertDialog.Builder(this)
+                    .setTitle(R.string.aquaword_choose_snapshot)
+                    .setItems(names, (dialog, which) -> {
+                        pendingAquaWordRestore = snapshots.get(which);
+                        Intent destination = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        destination.addCategory(Intent.CATEGORY_OPENABLE);
+                        final String lowerName = pendingAquaWordRestore.displayName.toLowerCase(java.util.Locale.ROOT);
+                        if (lowerName.endsWith(".docx")) {
+                            destination.setType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                        } else if (lowerName.endsWith(".odt")) {
+                            destination.setType("application/vnd.oasis.opendocument.text");
+                        } else if (lowerName.endsWith(".rtf")) {
+                            destination.setType("application/rtf");
+                        } else if (lowerName.endsWith(".txt")) {
+                            destination.setType("text/plain");
+                        } else {
+                            destination.setType("application/octet-stream");
+                        }
+                        destination.putExtra(Intent.EXTRA_TITLE, pendingAquaWordRestore.displayName);
+                        startActivityForResult(destination, AQUAWORD_RESTORE_REQUEST_CODE);
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            });
+        }, "AquaWordHistoryList").start();
     }
 
 '''
