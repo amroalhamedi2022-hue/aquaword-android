@@ -64,9 +64,11 @@ jobs:
               "https://raw.githubusercontent.com/CollaboraOnline/online.mirror/$PIN/$path" \
               -o "upstream-fixture/$path"
           done
+          # The native source overlay must be idempotent BEFORE the additive
+          # template translation strings are applied (they own that resource).
+          python3 scripts/apply_to_collabora.py --repo upstream-fixture --phase source
           python3 scripts/apply_to_collabora.py --repo upstream-fixture --phase source
           python3 scripts/apply_templates.py --repo upstream-fixture
-          python3 scripts/apply_to_collabora.py --repo upstream-fixture --phase source
           python3 scripts/apply_templates.py --repo upstream-fixture
           python3 - <<'PY'
           from pathlib import Path
