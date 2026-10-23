@@ -148,6 +148,14 @@ class AquaWordIntegrationTests(unittest.TestCase):
             return true;
         }
     }
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt(FILTER_MODE_KEY, filterMode);
+    }
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        filterMode = savedInstanceState.getInt(FILTER_MODE_KEY, FileUtilities.ALL);
+    }
     /** File name extensions for which an empty document template is bundled in the assets. */
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         switch (requestCode) {
@@ -187,6 +195,29 @@ class AquaWordIntegrationTests(unittest.TestCase):
     def run_phase(self,phase):
         r=subprocess.run([sys.executable,str(ROOT/'scripts/apply_to_collabora.py'),'--repo',str(self.path),'--phase',phase],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+    def test_saf_template_create_and_restore_survive_rotation(self):
+        self.run_phase('source')
+        from pathlib import Path
+        subprocess.run([sys.executable, str(ROOT/'scripts/generate_templates.py')],
+                       check=True, cwd=ROOT, capture_output=True, text=True)
+        args = [sys.executable, str(ROOT/'scripts/apply_templates.py'),
+                '--repo', str(self.path)]
+        for _ in range(2):
+            outcome = subprocess.run(args, capture_output=True, text=True)
+            self.assertEqual(outcome.returncode, 0, (outcome.stdout, outcome.stderr))
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        self.assertEqual(activity.count('AQUAWORD_PENDING_SAF_RECOVERY'), 1)
+        self.assertIn('outState.putString("aquaword.pending_template"', activity)
+        self.assertIn('savedInstanceState.getString("aquaword.pending_template")', activity)
+        self.assertIn('outState.putString("aquaword.pending_restore"', activity)
+        self.assertIn('version.file.getName().equals(previousSnapshotId)', activity)
+        self.assertIn('persistDocumentPermission(destination, data);', activity)
+        self.assertIn('persistDocumentPermission(target, data);', activity)
+        self.assertIn('if (finished)', activity)
+        self.assertIn('open(target); // The recovered document is genuinely editable.', activity)
+        self.assertIn('if (written < 500L)', activity)
+        self.assertIn('catch (Exception problem)', activity)
+
     def test_writer_creation_uses_real_docx_mime(self):
         self.run_phase('source')
         activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
