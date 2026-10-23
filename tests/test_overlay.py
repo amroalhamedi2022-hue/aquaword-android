@@ -302,6 +302,31 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('success = false;',restore)
         self.assertIn('if (finished)\n                                open(target);',restore)
 
+    def test_restore_verifies_snapshot_before_truncating_provider(self):
+        """Corrupt recovery bytes must not destroy a selected SAF document.
+
+        This checks generated Java ordering and helper presence. Actual
+        ContentProvider truncation still needs Android instrumentation.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # repeated overlay is stable
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        restore=activity.split('case AQUAWORD_RESTORE_REQUEST_CODE:',1)[1].split(
+            'case LO_ACTIVITY_REQUEST_CODE:',1)[0]
+        self.assertEqual(restore.count('AQUAWORD_RESTORE_PREFLIGHT'),1)
+        self.assertIn('AquaWordHistory.verifyForRestore(item);',restore)
+        self.assertLess(restore.index('AquaWordHistory.verifyForRestore(item);'),
+                        restore.index('openOutputStream(target, "wt")'))
+        self.assertLess(restore.index('AquaWordHistory.verifyForRestore(item);'),
+                        restore.index('openOutputStream(target, "rwt")'))
+        self.assertIn('catch (Exception failure)',restore)
+        self.assertIn('success = false;',restore)
+        self.assertIn('if (finished)\n                                open(target);',restore)
+        helper=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
+        self.assertIn('public static synchronized void verifyForRestore(Snapshot snapshot)',helper)
+        self.assertIn('snapshot == null || !verifyBytes(snapshot)',helper)
+        self.assertIn('public static synchronized void restore(Snapshot snapshot, OutputStream target)',helper)
+
     def test_null_native_save_stream_retries_explicit_rwt(self):
         """A null wt stream from a crashed provider must try rwt, not w."""
         self.run_phase('source')
