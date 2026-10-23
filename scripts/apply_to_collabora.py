@@ -646,13 +646,44 @@ def patch_saf_permission_handling(path: Path) -> bool:
     anchor = '    /** File name extensions for which an empty document template is bundled in the assets. */'
     if body.count(anchor) != 1:
         raise PatchError('Expected unique SAF helper insertion point')
+    # Collabora originally adds WRITE even when Android grants READ only.
+    edit_anchor = '''    public Intent getIntentToEdit(Uri uri) {
+        Intent i = new Intent(Intent.ACTION_EDIT, uri);
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        i.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);'''
+    if body.count(edit_anchor) != 1:
+        raise PatchError('Upstream editable Intent grant handler changed')
+    edit_replacement = '''    public Intent getIntentToEdit(Uri uri) {
+        Intent i = new Intent(Intent.ACTION_EDIT, uri);
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        boolean readOnly = mAquaWordReadOnlyDocumentUris.contains(uri.toString());
+        // Android persisted document permissions survive Activity restarts.
+        for (android.content.UriPermission permission : getContentResolver().getPersistedUriPermissions()) {
+            if (uri.equals(permission.getUri()) && permission.isReadPermission() &&
+                    !permission.isWritePermission()) {
+                readOnly = true;
+                break;
+            }
+        }
+        if (!readOnly)
+            i.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);'''
+    body = body.replace(edit_anchor, edit_replacement, 1)
     helper = '''    // AQUAWORD_SAFE_SAF_PERMISSIONS: do not crash on read-only or GET_CONTENT providers.
+    // AQUAWORD_READONLY_DOCUMENT_GRANTS: never invent WRITE permission.
+    private final java.util.Set<String> mAquaWordReadOnlyDocumentUris =
+            new java.util.HashSet<String>();
     private void persistDocumentPermission(final Uri uri, final Intent returnedIntent) {
         if (uri == null || returnedIntent == null)
             return;
         final int supported = Intent.FLAG_GRANT_READ_URI_PERMISSION |
                               Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
         final int granted = returnedIntent.getFlags() & supported;
+        // Providers may grant READ alone (including temporary grants).
+        if ((granted & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0 &&
+                (granted & Intent.FLAG_GRANT_WRITE_URI_PERMISSION) == 0)
+            mAquaWordReadOnlyDocumentUris.add(uri.toString());
+        else if ((granted & Intent.FLAG_GRANT_WRITE_URI_PERMISSION) != 0)
+            mAquaWordReadOnlyDocumentUris.remove(uri.toString());
         if (granted == 0) {
             Log.w(LOGTAG, "Provider did not grant persistable document access");
             return;

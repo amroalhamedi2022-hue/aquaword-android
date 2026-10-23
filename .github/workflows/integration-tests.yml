@@ -151,6 +151,7 @@ jobs:
             --rule 'no-mixed-spaces-and-tabs: [2, "smart-tabs"]' \
             upstream-fixture/browser/src/main.js
           grep -q 'AQUAWORD_DEFAULT_DOCX' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java
+          grep -q 'AQUAWORD_READONLY_DOCUMENT_GRANTS' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_PERIODIC_NATIVE_AUTOSAVE' upstream-fixture/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           grep -q 'AQUAWORD_NATIVE_SAVE_CHECKPOINT' upstream-fixture/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           grep -q 'AQUAWORD_FOCUS_CSS_BEGIN' upstream-fixture/browser/css/toolbar.css
