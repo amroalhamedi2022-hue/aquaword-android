@@ -88,6 +88,13 @@ jobs:
           python3 scripts/apply_to_collabora.py --repo collabora --phase source
           python3 scripts/apply_templates.py --repo collabora
           node --check collabora/browser/src/main.js
+          # Validate exactly the indentation that broke native CI run 39768833806.
+          # Run BEFORE the ~hours-long LibreOffice ARM64 engine compilation.
+          npx --yes --package eslint@7.32.0 -- eslint --no-eslintrc --no-ignore \
+            --env browser,es6 --parser-options '{"ecmaVersion":2017}' \
+            --rule 'indent: [2, "tab", {"outerIIFEBody": 0}]' \
+            --rule 'no-mixed-spaces-and-tabs: [2, "smart-tabs"]' \
+            collabora/browser/src/main.js
           grep -q 'AQUAWORD_FOCUS_BOOTSTRAP_BEGIN' collabora/browser/src/main.js
           grep -q 'AQUAWORD_FOCUS_CSS_BEGIN' collabora/browser/css/toolbar.css
           grep -q 'AQUAWORD_DEFAULT_DOCX' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java
