@@ -74,81 +74,100 @@ def patch_focus_styles(path: Path) -> bool:
 
 
 def patch_native_save_checkpoints(path: Path) -> bool:
-    """Back up the *actually saved* native document after the Writer SAVE event.
+    """Commit a durable saved revision before SAF writeback, off the UI thread.
 
-    The source identity and properties format are shared with the file-browser
-    pre-edit safety copies, so a single History UI can restore either version.
-    Opens the temp document stream before scheduling a worker to tolerate
-    Activity shutdown; never blocks the main thread for the extra backup.
+    A single worker serializes saves. It writes the exact committed snapshot
+    bytes, not a mutable Writer temp path, to the selected document provider.
     """
     body = require(path).read_text(encoding='utf-8')
     marker = 'AQUAWORD_NATIVE_SAVE_CHECKPOINT'
     if marker in body:
-        if body.count('captureNativeSaveCheckpoint();') != 1:
+        if body.count('captureNativeSaveCheckpoint(messageAndParam.clone());') != 1:
             raise PatchError('Partial native save checkpoint integration')
         return False
     save_anchor = '''            case "SAVE":
                 copyTempBackToIntent();
                 sendBroadcast(messageAndParam[0], messageAndParam[1]);'''
     field_anchor = '    private boolean documentLoaded = false;'
-    if body.count(save_anchor) != 1 or body.count(field_anchor) != 1:
-        raise PatchError('Upstream native SAVE callback or LOActivity field anchor changed')
+    destroy_anchor = '''    protected void onDestroy() {
+        mAquaWordSaveHandler.removeCallbacks(mAquaWordSaveTick);'''
+    if (body.count(save_anchor) != 1 or body.count(field_anchor) != 1 or
+            body.count(destroy_anchor) != 1):
+        raise PatchError('Upstream native SAVE callback/lifecycle anchor changed')
     method = '''    // AQUAWORD_NATIVE_SAVE_CHECKPOINT:
-    // Store a recoverable revision after native Writer signals SAVE.
-    // The previously captured pre-edit snapshot remains untouched.
-    private void captureNativeSaveCheckpoint() {
-        if (!isDocEditable || mTempFile == null || !mTempFile.isFile() ||
-                mTempFile.length() <= 0L)
-            return;
+    // Serialize saves to preserve their order. The queue is Activity-owned;
+    // shutdown on destroy drains already-accepted saves without cancelling.
+    private final java.util.concurrent.ExecutorService mAquaWordSaveExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread worker = new Thread(r, "AquaWordNativeSaveCheckpoint");
+                return worker;
+            });
+
+    private void captureNativeSaveCheckpoint(final String[] saveMessage) {
         final android.net.Uri original = getIntent().getData();
-        if (original == null)
+        if (!isDocEditable || mTempFile == null || !mTempFile.isFile() ||
+                mTempFile.length() <= 0L || original == null) {
+            Log.e(TAG, "AquaWord cannot save: missing editable Writer source");
             return;
+        }
         final String sourceIdentity = original.toString();
-        // SAF document ids are not always filenames (e.g. cloud providers).
-        // Prefer the provider's actual display name for the recovery list.
-        String candidateName = original.getLastPathSegment() == null ?
+        final String fallbackName = original.getLastPathSegment() == null ?
                 "Document.docx" : original.getLastPathSegment();
-        // Provider metadata may require cloud IPC/network I/O. Never query
-        // it on the native SAVE callback before the actual SAF writeback.
-        final String fallbackName = candidateName;
         final java.io.InputStream saved;
         try {
-            // Hold an FD before Activity teardown; backup work is asynchronous.
+            // Open before returning from Writer's SAVE callback. If Writer
+            // replaces its temp path, this descriptor still refers to the
+            // saved version rather than the next revision.
             saved = new java.io.FileInputStream(mTempFile);
         } catch (java.io.IOException failure) {
             Log.e(TAG, "Cannot open saved Writer document for recovery", failure);
             return;
         }
-        new Thread(() -> {
-            // Keep slow/unavailable provider queries off the SAVE callback.
-            // The already-open native temp FD is owned by this worker.
-            try (java.io.InputStream stream = saved) {
-                // AQUAWORD_LOCAL_RECOVERY_NAME: cloud metadata IPC must never
-                // delay the only post-edit recovery snapshot. The pre-edit
-                // checkpoint already stored the provider's display name.
-                // Look it up from private metadata before copying the bytes.
-                String name = AquaWordHistory.preferredDisplayName(
-                        getFilesDir(), sourceIdentity, fallbackName);
-                AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved");
-            } catch (Exception failure) {
-                Log.e(TAG, "AquaWord post-save recovery checkpoint failed", failure);
-            }
-        }, "AquaWordNativeSaveCheckpoint").start();
+        try {
+            mAquaWordSaveExecutor.execute(() -> {
+                // AQUAWORD_LOCAL_RECOVERY_NAME: no provider metadata IPC on
+                // the SAVE callback or in the recovery-critical path.
+                try (java.io.InputStream stream = saved) {
+                    String name = AquaWordHistory.preferredDisplayName(
+                            getFilesDir(), sourceIdentity, fallbackName);
+                    // AQUAWORD_DURABLE_SAVE_BARRIER: capture fsyncs the
+                    // app-private bytes and metadata before returning. If
+                    // capture fails, do NOT open/truncate the SAF destination.
+                    AquaWordHistory.Snapshot checkpoint = AquaWordHistory.capture(
+                            getFilesDir(), stream, name, sourceIdentity, "saved");
+                    if (checkpoint == null || checkpoint.sizeBytes <= 0L)
+                        throw new java.io.IOException("Empty native recovery checkpoint");
+                    AquaWordHistory.verifyForRestore(checkpoint);
+                    // Write the immutable verified revision, not mTempFile:
+                    // subsequent Writer saves must not change the payload.
+                    if (copyTempBackToIntent(checkpoint.file, original)) {
+                        sendBroadcast(saveMessage[0], saveMessage[1]);
+                    } else {
+                        Log.e(TAG, "AquaWord SAVE not acknowledged because the original document was not written");
+                    }
+                } catch (Exception failure) {
+                    Log.e(TAG, "AquaWord post-save recovery or writeback failed", failure);
+                    runOnUiThread(() -> {
+                        if (!isFinishing() && !isDestroyed())
+                            Toast.makeText(this, R.string.failed_to_save_file, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException shutdown) {
+            try { saved.close(); } catch (java.io.IOException ignored) { }
+            Log.e(TAG, "AquaWord SAVE arrived after the Activity save queue closed", shutdown);
+        }
     }
 
 '''
     body = body.replace(field_anchor, method + field_anchor, 1)
     body = body.replace(save_anchor, '''            case "SAVE":
-                // AQUAWORD_RECOVER_FAILED_SAF_SAVE: preserve the native
-                // Writer temp document BEFORE a potentially destructive
-                // provider write. A failed SAF copy must not lose the
-                // post-edit recovery revision.
-                captureNativeSaveCheckpoint();
-                if (copyTempBackToIntent()) {
-                    sendBroadcast(messageAndParam[0], messageAndParam[1]);
-                } else {
-                    Log.e(TAG, "AquaWord SAVE not acknowledged because the original document was not written");
-                }''', 1)
+                // AQUAWORD_RECOVER_FAILED_SAF_SAVE: queue recovery + SAF
+                // writeback as one ordered background transaction. A SAVE
+                // broadcast is sent only after both steps succeed.
+                captureNativeSaveCheckpoint(messageAndParam.clone());''', 1)
+    body = body.replace(destroy_anchor, destroy_anchor +
+            '\n        mAquaWordSaveExecutor.shutdown();', 1)
     return store(path, body)
 
 
@@ -189,7 +208,8 @@ def patch_native_saf_saveback(path: Path) -> bool:
             'reportSaveToFileFailed();' not in direct or
             'MediaScannerConnection.scanFile' not in direct):
         raise PatchError('Upstream direct-file save semantics drifted')
-    direct = direct.replace('private void copyTempBackToFile()', 'private boolean copyTempBackToFile()', 1)
+    direct = direct.replace('private void copyTempBackToFile()', 'private boolean copyTempBackToFile(java.io.File sourceFile)', 1)
+    direct = direct.replace('new FileInputStream(mTempFile)', 'new FileInputStream(sourceFile)')
     direct = direct.replace('            return;', '            return false;')
     # Successful copy and rename is the only path allowed to acknowledge SAVE.
     direct = direct.replace('            MediaScannerConnection.scanFile(this, new String[]{resolvedFile.getAbsolutePath()}, null, null);',
@@ -199,17 +219,16 @@ def patch_native_saf_saveback(path: Path) -> bool:
     if ('return true;' not in direct or direct.count('return false;') < 3):
         raise PatchError('Could not make direct-file save report its completion state')
     replacement = '''    // AQUAWORD_NATIVE_SAF_SAVE_BACK: never silently report incomplete writes.
-    private boolean copyTempBackToIntent() {
-        if (!isDocEditable || mTempFile == null ||
-                getIntent().getData() == null ||
-                !ContentResolver.SCHEME_CONTENT.equals(getIntent().getData().getScheme()))
+    private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination) {
+        if (!isDocEditable || sourceFile == null || !sourceFile.isFile() ||
+                destination == null ||
+                !ContentResolver.SCHEME_CONTENT.equals(destination.getScheme()))
             return false;
         if (mResolvedFile != null) {
-            return copyTempBackToFile();
+            return copyTempBackToFile(sourceFile);
         }
-        final Uri destination = getIntent().getData();
-        try (InputStream input = new FileInputStream(mTempFile)) {
-            if (mTempFile.length() <= 0L)
+        try (InputStream input = new FileInputStream(sourceFile)) {
+            if (sourceFile.length() <= 0L)
                 throw new IOException("Refusing to replace document with empty Writer temp file");
             // Android ContentResolver.openOutputStream(uri) is equivalent to
             // mode "w", which is NOT guaranteed to truncate existing content.
@@ -243,7 +262,7 @@ def patch_native_saf_saveback(path: Path) -> bool:
                 output.flush();
             }
             // Stream closed successfully before any success log.
-            if (bytes != mTempFile.length())
+            if (bytes != sourceFile.length())
                 throw new IOException("SAF copy size differs from native saved document");
             Log.i(TAG, "AquaWord safely copied " + bytes + " bytes to the document provider");
             return true;
