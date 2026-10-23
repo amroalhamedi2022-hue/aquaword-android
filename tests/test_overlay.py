@@ -62,6 +62,34 @@ class AquaWordIntegrationTests(unittest.TestCase):
     }
 
     /** Copy the temp file back to the document. */
+    private void copyTempBackToFile() {
+        final File resolvedFile = mResolvedFile;
+        if (resolvedFile == null)
+            return;
+        File newContent = new File(resolvedFile.getParentFile(), "." + resolvedFile.getName() + ".part");
+        try {
+            try (InputStream inputStream = new FileInputStream(mTempFile)) {
+                int len = inputStream.available();
+                if (len <= 0)
+                    return;
+                try (FileOutputStream outputStream = new FileOutputStream(newContent)) {
+                    byte[] buffer = new byte[1024];
+                    while (inputStream.read(buffer) > 0) { }
+                    outputStream.flush();
+                }
+            }
+            if (!newContent.renameTo(resolvedFile)) {
+                newContent.delete();
+                reportSaveToFileFailed();
+                return;
+            }
+            MediaScannerConnection.scanFile(this, new String[]{resolvedFile.getAbsolutePath()}, null, null);
+        } catch (Exception e) {
+            newContent.delete();
+            reportSaveToFileFailed();
+        }
+    }
+    /** Followup method must remain a separate anchor. */
     private boolean documentLoaded = false;
     protected void onResume() {
         super.onResume();
@@ -169,6 +197,11 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('output.flush();',lib)
         self.assertIn('bytes != mTempFile.length()',lib)
         self.assertNotIn('copyThread.join();',lib)
+        self.assertIn('private boolean copyTempBackToIntent()',lib)
+        self.assertIn('private boolean copyTempBackToFile()',lib)
+        self.assertIn('return copyTempBackToFile();',lib)
+        self.assertIn('return true;',lib)
+        self.assertIn('AquaWord SAVE not acknowledged',lib)
 
     def test_save_callbacks_create_real_history_checkpoints(self):
         self.run_phase('source')
@@ -177,6 +210,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         browser=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
         self.assertEqual(lib.count('AQUAWORD_NATIVE_SAVE_CHECKPOINT'),1)
         self.assertIn('captureNativeSaveCheckpoint();',lib)
+        self.assertIn('if (copyTempBackToIntent())',lib)
+        self.assertIn('sendBroadcast(messageAndParam[0], messageAndParam[1])',lib)
         self.assertIn('AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved")',lib)
         self.assertIn('AquaWordNativeSaveCheckpoint',lib)
         self.assertIn('android.provider.OpenableColumns.DISPLAY_NAME',lib)
