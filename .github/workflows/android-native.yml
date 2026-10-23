@@ -104,6 +104,12 @@ jobs:
           grep -q 'AQUAWORD_PERIODIC_NATIVE_AUTOSAVE' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           grep -q 'AQUAWORD_NATIVE_SAVE_CHECKPOINT' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           grep -q 'AQUAWORD_NATIVE_SAF_SAVE_BACK' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          # A native save must NEVER be acknowledged or snapshotted when the
+          # actual Android document provider or resolved-file write fails.
+          grep -q 'private boolean copyTempBackToIntent()' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -q 'private boolean copyTempBackToFile()' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -q 'if (copyTempBackToIntent())' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -q 'AquaWord SAVE not acknowledged' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           git -C collabora diff --check
       - name: Check build interpreter dependencies before expensive compilation
         shell: bash
