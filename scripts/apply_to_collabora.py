@@ -222,8 +222,12 @@ def patch_native_saf_saveback(path: Path) -> bool:
                 opened = getContentResolver().openOutputStream(destination, "wt");
             } catch (FileNotFoundException | UnsupportedOperationException noTruncateMode) {
                 Log.w(TAG, "Provider rejected wt; trying explicit rwt truncate mode", noTruncateMode);
-                opened = getContentResolver().openOutputStream(destination, "rwt");
+                opened = null;
             }
+            // ContentResolver may return null when a provider has crashed.
+            // A null "wt" stream is not success: try "rwt" before failing.
+            if (opened == null)
+                opened = getContentResolver().openOutputStream(destination, "rwt");
             if (opened == null)
                 throw new IOException("Document provider returned no writable stream");
             long bytes = 0L;
@@ -570,8 +574,26 @@ def patch_history_activity(path: Path) -> bool:
                 persistDocumentPermission(target, data);
                 new Thread(() -> {
                     boolean success;
-                    try (OutputStream output = getContentResolver().openOutputStream(target, "w")) {
-                        AquaWordHistory.restore(item, output);
+                    try {
+                        // AQUAWORD_SAFE_HISTORY_RESTORE: ACTION_CREATE_DOCUMENT
+                        // can return an existing URI. Plain "w" may not truncate,
+                        // leaving trailing bytes from an older DOCX/ZIP.
+                        OutputStream opened;
+                        try {
+                            opened = getContentResolver().openOutputStream(target, "wt");
+                        } catch (java.io.FileNotFoundException | UnsupportedOperationException rejected) {
+                            Log.w(LOGTAG, "Restore provider rejected wt; trying rwt", rejected);
+                            opened = null;
+                        }
+                        if (opened == null)
+                            opened = getContentResolver().openOutputStream(target, "rwt");
+                        if (opened == null)
+                            throw new IOException("No truncating writable recovery destination");
+                        try (OutputStream output = opened) {
+                            AquaWordHistory.restore(item, output);
+                        }
+                        // Only open the recovered document after restore and
+                        // output close both succeed. On failure keep snapshot.
                         success = true;
                     } catch (Exception failure) {
                         Log.e(LOGTAG, "AquaWord safety copy restore failed", failure);
