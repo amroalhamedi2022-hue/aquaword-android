@@ -105,8 +105,16 @@ def patch_native_save_checkpoints(path: Path) -> bool:
 
     private void captureNativeSaveCheckpoint(final String[] saveMessage) {
         final android.net.Uri original = getIntent().getData();
-        if (!isDocEditable || mTempFile == null || !mTempFile.isFile() ||
-                mTempFile.length() <= 0L || original == null) {
+        // AQUAWORD_DIRECT_FILE_SAVE: pinned Collabora opens file:// Writer
+        // documents directly, with mTempFile == null. Writer has already
+        // written the original at SAVE; there is no SAF copy-back to perform.
+        // Do not silently drop the SAVE notification for these documents.
+        final boolean directWriterFile = original != null && mTempFile == null &&
+                ContentResolver.SCHEME_FILE.equals(original.getScheme());
+        final java.io.File writerOutput = directWriterFile && original.getPath() != null ?
+                new java.io.File(original.getPath()) : mTempFile;
+        if (!isDocEditable || writerOutput == null || !writerOutput.isFile() ||
+                writerOutput.length() <= 0L || original == null) {
             Log.e(TAG, "AquaWord cannot save: missing editable Writer source");
             return;
         }
@@ -118,7 +126,7 @@ def patch_native_save_checkpoints(path: Path) -> bool:
             // Open before returning from Writer's SAVE callback. If Writer
             // replaces its temp path, this descriptor still refers to the
             // saved version rather than the next revision.
-            saved = new java.io.FileInputStream(mTempFile);
+            saved = new java.io.FileInputStream(writerOutput);
         } catch (java.io.IOException failure) {
             Log.e(TAG, "Cannot open saved Writer document for recovery", failure);
             return;
@@ -140,12 +148,23 @@ def patch_native_save_checkpoints(path: Path) -> bool:
                     AquaWordHistory.verifyForRestore(checkpoint);
                     // Write the immutable verified revision, not mTempFile:
                     // subsequent Writer saves must not change the payload.
-                    if (copyTempBackToIntent(checkpoint.file, original)) {
+                    if (directWriterFile || copyTempBackToIntent(checkpoint.file, original)) {
+                        // file:// was already persisted by native Writer; the
+                        // content:// path needs explicit verified writeback.
                         sendBroadcast(saveMessage[0], saveMessage[1]);
                     } else {
                         Log.e(TAG, "AquaWord SAVE not acknowledged because the original document was not written");
                     }
                 } catch (Exception failure) {
+                    if (directWriterFile && writerOutput.isFile() && writerOutput.length() > 0L) {
+                        // A history quota/I/O failure must not turn an already
+                        // persisted native file:// SAVE into a false failure.
+                        // Recovery is degraded; record it without claiming
+                        // that a safety copy exists.
+                        Log.w(TAG, "Native file saved by Writer, but recovery checkpoint failed", failure);
+                        sendBroadcast(saveMessage[0], saveMessage[1]);
+                        return;
+                    }
                     Log.e(TAG, "AquaWord post-save recovery or writeback failed", failure);
                     runOnUiThread(() -> {
                         if (!isFinishing() && !isDestroyed())
