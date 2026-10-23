@@ -281,7 +281,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/publish_qa_draft.sh
-      # Publishing a draft is NOT a completed user-facing release.
+      # If compilation and package verification passed, but runtime QA fails
+      # (e.g. unsupported ARM64 translation), keep the bytes for internal
+      # device debugging without claiming Android acceptance.
+      - name: Retain valid compiled APK when emulator certification is blocked
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if test -s output/SHA256SUMS; then
+            bash scripts/publish_qa_draft.sh --unverified
+          else
+            echo 'No verified build output; not preserving an APK.'
+          fi
+      # Publishing any internal draft is NOT a completed user-facing release.
       - name: Explain and preserve native build failure evidence in run summary
         if: failure()
         shell: bash
