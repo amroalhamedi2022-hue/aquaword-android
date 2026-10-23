@@ -247,9 +247,22 @@ public final class AquaWordHistory {
         }
     }
 
-    public static void restore(Snapshot snapshot, OutputStream target) throws IOException {
+    /**
+     * Validate a private recovery snapshot BEFORE opening a SAF destination.
+     * Opening a provider output stream in "wt"/"rwt" may truncate its existing
+     * document immediately, even if restore() would later reject corrupt bytes.
+     * Call this before ContentResolver.openOutputStream(), not afterwards.
+     */
+    public static synchronized void verifyForRestore(Snapshot snapshot) throws IOException {
+        if (snapshot == null || !verifyBytes(snapshot))
+            throw new IOException("Recovery snapshot missing or checksum mismatch");
+    }
+
+    // Keep retention/trim from deleting a snapshot midway through restore.
+    public static synchronized void restore(Snapshot snapshot, OutputStream target) throws IOException {
         if (snapshot == null || target == null) throw new IOException("Missing recovery destination");
-        // Verify before writing any bytes to the selected user document.
+        // Re-verify at copy time as a defense against changes after preflight.
+        verifyForRestore(snapshot);
         MessageDigest checksum = digest();
         try (DigestInputStream in = new DigestInputStream(new FileInputStream(snapshot.file), checksum)) {
             byte[] buffer = new byte[64 * 1024];
