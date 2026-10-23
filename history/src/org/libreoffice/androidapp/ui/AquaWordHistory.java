@@ -261,15 +261,9 @@ public final class AquaWordHistory {
     // Keep retention/trim from deleting a snapshot midway through restore.
     public static synchronized void restore(Snapshot snapshot, OutputStream target) throws IOException {
         if (snapshot == null || target == null) throw new IOException("Missing recovery destination");
-        // Re-verify at copy time as a defense against changes after preflight.
+        // Re-verify at copy time, since callers outside SAF may use restore()
+        // directly. Both this check and the provider preflight are intentional.
         verifyForRestore(snapshot);
-        MessageDigest checksum = digest();
-        try (DigestInputStream in = new DigestInputStream(new FileInputStream(snapshot.file), checksum)) {
-            byte[] buffer = new byte[64 * 1024];
-            while (in.read(buffer) != -1) { /* read to verify */ }
-        }
-        if (!hex(checksum.digest()).equals(snapshot.sha256))
-            throw new IOException("Snapshot checksum mismatch — recovery cancelled");
         try (InputStream in = new FileInputStream(snapshot.file)) {
             byte[] buffer = new byte[64 * 1024];
             int n;
