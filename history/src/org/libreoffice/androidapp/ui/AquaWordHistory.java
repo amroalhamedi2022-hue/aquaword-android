@@ -94,8 +94,17 @@ public final class AquaWordHistory {
             try (FileOutputStream output = new FileOutputStream(temp)) {
                 byte[] buffer = new byte[64 * 1024];
                 int count;
+                int noProgressReads = 0;
                 while ((count = input.read(buffer)) != -1) {
-                    if (count == 0) continue;
+                    // A nonconforming cloud/provider stream can repeatedly
+                    // return zero for a nonempty buffer. Never spin forever
+                    // while holding the synchronized history lock.
+                    if (count == 0) {
+                        if (++noProgressReads >= 8)
+                            throw new IOException("Document input stream made no progress");
+                        continue;
+                    }
+                    noProgressReads = 0;
                     length += count;
                     if (length > MAX_SINGLE_BYTES)
                         throw new IOException("Document exceeds local safety-copy size limit");
