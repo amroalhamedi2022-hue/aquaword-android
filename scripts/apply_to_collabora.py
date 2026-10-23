@@ -213,12 +213,18 @@ def patch_native_saf_saveback(path: Path) -> bool:
         try (InputStream input = new FileInputStream(mTempFile)) {
             if (mTempFile.length() <= 0L)
                 throw new IOException("Refusing to replace document with empty Writer temp file");
+            // Android ContentResolver.openOutputStream(uri) is equivalent to
+            // mode "w", which is NOT guaranteed to truncate existing content.
+            // A shorter edited DOCX could retain stale trailing ZIP bytes.
+            // Never silently fall back to ambiguous "w" on an existing file.
+            // Try only explicitly truncating modes, otherwise fail the SAVE
+            // and leave the post-edit recovery snapshot available.
             OutputStream opened;
             try {
                 opened = getContentResolver().openOutputStream(destination, "wt");
-            } catch (FileNotFoundException noTruncateMode) {
-                Log.w(TAG, "Provider did not support wt; trying default output mode", noTruncateMode);
-                opened = getContentResolver().openOutputStream(destination);
+            } catch (FileNotFoundException | UnsupportedOperationException noTruncateMode) {
+                Log.w(TAG, "Provider rejected wt; trying explicit rwt truncate mode", noTruncateMode);
+                opened = getContentResolver().openOutputStream(destination, "rwt");
             }
             if (opened == null)
                 throw new IOException("Document provider returned no writable stream");
