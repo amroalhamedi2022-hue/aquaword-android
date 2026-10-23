@@ -273,6 +273,50 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('return true;',lib)
         self.assertIn('AquaWord SAVE not acknowledged',lib)
 
+    def test_history_restore_requires_truncating_saf_stream(self):
+        """A restored DOCX must not retain a prior document's ZIP tail.
+
+        Generated-source contract only: real providers and device runtime
+        remain NOT TESTED. A null/unsupported provider must fail closed.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # idempotent overlay
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        restore=activity.split('case AQUAWORD_RESTORE_REQUEST_CODE:',1)[1].split(
+            'case LO_ACTIVITY_REQUEST_CODE:',1)[0]
+        self.assertEqual(restore.count('AQUAWORD_SAFE_HISTORY_RESTORE'),1)
+        self.assertEqual(restore.count('openOutputStream(target, "wt")'),1)
+        self.assertEqual(restore.count('openOutputStream(target, "rwt")'),1)
+        self.assertLess(restore.index('openOutputStream(target, "wt")'),
+                        restore.index('openOutputStream(target, "rwt")'))
+        self.assertNotIn('openOutputStream(target, "w")',restore)
+        self.assertNotIn('openOutputStream(target);',restore)
+        self.assertIn('catch (java.io.FileNotFoundException | UnsupportedOperationException rejected)',restore)
+        self.assertIn('if (opened == null)\n                            opened = getContentResolver().openOutputStream(target, "rwt");',restore)
+        self.assertIn('throw new IOException("No truncating writable recovery destination")',restore)
+        self.assertLess(restore.index('try (OutputStream output = opened)'),
+                        restore.index('success = true;'))
+        self.assertLess(restore.index('AquaWordHistory.restore(item, output);'),
+                        restore.index('success = true;'))
+        self.assertIn('catch (Exception failure)',restore)
+        self.assertIn('success = false;',restore)
+        self.assertIn('if (finished)\n                                open(target);',restore)
+
+    def test_null_native_save_stream_retries_explicit_rwt(self):
+        """A null wt stream from a crashed provider must try rwt, not w."""
+        self.run_phase('source')
+        self.run_phase('source')
+        native=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        save=native.split('private boolean copyTempBackToIntent() {',1)[1].split(
+            '/** Copy the temp file back to the document. */',1)[0]
+        self.assertEqual(save.count('openOutputStream(destination, "wt")'),1)
+        self.assertEqual(save.count('openOutputStream(destination, "rwt")'),1)
+        self.assertIn('if (opened == null)\n                opened = getContentResolver().openOutputStream(destination, "rwt");',save)
+        self.assertIn('if (opened == null)\n                throw new IOException("Document provider returned no writable stream");',save)
+        self.assertNotIn('openOutputStream(destination, "w")',save)
+        self.assertLess(save.index('try (OutputStream output = opened)'),
+                        save.index('return true;'))
+
     def test_existing_saf_docx_save_never_uses_nontruncating_w_mode(self):
         """A shorter edited DOCX must not leave the old ZIP tail behind.
 
