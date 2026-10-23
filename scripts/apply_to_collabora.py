@@ -108,19 +108,9 @@ def patch_native_save_checkpoints(path: Path) -> bool:
         // Prefer the provider's actual display name for the recovery list.
         String candidateName = original.getLastPathSegment() == null ?
                 "Document.docx" : original.getLastPathSegment();
-        try (android.database.Cursor cursor = getContentResolver().query(
-                original, new String[] { android.provider.OpenableColumns.DISPLAY_NAME },
-                null, null, null)) {
-            if (cursor != null && cursor.moveToFirst()) {
-                final int column = cursor.getColumnIndex(
-                        android.provider.OpenableColumns.DISPLAY_NAME);
-                if (column >= 0 && cursor.getString(column) != null)
-                    candidateName = cursor.getString(column);
-            }
-        } catch (Exception queryFailure) {
-            Log.w(TAG, "Using fallback document name for recovery checkpoint", queryFailure);
-        }
-        final String name = candidateName;
+        // Provider metadata may require cloud IPC/network I/O. Never query
+        // it on the native SAVE callback before the actual SAF writeback.
+        final String fallbackName = candidateName;
         final java.io.InputStream saved;
         try {
             // Hold an FD before Activity teardown; backup work is asynchronous.
@@ -130,7 +120,22 @@ def patch_native_save_checkpoints(path: Path) -> bool:
             return;
         }
         new Thread(() -> {
+            // Keep slow/unavailable provider queries off the SAVE callback.
+            // The already-open native temp FD is owned by this worker.
             try (java.io.InputStream stream = saved) {
+                String name = fallbackName;
+                try (android.database.Cursor cursor = getContentResolver().query(
+                        original, new String[] { android.provider.OpenableColumns.DISPLAY_NAME },
+                        null, null, null)) {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        final int column = cursor.getColumnIndex(
+                                android.provider.OpenableColumns.DISPLAY_NAME);
+                        if (column >= 0 && cursor.getString(column) != null)
+                            name = cursor.getString(column);
+                    }
+                } catch (Exception queryFailure) {
+                    Log.w(TAG, "Using fallback document name for recovery checkpoint", queryFailure);
+                }
                 AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved");
             } catch (Exception failure) {
                 Log.e(TAG, "AquaWord post-save recovery checkpoint failed", failure);
