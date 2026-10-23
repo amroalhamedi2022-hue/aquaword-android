@@ -1,0 +1,55 @@
+name: AquaWord Queue Current Native Build (One Shot)
+
+# This workflow is intentionally triggered ONLY when first installed on main.
+# It doesn't run on ordinary source pushes, nor does it cancel a compiling engine.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/queue-current-native-once.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-current:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Retire only obsolete waiting native runs and dispatch current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          echo "Current main source commit: $CURRENT"
+          RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/android-native.yml/runs?per_page=100")"
+          # Never cancel a running, compiling engine. It may already be hours into work.
+          printf '%s\n' "$RUNS" | jq -r --arg head "$CURRENT" '
+            .workflow_runs[] | select(.head_sha != $head and
+              (.status == "pending" or .status == "queued" or
+               .status == "waiting" or .status == "requested")) | .id
+          ' | while IFS= read -r old; do
+            [ -n "$old" ] || continue
+            echo "Cancel obsolete waiting native run $old"
+            gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$old/cancel" >/dev/null ||
+              echo "Could not cancel $old; leaving it unchanged"
+          done
+          # GitHub concurrency leaves the current native run alive. No duplicates
+          # are submitted for an already queued or running identical commit.
+          ACTIVE="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/android-native.yml/runs?per_page=100")"
+          COUNT="$(printf '%s\n' "$ACTIVE" | jq -r --arg head "$CURRENT" '
+            [.workflow_runs[] | select(.head_sha == $head and
+              (.status == "in_progress" or .status == "pending" or
+               .status == "queued" or .status == "waiting" or
+               .status == "requested"))] | length
+          ')"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "Existing latest-source native run(s): $COUNT; avoiding duplicate"
+          else
+            echo "Dispatching exactly one native build for current main $CURRENT"
+            gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/android-native.yml/dispatches" -f ref=main
+          fi
+          echo "Queue inspection finished; this is NOT evidence of a successful APK."
