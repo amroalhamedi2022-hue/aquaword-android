@@ -140,9 +140,12 @@ def patch_native_save_checkpoints(path: Path) -> bool:
 '''
     body = body.replace(field_anchor, method + field_anchor, 1)
     body = body.replace(save_anchor, '''            case "SAVE":
-                copyTempBackToIntent();
-                captureNativeSaveCheckpoint();
-                sendBroadcast(messageAndParam[0], messageAndParam[1]);''', 1)
+                if (copyTempBackToIntent()) {
+                    captureNativeSaveCheckpoint();
+                    sendBroadcast(messageAndParam[0], messageAndParam[1]);
+                } else {
+                    Log.e(TAG, "AquaWord SAVE not acknowledged because the original document was not written");
+                }''', 1)
     return store(path, body)
 
 
@@ -169,15 +172,37 @@ def patch_native_saf_saveback(path: Path) -> bool:
     if ('copyThread.join();' not in original or
             'contentResolver.openOutputStream(uri, "wt")' not in original):
         raise PatchError('Upstream native copy semantics changed')
+    # Native SAVE has two writeback paths. Both must report success truthfully.
+    file_anchor = '    private void copyTempBackToFile() {'
+    file_tail = '    private void reportSaveToFileFailed() {'
+    if body.count(file_anchor) != 1:
+        raise PatchError('Upstream direct-file writeback method changed')
+    file_start = body.index(file_anchor)
+    file_end = body.find('\n    /**', file_start + len(file_anchor))
+    if file_end < 0 or file_end <= file_start:
+        raise PatchError('Cannot determine native direct-file writeback boundary')
+    direct = body[file_start:file_end]
+    if ('newContent.renameTo(resolvedFile)' not in direct or
+            'reportSaveToFileFailed();' not in direct or
+            'MediaScannerConnection.scanFile' not in direct):
+        raise PatchError('Upstream direct-file save semantics drifted')
+    direct = direct.replace('private void copyTempBackToFile()', 'private boolean copyTempBackToFile()', 1)
+    direct = direct.replace('            return;', '            return false;')
+    # Successful copy and rename is the only path allowed to acknowledge SAVE.
+    direct = direct.replace('            MediaScannerConnection.scanFile(this, new String[]{resolvedFile.getAbsolutePath()}, null, null);',
+        '            MediaScannerConnection.scanFile(this, new String[]{resolvedFile.getAbsolutePath()}, null, null);\n            return true;', 1)
+    direct = direct.replace('            reportSaveToFileFailed();\n        }',
+        '            reportSaveToFileFailed();\n            return false;\n        }', 1)
+    if ('return true;' not in direct or direct.count('return false;') < 3):
+        raise PatchError('Could not make direct-file save report its completion state')
     replacement = '''    // AQUAWORD_NATIVE_SAF_SAVE_BACK: never silently report incomplete writes.
-    private void copyTempBackToIntent() {
+    private boolean copyTempBackToIntent() {
         if (!isDocEditable || mTempFile == null ||
                 getIntent().getData() == null ||
                 !ContentResolver.SCHEME_CONTENT.equals(getIntent().getData().getScheme()))
-            return;
+            return false;
         if (mResolvedFile != null) {
-            copyTempBackToFile();
-            return;
+            return copyTempBackToFile();
         }
         final Uri destination = getIntent().getData();
         try (InputStream input = new FileInputStream(mTempFile)) {
@@ -208,17 +233,23 @@ def patch_native_saf_saveback(path: Path) -> bool:
             if (bytes != mTempFile.length())
                 throw new IOException("SAF copy size differs from native saved document");
             Log.i(TAG, "AquaWord safely copied " + bytes + " bytes to the document provider");
+            return true;
         } catch (Exception error) {
             Log.e(TAG, "AquaWord SAF writeback failed — recovery snapshot is retained", error);
             runOnUiThread(() -> {
                 if (!isFinishing() && !isDestroyed())
                     Toast.makeText(this, R.string.failed_to_save_file, Toast.LENGTH_LONG).show();
             });
+            return false;
         }
     }
 
 '''
-    return store(path, body[:a] + replacement + body[b:])
+    # Insert both patched methods in a single transaction with anchored slices.
+    with_file_patch = body[:file_start] + direct + body[file_end:]
+    a = with_file_patch.index(start)
+    b = with_file_patch.index(end, a)
+    return store(path, with_file_patch[:a] + replacement + with_file_patch[b:])
 
 
 def patch_periodic_native_autosave(path: Path) -> bool:
