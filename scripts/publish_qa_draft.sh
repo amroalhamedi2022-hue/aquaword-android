@@ -21,7 +21,16 @@ test -s "$APK"
 test -s output/SHA256SUMS
 (cd output && sha256sum -c SHA256SUMS)
 
-# Gate QA storage on real app execution, not build outputs or screenshots alone.
+# Verified and unverified builds are separate, both ALWAYS unpublished.
+# An emulator architecture failure must not throw away hours of compiled APK.
+MODE="${1:---verified}"
+case "$MODE" in
+  --verified|--unverified) ;;
+  *) echo "Use --verified or --unverified" >&2; exit 2 ;;
+esac
+
+if [ "$MODE" = "--verified" ]; then
+# Gate verified QA status on actual runtime evidence, never mere APK existence.
 for proof in smoke-evidence/smoke-result.txt \
              smoke-evidence/editor-webview-state.json \
              smoke-evidence/editor-tablet-webview-state.json \
@@ -46,6 +55,7 @@ for name in (
     assert state['docType']=='text' and state['documentLayer'] is True,name
     assert state['focusModeFunctional'] is True,name
 PY
+fi
 
 shortsha="$(printf '%s' "$GITHUB_SHA" | cut -c1-12)"
 tag="qa-$shortsha"
@@ -61,6 +71,23 @@ approval has occurred. Keep this GitHub release in DRAFT state.
 See original CI run logs for detailed evidence and SHA-256 checksums.
 EOF
 )"
+if [ "$MODE" = "--unverified" ]; then
+  tag="qa-unverified-$shortsha"
+  notes="$(cat <<EOF
+**UNPUBLISHED INTERNAL BUILD ARTIFACT — ANDROID RUNTIME NOT VERIFIED.**
+
+APK compiled and checksum-validated from source commit $GITHUB_SHA.
+It is retained solely to avoid rebuilding the expensive Collabora ARM64 engine.
+Android installation, real document loading, writing, crash recovery and
+tablet correctness are NOT established. A failed/unsupported emulator run
+MUST NOT be counted as acceptance. Do not publish this draft or distribute
+it as a completed AquaWord APK.
+
+See native CI run logs, failure summary and SHA-256 verification output.
+EOF
+)"
+fi
+
 if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
   echo "An internal QA draft already exists; refusing overwrite: $tag" >&2
   exit 1
@@ -73,4 +100,8 @@ gh release create "$tag" \
   --notes "$notes" \
   --draft \
   --latest=false
-echo "Stored emulator-verified APK as an UNPUBLISHED QA draft: $tag"
+if [ "$MODE" = "--verified" ]; then
+  echo "Stored emulator-verified APK as an UNPUBLISHED QA draft: $tag"
+else
+  echo "Stored checksummed build-only APK in UNPUBLISHED UNVERIFIED draft: $tag"
+fi

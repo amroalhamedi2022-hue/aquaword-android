@@ -2,7 +2,15 @@
 
 **AquaWord** is an Android-only, offline-first document editor project for tablets and phones (Xiaomi Pad 5 first). The intended editing engine is the existing **Collabora Office / LibreOfficeKit** Android stack, not the small legacy WebView editor.
 
-## Current status — 2026-10-22
+## Development update — 2026-10-23
+- Native read-only SAF grants hardened; never assert WRITE for a provider that explicitly granted READ only.
+- Blank native DOCX asset and 4 actual Word templates integrated, with source and desktop OOXML tests.
+- SAF template/restore picker selections are saved across Activity recreation; recovered files open only after successful writes.
+- Fast pinned-Collabora source validation runs independently from the full LibreOffice desktop round-trip gate.
+- Internally checksum-verified but Android-unverified APKs can be preserved in a **separate unpublished GitHub draft** if the emulator test fails. Such drafts are NOT accepted releases.
+- **No native APK installation or final document editing pass has yet been verified.** Watch Actions for the latest main commit; an old build cannot certify it.
+
+## Previous project status — 2026-10-22
 - Real **public** GitHub repository. Public Linux runners restored free CI execution; all dependencies must retain required licenses and notices.
 - **Not a completed Word clone**; no working APK has been produced or verified yet.
 - The source overlay and integration CI are checked in. A previous **LibreOffice ARM64 engine build succeeded**, while the subsequent Collabora app configure failed on an unavailable Python module; the workflow preflight now tests its Python dependencies. An AquaWord APK is **not** verified.
