@@ -51,3 +51,7 @@ Selected documents with only READ grants now receive native Writer EDIT intents 
 ## Native SAF templates / restore lifecycle hardening
 
 The four packaged editable DOCX templates now persist grantable create-document URI permissions, reject incomplete streamed template payloads, and handle unexpected provider exceptions. The pending template and history-restore selection survive Activity recreation (orientation/process restoration where Android delivers a saved state). A recovered document opens only after the new SAF file is successfully written and closed. Source/Python checks are independent of real Android provider validation.
+
+## Retaining expensive compiled APKs without false runtime claims
+
+When SHA-256 checks and package/assets validation have passed but the Android emulator rejects the APK or its runtime checks fail, CI can keep that **UNVERIFIED** APK in a separate unpublished `qa-unverified-<commit>` draft Release. This avoids another hours-long engine rebuild when switching to a device-compatible test path. It is **not** a user-facing release and cannot satisfy runtime acceptance. The successful verified path still requires all Android smoke proof files, and both paths preserve draft-only visibility.
