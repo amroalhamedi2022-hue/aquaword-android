@@ -2,9 +2,6 @@ name: AquaWord Native Android (Internal CI)
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/android-native.yml'
 
 permissions:
   contents: write
@@ -16,7 +13,7 @@ concurrency:
 jobs:
   native-debug:
     # One native build at a time; never cancel hours of native compilation on a push.
-    # Heavy internal native build; push trigger is limited to edits of this workflow.
+    # Heavy native builds are MANUAL only to avoid repeated hours-long runs on every workflow edit.
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
@@ -141,7 +138,19 @@ jobs:
             }
           done
           echo 'PASS: pinned Collabora source supports required AquaWord Android flags'
-      - name: Build LibreOffice native engine for Android arm64
+      # Independent of the exhausted Actions artifact quota: repositories
+      # have a separate free Actions build cache, default 10 GB. The key
+      # includes the immutable LO commit and pinned Android toolchain.
+      # Preserve only LO build outputs, not the entire cloned source tree.
+      - name: Restore LibreOffice ARM64 build cache
+        id: engine_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            collabora/engine/workdir
+            collabora/engine/instdir
+          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v1
+      - name: Build or safely reuse LibreOffice native ARM64 engine
         shell: bash
         run: |
           set -euo pipefail
@@ -153,7 +162,27 @@ jobs:
           --with-distro=CPAndroidAarch64
           EOF
           ./autogen.sh
-          make -j2
+          # Require real LibreOffice output files; a cache-hit flag alone
+          # must never become false evidence that the engine compiled.
+          if [ "${{ steps.engine_cache.outputs.cache-hit }}" = "true" ] &&
+             test -s instdir/program/setuprc &&
+             test -s workdir/LinkTarget/StaticLibrary/liblibpng.a; then
+            echo "Reusing compiled LO ARM64 engine after validating required outputs"
+          else
+            echo "No complete valid LO ARM64 build cache; compiling native engine"
+            make -j2
+          fi
+          test -s instdir/program/setuprc
+          test -s workdir/LinkTarget/StaticLibrary/liblibpng.a
+      - name: Cache successful LibreOffice engine for next internal build
+        if: success() && steps.engine_cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            collabora/engine/workdir
+            collabora/engine/instdir
+          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v1
       - name: Configure and compile Collabora Android app sources
         shell: bash
         run: |
