@@ -97,7 +97,8 @@ def patch_native_save_checkpoints(path: Path) -> bool:
     // Store a recoverable revision after native Writer signals SAVE.
     // The previously captured pre-edit snapshot remains untouched.
     private void captureNativeSaveCheckpoint() {
-        if (!isDocEditable || mTempFile == null || !mTempFile.isFile())
+        if (!isDocEditable || mTempFile == null || !mTempFile.isFile() ||
+                mTempFile.length() <= 0L)
             return;
         final android.net.Uri original = getIntent().getData();
         if (original == null)
@@ -140,8 +141,12 @@ def patch_native_save_checkpoints(path: Path) -> bool:
 '''
     body = body.replace(field_anchor, method + field_anchor, 1)
     body = body.replace(save_anchor, '''            case "SAVE":
+                // AQUAWORD_RECOVER_FAILED_SAF_SAVE: preserve the native
+                // Writer temp document BEFORE a potentially destructive
+                // provider write. A failed SAF copy must not lose the
+                // post-edit recovery revision.
+                captureNativeSaveCheckpoint();
                 if (copyTempBackToIntent()) {
-                    captureNativeSaveCheckpoint();
                     sendBroadcast(messageAndParam[0], messageAndParam[1]);
                 } else {
                     Log.e(TAG, "AquaWord SAVE not acknowledged because the original document was not written");
