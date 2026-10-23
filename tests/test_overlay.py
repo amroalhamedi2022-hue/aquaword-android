@@ -240,6 +240,32 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('return true;',lib)
         self.assertIn('AquaWord SAVE not acknowledged',lib)
 
+    def test_existing_saf_docx_save_never_uses_nontruncating_w_mode(self):
+        """A shorter edited DOCX must not leave the old ZIP tail behind.
+
+        Android documents that openOutputStream(uri) aliases "w" and that
+        "w" may not truncate. This checks the generated native SAVE path,
+        not an Android-provider runtime execution.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # overlay remains idempotent
+        source=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        save=source.split('private boolean copyTempBackToIntent() {', 1)[1].split(
+            '/** Copy the temp file back to the document. */', 1)[0]
+        self.assertEqual(save.count('openOutputStream(destination, "wt")'), 1)
+        self.assertEqual(save.count('openOutputStream(destination, "rwt")'), 1)
+        self.assertLess(save.index('openOutputStream(destination, "wt")'),
+                        save.index('openOutputStream(destination, "rwt")'))
+        self.assertNotIn('openOutputStream(destination);', save)
+        self.assertNotIn('openOutputStream(destination, "w")', save)
+        self.assertIn('catch (FileNotFoundException | UnsupportedOperationException noTruncateMode)', save)
+        self.assertIn('SAF writeback failed', save)
+        self.assertIn('return false;', save)
+        # A provider rejecting both explicit modes must NOT acknowledge SAVE.
+        callback=source.split('case "SAVE":', 1)[1].split('return;', 1)[0]
+        self.assertIn('if (copyTempBackToIntent())', callback)
+        self.assertIn('AquaWord SAVE not acknowledged', callback)
+
     def test_failed_saf_writeback_keeps_native_post_edit_recovery(self):
         """A provider failure must not discard the only post-edit version.
 
