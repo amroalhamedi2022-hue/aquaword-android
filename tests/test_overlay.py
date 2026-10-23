@@ -287,6 +287,32 @@ class AquaWordIntegrationTests(unittest.TestCase):
             'final android.net.Uri original', 1)[0]
         self.assertIn('mTempFile.length() <= 0L', guard)
 
+    def test_slow_saf_provider_metadata_does_not_block_native_save_callback(self):
+        """A remote provider query must run on the checkpoint worker, not SAVE.
+
+        The fixture verifies the generated Java overlay's thread boundaries.
+        It does not claim real Android provider latency was measured.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # stable overlay across repeated application
+        source=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        checkpoint=source.split('private void captureNativeSaveCheckpoint() {', 1)[1].split(
+            'private boolean documentLoaded', 1)[0]
+        worker=checkpoint.index('new Thread(() -> {')
+        self.assertLess(checkpoint.index('new java.io.FileInputStream(mTempFile)'), worker)
+        self.assertEqual(checkpoint.count('getContentResolver().query('), 1)
+        self.assertGreater(checkpoint.index('getContentResolver().query('), worker)
+        self.assertIn('final String fallbackName = candidateName;', checkpoint[:worker])
+        self.assertIn('String name = fallbackName;', checkpoint[worker:])
+        self.assertIn('try (java.io.InputStream stream = saved)', checkpoint[worker:])
+        self.assertIn('catch (Exception queryFailure)', checkpoint[worker:])
+        self.assertLess(checkpoint.index('getContentResolver().query('),
+                        checkpoint.index('AquaWordHistory.capture('))
+        # The existing callback still attempts recovery before SAF writeback.
+        callback=source.split('case "SAVE":', 1)[1].split('return;', 1)[0]
+        self.assertLess(callback.index('captureNativeSaveCheckpoint();'),
+                        callback.index('if (copyTempBackToIntent())'))
+
     def test_save_callbacks_create_real_history_checkpoints(self):
         self.run_phase('source')
         self.run_phase('source')
