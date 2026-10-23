@@ -123,6 +123,48 @@ public class AquaWordHistoryTest {
             try { AquaWordHistory.verifyForRestore(missing); }
             catch (IOException expected) { missingRejected = true; }
             check(missingRejected, "missing snapshot was accepted for provider write");
+            // A broken SAF provider may violate InputStream's progress
+            // contract. Capture must fail promptly and clean partial files,
+            // rather than hold the synchronized history lock indefinitely.
+            int beforeStall = AquaWordHistory.list(root).size();
+            InputStream stalledProvider = new InputStream() {
+                @Override public int read() { return 0; }
+                @Override public int read(byte[] buffer, int off, int len) { return 0; }
+            };
+            boolean stallRejected = false;
+            try {
+                AquaWordHistory.capture(root, stalledProvider, "stalled.docx",
+                        "content://stalled/provider");
+            } catch (IOException expected) {
+                stallRejected = expected.getMessage().contains("no progress");
+            }
+            check(stallRejected, "zero-progress provider must fail without hanging");
+            check(AquaWordHistory.list(root).size() == beforeStall,
+                    "failed provider must not create a committed recovery snapshot");
+            File historyDir = new File(root, "aquaword-history");
+            File[] partials = historyDir.listFiles((dir, filename) ->
+                    filename.endsWith(".partial") || filename.endsWith(".meta-partial"));
+            check(partials != null && partials.length == 0,
+                    "failed provider left a temporary snapshot behind");
+
+            // A brief intermittent zero read is recoverable; a successful
+            // subsequent read must reset the consecutive-stall counter.
+            InputStream intermittentProvider = new InputStream() {
+                private int phase = 0;
+                @Override public int read() { return phase++ < 3 ? 0 : -1; }
+                @Override public int read(byte[] buffer, int off, int len) {
+                    if (phase++ < 3) return 0;
+                    if (phase == 4) { buffer[off] = 65; return 1; }
+                    return -1;
+                }
+            };
+            AquaWordHistory.Snapshot recoveredAfterPause = AquaWordHistory.capture(
+                    root, intermittentProvider, "intermittent.docx",
+                    "content://intermittent/provider");
+            ByteArrayOutputStream afterPause = new ByteArrayOutputStream();
+            AquaWordHistory.restore(recoveredAfterPause, afterPause);
+            check(Arrays.equals(new byte[]{65}, afterPause.toByteArray()),
+                    "intermittent provider lost valid document bytes");
             byte[] huge = new byte[1024];
             for (int i = 0; i < 65; i++) {
                 AquaWordHistory.capture(root, new ByteArrayInputStream(huge), "sample"+i+".odt");
