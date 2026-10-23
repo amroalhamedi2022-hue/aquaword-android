@@ -399,7 +399,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
                         method.index('sendBroadcast(saveMessage[0], saveMessage[1]);'))
         self.assertIn('AquaWord SAVE not acknowledged', method)
         self.assertNotIn('sendBroadcast(', method.split('} else {', 1)[1])
-        self.assertIn('mTempFile.length() <= 0L', method)
+        self.assertIn('writerOutput.length() <= 0L', method)
 
     def test_native_save_reuses_local_preedit_name_without_cloud_query(self):
         """No cloud metadata IPC; recovery and provider I/O run off callback."""
@@ -409,7 +409,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         checkpoint=source.split('private void captureNativeSaveCheckpoint(final String[] saveMessage) {', 1)[1].split(
             'private boolean documentLoaded', 1)[0]
         worker=checkpoint.index('mAquaWordSaveExecutor.execute(() -> {')
-        self.assertLess(checkpoint.index('new java.io.FileInputStream(mTempFile)'), worker)
+        self.assertLess(checkpoint.index('new java.io.FileInputStream(writerOutput)'), worker)
         self.assertIn('final String fallbackName', checkpoint[:worker])
         self.assertIn('try (java.io.InputStream stream = saved)', checkpoint[worker:])
         self.assertNotIn('getContentResolver().query(', checkpoint)
@@ -420,6 +420,34 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('getFilesDir(), stream, name, sourceIdentity, "saved"', checkpoint)
         self.assertLess(checkpoint.index('AquaWordHistory.capture('),
                         checkpoint.index('copyTempBackToIntent(checkpoint.file, original)'))
+
+    def test_native_file_uri_writer_save_does_not_require_saf_copyback(self):
+        """Pinned native Writer writes file:// directly; source contract only.
+
+        With no mTempFile, SAVE must use the actual file as the snapshot
+        source, never try ContentResolver, and acknowledge Writer's save even
+        if best-effort history capture fails. Android runtime is NOT TESTED.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # idempotent overlay
+        native=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        method=native.split('private void captureNativeSaveCheckpoint(final String[] saveMessage) {',1)[1].split(
+            'private boolean documentLoaded',1)[0]
+        self.assertEqual(method.count('AQUAWORD_DIRECT_FILE_SAVE'),1)
+        self.assertIn('mTempFile == null &&',method)
+        self.assertIn('ContentResolver.SCHEME_FILE.equals(original.getScheme())',method)
+        self.assertIn('new java.io.File(original.getPath()) : mTempFile',method)
+        self.assertIn('new java.io.FileInputStream(writerOutput)',method)
+        self.assertIn('if (directWriterFile || copyTempBackToIntent(checkpoint.file, original))',method)
+        self.assertLess(method.index('AquaWordHistory.verifyForRestore(checkpoint);'),
+                        method.index('if (directWriterFile || copyTempBackToIntent('))
+        self.assertIn('if (directWriterFile && writerOutput.isFile() && writerOutput.length() > 0L)',method)
+        self.assertIn('Native file saved by Writer, but recovery checkpoint failed',method)
+        self.assertIn('sendBroadcast(saveMessage[0], saveMessage[1]);\n                        return;',method)
+        # The content:// branch still has the durability barrier and refuses
+        # a SAVE broadcast when its explicit provider writeback fails.
+        self.assertIn('AquaWord SAVE not acknowledged',method)
+        self.assertIn('copyTempBackToIntent(checkpoint.file, original)',method)
 
     def test_native_save_uses_immutable_snapshot_for_both_writeback_paths(self):
         """Source contract: avoid mutable Writer temp path after async SAVE."""
