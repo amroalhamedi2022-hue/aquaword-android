@@ -326,7 +326,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('AquaWordNativeSaveCheckpoint',lib)
         self.assertIn('android.provider.OpenableColumns.DISPLAY_NAME',lib)
         self.assertIn('try (android.database.Cursor cursor',lib)
-        self.assertIn('candidateName = cursor.getString(column)',lib)
+        self.assertIn('name = cursor.getString(column)',lib)
         self.assertIn('aquaword_snapshot_saved',browser)
         self.assertIn('aquaword_snapshot_preedit',browser)
         self.assertIn('org.libreoffice.androidlib.AquaWordHistory',browser)
