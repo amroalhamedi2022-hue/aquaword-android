@@ -1,43 +1,57 @@
 /* AQUAWORD_AURORA_BEGIN
    AquaWord tablet toolbar skin. Preserve the upstream native document canvas. */
 :root {
-  --aquaword-navy: #0c2942;
-  --aquaword-blue: #0e7097;
-  --aquaword-cyan: #24c7d1;
-  --aquaword-mist: #d7f4f5;
-  --aquaword-focus: #008b9a;
+	--aquaword-navy: #0c2942;
+	--aquaword-blue: #0e7097;
+	--aquaword-cyan: #24c7d1;
+	--aquaword-mist: #d7f4f5;
+	--aquaword-focus: #008b9a;
 }
 body #toolbar-wrapper.hasnotebookbar {
-  background: linear-gradient(115deg,#edf8fb 0%,#e1f3f8 52%,#effaff 100%);
-  border-bottom: 1px solid rgba(19,99,136,.16);
+	background: linear-gradient(115deg, #edf8fb 0%, #e1f3f8 52%, #effaff 100%);
+	border-bottom: 1px solid rgba(19, 99, 136, .16);
 }
 #toolbar-wrapper .ui-tabs.notebookbar {
-  scroll-behavior: smooth;
-  scrollbar-width: none;
+	scroll-behavior: smooth;
+	scrollbar-width: none;
 }
-#toolbar-wrapper .ui-tabs.notebookbar::-webkit-scrollbar {display:none}
+#toolbar-wrapper .ui-tabs.notebookbar::-webkit-scrollbar {
+	display: none;
+}
 #toolbar-wrapper .ui-tab.notebookbar {
-  border-radius: 12px 12px 0 0;
-  margin-inline: 2px;
-  transition: background-color .15s ease,color .15s ease;
+	border-radius: 12px 12px 0 0;
+	margin-inline: 2px;
+	transition: background-color .15s ease, color .15s ease;
 }
 #toolbar-wrapper .ui-tab.selected.notebookbar {
-  background: rgba(34,175,198,.16);
-  color: var(--aquaword-blue);
-  box-shadow: inset 0 -3px 0 var(--aquaword-cyan);
+	background: rgba(34, 175, 198, .16);
+	color: var(--aquaword-blue);
+	box-shadow: inset 0 -3px 0 var(--aquaword-cyan);
 }
-#toolbar-wrapper .unotoolbutton.notebookbar .unobutton {border-radius:10px}
-#toolbar-wrapper .unotoolbutton.notebookbar:not(.disabled) .unobutton:active {background:rgba(43,181,199,.2)}
-#toolbar-wrapper :focus-visible {outline:2px solid var(--aquaword-focus);outline-offset:2px}
+#toolbar-wrapper .unotoolbutton.notebookbar .unobutton {
+	border-radius: 10px;
+}
+#toolbar-wrapper .unotoolbutton.notebookbar:not(.disabled) .unobutton:active {
+	background: rgba(43, 181, 199, .2);
+}
+#toolbar-wrapper :focus-visible {
+	outline: 2px solid var(--aquaword-focus);
+	outline-offset: 2px;
+}
 html[data-theme='dark'] #toolbar-wrapper.hasnotebookbar {
-  background:linear-gradient(112deg,#0a253b,#113d55 58%,#164b5e);
-  border-bottom-color:rgba(95,205,226,.18)
+	background: linear-gradient(112deg, #0a253b, #113d55 58%, #164b5e);
+	border-bottom-color: rgba(95, 205, 226, .18);
 }
 html[data-theme='dark'] #toolbar-wrapper .ui-tab.selected.notebookbar {
-  color:#b3f3f4;background:rgba(70,214,218,.12)
+	color: #b3f3f4;
+	background: rgba(70, 214, 218, .12);
 }
-@media (prefers-reduced-motion:reduce) {
-  #toolbar-wrapper .ui-tabs.notebookbar {scroll-behavior:auto}
-  #toolbar-wrapper .ui-tab.notebookbar {transition:none}
+@media (prefers-reduced-motion: reduce) {
+	#toolbar-wrapper .ui-tabs.notebookbar {
+		scroll-behavior: auto;
+	}
+	#toolbar-wrapper .ui-tab.notebookbar {
+		transition: none;
+	}
 }
 /* AQUAWORD_AURORA_END */
