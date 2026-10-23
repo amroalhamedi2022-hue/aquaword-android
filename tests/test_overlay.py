@@ -136,6 +136,12 @@ class AquaWordIntegrationTests(unittest.TestCase):
         Intent i = getIntentToEdit(uri);
         startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
     }
+    public Intent getIntentToEdit(Uri uri) {
+        Intent i = new Intent(Intent.ACTION_EDIT, uri);
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        i.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        return i;
+    }
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.action_open_file) {
             openDocument();
@@ -271,6 +277,12 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertEqual(s.count('persistDocumentPermission(uri, data);'),2)
         self.assertIn('Intent.FLAG_GRANT_READ_URI_PERMISSION',s)
         self.assertIn('SecurityException | IllegalArgumentException',s)
+        self.assertIn('AQUAWORD_READONLY_DOCUMENT_GRANTS',s)
+        self.assertIn('mAquaWordReadOnlyDocumentUris.add(uri.toString())',s)
+        self.assertIn('permission.isReadPermission()',s)
+        self.assertIn('!permission.isWritePermission()',s)
+        self.assertIn('if (!readOnly)',s)
+        self.assertEqual(s.count('AQUAWORD_READONLY_DOCUMENT_GRANTS'),1)
 
     def test_saf_upstream_drift_rejected(self):
         p=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
