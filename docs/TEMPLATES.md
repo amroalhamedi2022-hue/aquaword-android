@@ -16,3 +16,8 @@ Generator dependency: [python-docx](https://github.com/python-openxml/python-doc
 CI checks archive integrity, Office Open XML packaging, heading structure, A4 sizing, Arabic `w:bidi` / `w:rtl`, template IDs and Android integration syntax.
 
 **What this feature does NOT mean:** automatic bibliography management, native APA/Vancouver citation insertion, embedded AI, or complete Word compatibility. These remain separate acceptance gates. A successful CI template check does not demonstrate a fully working Android APK.
+
+
+## Guaranteed blank New Document
+
+Besides the four selectable templates, `blank.docx` is an **empty** OOXML file packaged in `assets/aquaword/`. Native Writer New Document opens this asset for DOCX creation rather than assuming an upstream `templates/untitled.docx` was generated. Integration tests confirm an empty page and a valid package, desktop LibreOffice checks the round-trip, and APK verification compares the bundled bytes. Android runtime creation/save still requires device verification.

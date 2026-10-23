@@ -213,6 +213,8 @@ jobs:
           test -s collabora/android/app/src/main/res/values-ar/aquaword_strings.xml
           test -s collabora/android/app/src/main/assets/aquaword/research_ar.docx
           test -s collabora/android/app/src/main/assets/aquaword/clinical_case.docx
+          test -s collabora/android/app/src/main/assets/aquaword/blank.docx
+          grep -q 'AQUAWORD_VERIFIED_BLANK_DOCX' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_TEMPLATES_V1' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
       - name: Verify Android artifact and package ID
         shell: bash
@@ -225,7 +227,7 @@ jobs:
           while IFS= read -r apk; do
             unzip -t "$apk" >/dev/null
             "$AAPT" dump badging "$apk" | grep -q "package: name='com.aquaword.app.debug'"
-            for template in research_en research_ar clinical_case study_notes; do
+            for template in research_en research_ar clinical_case study_notes blank; do
               unzip -p "$apk" "assets/aquaword/$template.docx" > "output/$template.package.docx"
               test -s "output/$template.package.docx"
               cmp -s "templates/generated/$template.docx" "output/$template.package.docx"

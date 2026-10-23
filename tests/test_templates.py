@@ -18,7 +18,18 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 class TemplateContracts(unittest.TestCase):
     def test_same_four_templates_in_generator_and_android(self):
         self.assertEqual(set(BUILDERS), set(ASSETS))
-        self.assertEqual(set(x.stem for x in FILES.glob("*.docx")), set(BUILDERS))
+        self.assertEqual(set(x.stem for x in FILES.glob("*.docx")), set(BUILDERS) | {"blank"})
+
+    def test_blank_new_document_is_real_empty_docx(self):
+        path = FILES / "blank.docx"
+        self.assertTrue(path.is_file())
+        with ZipFile(path) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertIn("word/document.xml", archive.namelist())
+        d = Document(path)
+        self.assertEqual([p.text for p in d.paragraphs if p.text.strip()], [])
+        self.assertEqual(len(d.tables), 0)
+        self.assertEqual(round(d.sections[0].page_width.cm, 1), 21.0)
 
     def test_office_openxml_package_and_content(self):
         for key in BUILDERS:

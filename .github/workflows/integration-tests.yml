@@ -46,14 +46,18 @@ jobs:
           from zipfile import ZipFile
           from docx import Document
           paths=sorted(Path('templates/generated').glob('*.docx'))
-          assert len(paths)==4, paths
+          assert len(paths)==5, paths
+          blank=Document('templates/generated/blank.docx')
+          assert not any(p.text.strip() for p in blank.paragraphs)
+          assert not blank.tables
           for path in paths:
               with ZipFile(path) as z:
                   assert z.testzip() is None
                   assert 'word/document.xml' in z.namelist()
               d=Document(path)
-              assert len(d.paragraphs) >= 8, path
-              assert any(p.style.name.startswith('Heading') for p in d.paragraphs),path
+              if path.stem != 'blank':
+                  assert len(d.paragraphs) >= 8, path
+                  assert any(p.style.name.startswith('Heading') for p in d.paragraphs),path
               print(path, len(d.paragraphs), 'paragraphs')
           PY
       - name: Validate rich Arabic Word table-image-bidi source fixture
@@ -153,6 +157,8 @@ jobs:
           python3 scripts/apply_templates.py --repo upstream-fixture
           python3 scripts/apply_templates.py --repo upstream-fixture
           test -s upstream-fixture/android/app/src/main/assets/aquaword/clinical_case.docx
+          test -s upstream-fixture/android/app/src/main/assets/aquaword/blank.docx
+          grep -q 'AQUAWORD_VERIFIED_BLANK_DOCX' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_TEMPLATES_V1' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_AURORA_BEGIN' upstream-fixture/browser/css/notebookbar.css
           grep -Fq "applicationId 'com.aquaword.app'" upstream-fixture/android/app/appSettings.gradle.in
