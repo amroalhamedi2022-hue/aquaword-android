@@ -398,7 +398,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertLess(method.index('copyTempBackToIntent(checkpoint.file, original)'),
                         method.index('sendBroadcast(saveMessage[0], saveMessage[1]);'))
         self.assertIn('AquaWord SAVE not acknowledged', method)
-        self.assertNotIn('sendBroadcast(', method.split('} else {', 1)[1])
+        # Only the failed SAF writeback branch must suppress SAVE. Native
+        # file:// Writer saves are already persisted and are a separate case.
+        saf_failure=method.split('} else {', 1)[1].split('} catch (Exception failure)', 1)[0]
+        self.assertNotIn('sendBroadcast(', saf_failure)
         self.assertIn('writerOutput.length() <= 0L', method)
 
     def test_native_save_reuses_local_preedit_name_without_cloud_query(self):
