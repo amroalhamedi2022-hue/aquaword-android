@@ -240,6 +240,27 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('return true;',lib)
         self.assertIn('AquaWord SAVE not acknowledged',lib)
 
+    def test_failed_saf_writeback_keeps_native_post_edit_recovery(self):
+        """A provider failure must not discard the only post-edit version.
+
+        This is a generated-source contract, NOT a device/SAF integration test.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # overlay stays idempotent
+        lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        save_case=lib.split('case "SAVE":', 1)[1].split('return;', 1)[0]
+        self.assertIn('AQUAWORD_RECOVER_FAILED_SAF_SAVE', save_case)
+        self.assertEqual(save_case.count('captureNativeSaveCheckpoint();'), 1)
+        self.assertLess(save_case.index('captureNativeSaveCheckpoint();'),
+                        save_case.index('if (copyTempBackToIntent())'))
+        self.assertIn('sendBroadcast(messageAndParam[0], messageAndParam[1]);', save_case)
+        self.assertIn('AquaWord SAVE not acknowledged', save_case)
+        self.assertNotIn('sendBroadcast(', save_case.split('} else {', 1)[1])
+        # Never archive a zero-byte Writer temp file as a valid revision.
+        guard=lib.split('private void captureNativeSaveCheckpoint()', 1)[1].split(
+            'final android.net.Uri original', 1)[0]
+        self.assertIn('mTempFile.length() <= 0L', guard)
+
     def test_save_callbacks_create_real_history_checkpoints(self):
         self.run_phase('source')
         self.run_phase('source')
