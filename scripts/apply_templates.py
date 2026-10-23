@@ -11,6 +11,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 JAVA_REL = "android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java"
 ASSETS = ("research_en", "research_ar", "clinical_case", "study_notes")
+PACKAGED_ASSETS = ASSETS + ("blank",)  # Internal native New Document asset
 
 
 class PatchError(RuntimeError):
@@ -163,7 +164,7 @@ def copy_template_files(repo: Path) -> int:
     dest = repo / "android/app/src/main/assets/aquaword"
     dest.mkdir(parents=True, exist_ok=True)
     count = 0
-    for name in ASSETS:
+    for name in PACKAGED_ASSETS:
         src = ROOT / "templates/generated" / (name + ".docx")
         if not src.is_file() or src.stat().st_size < 500:
             raise PatchError(f"Generate template first: {src}")
@@ -201,7 +202,7 @@ def integrate(repo: Path) -> None:
     )
     for path in paths:
         require(path)
-    for name in ASSETS:
+    for name in PACKAGED_ASSETS:
         doc = ROOT / "templates/generated" / (name + ".docx")
         if not doc.exists():
             raise PatchError(f"Missing generated document {doc}")

@@ -2,7 +2,7 @@
 """Independent real LibreOffice DOCX open/save compatibility gate.
 
 Not a claim about the Android APK. LibreOffice Desktop's headless import/export
-is used to detect data loss in four DOCX assets BEFORE packaging them in Android.
+is used to detect data loss in five DOCX assets BEFORE packaging them in Android.
 Must fail if content disappears, Arabic text is lost or editable tables vanish.
 """
 from pathlib import Path
@@ -13,7 +13,7 @@ from docx import Document
 
 ROOT=Path(__file__).resolve().parents[1]
 SOURCES=ROOT/"templates/generated"
-EXPECTED={"research_en","research_ar","clinical_case","study_notes"}
+EXPECTED={"research_en","research_ar","clinical_case","study_notes","blank"}
 
 def signature(file):
     document=Document(str(file))
@@ -27,7 +27,7 @@ def signature(file):
 def run_test():
     paths=list(SOURCES.glob("*.docx"))
     if {p.stem for p in paths} != EXPECTED:
-        raise AssertionError("Exactly four known AquaWord DOCX assets required")
+        raise AssertionError("Exactly five known AquaWord DOCX assets required")
     rich=ROOT/"quality/fixtures/qa_rich_arabic.docx"
     if not rich.is_file():
         raise AssertionError("Rich Arabic/English/image/table fixture must be generated first")
@@ -53,6 +53,8 @@ def run_test():
                 raise AssertionError(f"Lost heading content in {original.name}: {expected_sections-actual_sections}")
             if len(a["table_cells"]) != len(b["table_cells"]):
                 raise AssertionError(f"Editable tables were lost from {original.name}")
+            if original.stem=="blank" and (b["paragraphs"] or b["table_cells"]):
+                raise AssertionError("An empty Writer document acquired unexpected content")
             if original.stem=="research_ar":
                 original_arabic="".join(a["paragraphs"])
                 converted_arabic="".join(b["paragraphs"])

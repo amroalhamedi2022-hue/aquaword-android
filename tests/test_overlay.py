@@ -284,6 +284,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
         self.assertEqual(activity.count('AQUAWORD_ASYNC_DOCUMENT_CREATE'),1)
         self.assertIn('AquaWordCreateBlank', activity)
+        self.assertIn('AQUAWORD_VERIFIED_BLANK_DOCX', activity)
+        self.assertIn('"aquaword/blank.docx"', activity)
         self.assertIn('OutputStream output = getContentResolver().openOutputStream(uri, "w")', activity)
         self.assertNotIn('thread.run();', activity)
         self.assertNotIn('thread.join();', activity)

@@ -12,7 +12,13 @@ MIME="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 mkdir -p "$ARTIFACTS"
 adb wait-for-device
 adb shell getprop ro.build.version.release | tee "$ARTIFACTS/android-version.txt"
-adb shell getprop ro.product.cpu.abilist | tee "$ARTIFACTS/android-abis.txt"
+adb shell getprop ro.product.cpu.abilist | tr -d '\r' | tee "$ARTIFACTS/android-abis.txt"
+# Do not assume x86_64 emulators can load an ARM64-only LibreOffice engine.
+# Google API images may advertise native ARM translation; check, don't guess.
+if ! grep -Eq '(^|,)arm64-v8a(,|$)' "$ARTIFACTS/android-abis.txt"; then
+  echo "Emulator does not advertise arm64-v8a; native ARM64 APK cannot be tested" >&2
+  exit 1
+fi
 adb shell getprop sys.boot_completed | tr -d '\r' | grep -qx 1 || {
   echo "Android device has not completed boot" >&2
   exit 1
@@ -221,7 +227,7 @@ def proof(requirement, files, method, observed):
       "result":"PASS",
       "tester":"GitHub Actions Android runtime harness (automated; NOT a human reviewer)",
       "device_class":"emulator",
-      "device":"Android API 35 Google APIs x86_64 with ARM64 translation",
+      "device":"Android API 35 emulator; advertised ABIs: " + (root/"android-abis.txt").read_text().strip(),
       "method":method,
       "observed":observed,
       "time_utc":now,

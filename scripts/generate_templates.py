@@ -222,6 +222,22 @@ BUILDERS = {
     "study_notes": study_notes,
 }
 
+def blank_document() -> Document:
+    """Genuinely empty native Writer DOCX: no example text or user data."""
+    d = Document()
+    section = d.sections[0]
+    section.page_width, section.page_height = Cm(21), Cm(29.7)
+    section.top_margin = Cm(2.2)
+    section.bottom_margin = Cm(2.2)
+    section.left_margin = Cm(2.4)
+    section.right_margin = Cm(2.4)
+    normal = d.styles["Normal"]
+    normal.font.name = "Arial"
+    normal.font.size = Pt(11)
+    d.add_paragraph()
+    d.core_properties.author = "AquaWord"
+    return d
+
 
 def generate() -> None:
     DEST.mkdir(parents=True, exist_ok=True)
@@ -234,6 +250,13 @@ def generate() -> None:
             if z.testzip() is not None:
                 raise RuntimeError(f"Corrupted Word package: {file}")
         print(f"Created {file.name} ({file.stat().st_size} bytes)")
+    # Native New Document must not depend on configure-generated upstream assets.
+    empty = DEST / "blank.docx"
+    blank_document().save(str(empty))
+    with zipfile.ZipFile(empty) as archive:
+        if archive.testzip() is not None or "word/document.xml" not in archive.namelist():
+            raise RuntimeError("Invalid AquaWord blank Writer DOCX")
+    print(f"Created {empty.name} ({empty.stat().st_size} bytes)")
 
 
 if __name__ == "__main__":

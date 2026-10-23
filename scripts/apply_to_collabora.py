@@ -593,7 +593,11 @@ def patch_async_new_document_creation(path: Path) -> bool:
     private void createNewFile(final Uri uri, final String extension) {
         new Thread(() -> {
             boolean failed = false;
-            try (InputStream template = getAssets().open("templates/untitled." + extension);
+            // AQUAWORD_VERIFIED_BLANK_DOCX: guaranteed packaged OOXML for Writer.
+            // Other legacy document formats retain their native upstream assets.
+            try (InputStream template = getAssets().open(
+                    "docx".equalsIgnoreCase(extension) ? "aquaword/blank.docx" :
+                    "templates/untitled." + extension);
                  OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
                 if (output == null)
                     throw new IOException("No writable document URI");
