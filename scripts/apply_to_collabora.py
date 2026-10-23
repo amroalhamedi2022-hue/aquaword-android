@@ -578,6 +578,10 @@ def patch_history_activity(path: Path) -> bool:
                         // AQUAWORD_SAFE_HISTORY_RESTORE: ACTION_CREATE_DOCUMENT
                         // can return an existing URI. Plain "w" may not truncate,
                         // leaving trailing bytes from an older DOCX/ZIP.
+                        // AQUAWORD_RESTORE_PREFLIGHT: wt/rwt can truncate as
+                        // soon as the provider opens. Reject a corrupt/missing
+                        // snapshot BEFORE touching the selected destination.
+                        AquaWordHistory.verifyForRestore(item);
                         OutputStream opened;
                         try {
                             opened = getContentResolver().openOutputStream(target, "wt");
