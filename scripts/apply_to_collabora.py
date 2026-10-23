@@ -632,17 +632,36 @@ def patch_async_new_document_creation(path: Path) -> bool:
             // Other legacy document formats retain their native upstream assets.
             try (InputStream template = getAssets().open(
                     "docx".equalsIgnoreCase(extension) ? "aquaword/blank.docx" :
-                    "templates/untitled." + extension);
-                 OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
-                if (output == null)
-                    throw new IOException("No writable document URI");
-                byte[] buffer = new byte[64 * 1024];
-                int bytesRead;
-                while ((bytesRead = template.read(buffer)) != -1) {
-                    if (bytesRead > 0)
-                        output.write(buffer, 0, bytesRead);
+                    "templates/untitled." + extension)) {
+                // Android's plain "w" may leave old bytes behind. A provider
+                // can return a pre-existing URI even for CREATE_DOCUMENT.
+                // Use only explicit truncation; never silently fall back to "w".
+                OutputStream opened;
+                try {
+                    opened = getContentResolver().openOutputStream(uri, "wt");
+                } catch (java.io.FileNotFoundException | UnsupportedOperationException rejected) {
+                    Log.w(LOGTAG, "Provider rejected wt for new document; trying rwt", rejected);
+                    opened = null;
                 }
-                output.flush();
+                if (opened == null)
+                    opened = getContentResolver().openOutputStream(uri, "rwt");
+                if (opened == null)
+                    throw new IOException("No truncating writable document URI");
+                long written = 0L;
+                try (OutputStream output = opened) {
+                    byte[] buffer = new byte[64 * 1024];
+                    int bytesRead;
+                    while ((bytesRead = template.read(buffer)) != -1) {
+                        if (bytesRead > 0) {
+                            output.write(buffer, 0, bytesRead);
+                            written += bytesRead;
+                        }
+                    }
+                    output.flush();
+                }
+                // Never launch Writer on an empty/incomplete template stream.
+                if (written <= 0L)
+                    throw new IOException("Empty document template");
                 // Successful close of both streams is required before opening.
             } catch (Exception error) {
                 failed = true;
