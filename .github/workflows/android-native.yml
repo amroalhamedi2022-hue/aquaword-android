@@ -92,6 +92,13 @@ jobs:
             --rule 'indent: [2, "tab", {"outerIIFEBody": 0}]' \
             --rule 'no-mixed-spaces-and-tabs: [2, "smart-tabs"]' \
             collabora/browser/src/main.js
+          # Pinned Collabora Stylelint check before multi-hour ARM64 compilation.
+          # Run 39916261052 failed on notebookbar selector after engine succeeded.
+          npx --yes --package stylelint@13.7.0 -- stylelint \
+            --config collabora/browser/.stylelintrc.json \
+            collabora/browser/css/notebookbar.css \
+            collabora/browser/css/mobilewizard.css \
+            collabora/browser/css/toolbar.css
           grep -q 'AQUAWORD_FOCUS_BOOTSTRAP_BEGIN' collabora/browser/src/main.js
           grep -q 'AQUAWORD_FOCUS_CSS_BEGIN' collabora/browser/css/toolbar.css
           grep -q 'AQUAWORD_DEFAULT_DOCX' collabora/android/app/src/main/java/org/libreoffice/androidapp/ui/FileUtilities.java

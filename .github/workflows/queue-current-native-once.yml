@@ -1,7 +1,9 @@
 name: AquaWord Queue Current Native Build (One Shot)
 
-# This workflow is intentionally triggered ONLY when first installed on main.
-# It doesn't run on ordinary source pushes, nor does it cancel a compiling engine.
+# One-shot on workflow-file edits, not on normal source pushes.
+# 2026-10-23: re-queue the Stylelint-fixed native source (PR #6).
+# Do NOT cancel an already compiling LibreOffice engine: its output may be cached
+# for the fixed run; obsolete *waiting* builds may be safely retired.
 on:
   push:
     branches: [main]

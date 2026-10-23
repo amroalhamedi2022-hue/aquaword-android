@@ -1,18 +1,19 @@
 /* AQUAWORD_AURORA_BEGIN
    Native mobile drawers; keep document canvas unchanged. */
-#mobile-wizard,.mobile-wizard,#mobile-wizard-content {
-  --aquaword-panel-accent:#11a4bf;
-  --aquaword-ink:#16384d;
+#mobile-wizard, .mobile-wizard, #mobile-wizard-content {
+	--aquaword-panel-accent: #11a4bf;
+	--aquaword-ink: #16384d;
 }
-#mobile-wizard .ui-header,.mobile-wizard .ui-header {
-  background:linear-gradient(115deg,#e9f8fc,#d7f4f5);
-  border-bottom:1px solid rgba(10,129,153,.13);
+#mobile-wizard .ui-header, .mobile-wizard .ui-header {
+	background: linear-gradient(115deg, #e9f8fc, #d7f4f5);
+	border-bottom: 1px solid rgba(10, 129, 153, .13);
 }
-#mobile-wizard button:focus-visible,.mobile-wizard button:focus-visible {
-  outline:2px solid #008b9a;outline-offset:2px
+#mobile-wizard button:focus-visible, .mobile-wizard button:focus-visible {
+	outline: 2px solid #008b9a;
+	outline-offset: 2px;
 }
 html[data-theme='dark'] #mobile-wizard .ui-header,
 html[data-theme='dark'] .mobile-wizard .ui-header {
-  background:linear-gradient(110deg,#09273d,#144459);
+	background: linear-gradient(110deg, #09273d, #144459);
 }
 /* AQUAWORD_AURORA_END */
