@@ -47,3 +47,7 @@ Source overlay and integration tests, including Java version-recovery checks, ri
 ## SAF provider read-only hardening (requires Android runtime acceptance)
 
 Selected documents with only READ grants now receive native Writer EDIT intents **without invented WRITE permission**. Persisted read-only URI grants are also inspected across Activity restarts. Non-persistable URI selections are tracked only for the current Activity lifetime. Read-only provider device testing is still mandatory and a source-level PASS alone is not proof of Android runtime behavior.
+
+## Native SAF templates / restore lifecycle hardening
+
+The four packaged editable DOCX templates now persist grantable create-document URI permissions, reject incomplete streamed template payloads, and handle unexpected provider exceptions. The pending template and history-restore selection survive Activity recreation (orientation/process restoration where Android delivers a saved state). A recovered document opens only after the new SAF file is successfully written and closed. Source/Python checks are independent of real Android provider validation.

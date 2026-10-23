@@ -536,6 +536,7 @@ def patch_history_activity(path: Path) -> bool:
                 if (resultCode != RESULT_OK || data == null || item == null || data.getData() == null)
                     break;
                 final Uri target = data.getData();
+                persistDocumentPermission(target, data);
                 new Thread(() -> {
                     boolean success;
                     try (OutputStream output = getContentResolver().openOutputStream(target, "w")) {
@@ -547,9 +548,12 @@ def patch_history_activity(path: Path) -> bool:
                     }
                     final boolean finished = success;
                     runOnUiThread(() -> {
-                        if (!isFinishing() && !isDestroyed())
+                        if (!isFinishing() && !isDestroyed()) {
                             Toast.makeText(this, finished ? R.string.aquaword_restore_success :
                                 R.string.aquaword_restore_failure, Toast.LENGTH_LONG).show();
+                            if (finished)
+                                open(target); // The recovered document is genuinely editable.
+                        }
                     });
                 }, "AquaWordRestore").start();
                 break;

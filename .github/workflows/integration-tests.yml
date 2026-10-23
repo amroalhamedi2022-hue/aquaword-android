@@ -161,6 +161,8 @@ jobs:
           test -s upstream-fixture/android/app/src/main/assets/aquaword/blank.docx
           grep -q 'AQUAWORD_VERIFIED_BLANK_DOCX' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_TEMPLATES_V1' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
+          grep -q 'AQUAWORD_PENDING_SAF_RECOVERY' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
+          grep -q 'persistDocumentPermission(destination, data);' upstream-fixture/android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java
           grep -q 'AQUAWORD_AURORA_BEGIN' upstream-fixture/browser/css/notebookbar.css
           grep -Fq "applicationId 'com.aquaword.app'" upstream-fixture/android/app/appSettings.gradle.in
           python3 -m pip install 'javalang==0.13.0'

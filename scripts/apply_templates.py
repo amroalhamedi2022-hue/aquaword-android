@@ -128,6 +128,9 @@ def patch_activity(path: Path) -> bool:
                 if (!Arrays.asList("research_en", "research_ar", "clinical_case", "study_notes").contains(template))
                     break;
                 final Uri destination = data.getData();
+                // ACTION_CREATE_DOCUMENT may grant persistable access. Retain it
+                // so a template document remains available after restarting.
+                persistDocumentPermission(destination, data);
                 new Thread(() -> {
                     boolean saved = false;
                     try (InputStream source = getAssets().open("aquaword/" + template + ".docx");
@@ -135,12 +138,18 @@ def patch_activity(path: Path) -> bool:
                         if (output == null) throw new IOException("No writable document destination");
                         byte[] buffer = new byte[64 * 1024];
                         int count;
+                        long written = 0L;
                         while ((count = source.read(buffer)) != -1) {
-                            if (count > 0) output.write(buffer, 0, count);
+                            if (count > 0) {
+                                output.write(buffer, 0, count);
+                                written += count;
+                            }
                         }
+                        if (written < 500L)
+                            throw new IOException("Packaged DOCX template is incomplete");
                         output.flush();
                         saved = true;
-                    } catch (IOException problem) {
+                    } catch (Exception problem) {
                         Log.e(LOGTAG, "AquaWord template creation failed", problem);
                     }
                     final boolean ready = saved;
@@ -156,6 +165,32 @@ def patch_activity(path: Path) -> bool:
     if content.count(marker) != 1:
         raise PatchError("Missing AquaWord history result handler anchor")
     content = content.replace(marker, template_case)
+    # SAF document pickers may rotate or recreate the Activity before
+    # returning. Preserve both template and restore intents across recreation.
+    save_anchor = '        outState.putInt(FILTER_MODE_KEY, filterMode);'
+    restore_anchor = '        filterMode = savedInstanceState.getInt(FILTER_MODE_KEY, FileUtilities.ALL);'
+    if content.count(save_anchor) != 1 or content.count(restore_anchor) != 1:
+        raise PatchError("Upstream Activity saved-state hooks changed")
+    content = content.replace(save_anchor, '''        // AQUAWORD_PENDING_SAF_RECOVERY
+        outState.putString("aquaword.pending_template", pendingAquaWordTemplate);
+        outState.putString("aquaword.pending_restore",
+            pendingAquaWordRestore == null ? null : pendingAquaWordRestore.file.getName());
+''' + save_anchor, 1)
+    content = content.replace(restore_anchor, '''        pendingAquaWordTemplate = savedInstanceState.getString("aquaword.pending_template");
+        final String previousSnapshotId = savedInstanceState.getString("aquaword.pending_restore");
+        if (previousSnapshotId != null) {
+            try {
+                for (AquaWordHistory.Snapshot version : AquaWordHistory.list(getFilesDir())) {
+                    if (version.file.getName().equals(previousSnapshotId)) {
+                        pendingAquaWordRestore = version;
+                        break;
+                    }
+                }
+            } catch (IOException restoreFailure) {
+                Log.w(LOGTAG, "Unable to reload pending snapshot after rotation", restoreFailure);
+            }
+        }
+''' + restore_anchor, 1)
     path.write_text(content, encoding="utf-8")
     return True
 
