@@ -357,7 +357,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('sendBroadcast(messageAndParam[0], messageAndParam[1])',lib)
         self.assertIn('AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved")',lib)
         self.assertIn('AquaWordNativeSaveCheckpoint',lib)
-        self.assertIn('android.provider.OpenableColumns.DISPLAY_NAME',lib)
+        # Provider metadata is resolved at pre-edit time, not during native SAVE.
         self.assertIn('AquaWordHistory.preferredDisplayName(',lib)
         self.assertNotIn('getContentResolver().query(', lib.split('private void captureNativeSaveCheckpoint()', 1)[1].split('private boolean documentLoaded', 1)[0])
         self.assertIn('aquaword_snapshot_saved',browser)
