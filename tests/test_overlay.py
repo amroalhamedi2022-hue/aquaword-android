@@ -266,13 +266,13 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.run_phase('source')
         self.run_phase('source')  # idempotent overlay copy
         helper=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
-        capture=helper.split('public static synchronized Snapshot capture(File appFilesDir, InputStream input,\\n                                                String name, String sourceIdentity,',1)[1].split(
+        capture=helper.split('public static synchronized Snapshot capture(File appFilesDir, InputStream input,\n                                                String name, String sourceIdentity,',1)[1].split(
             'private static String sanitizeName',1)[0]
         self.assertIn('int noProgressReads = 0;',capture)
         self.assertIn('if (++noProgressReads >= 8)',capture)
         self.assertIn('throw new IOException("Document input stream made no progress")',capture)
-        self.assertIn('noProgressReads = 0;\\n                    length += count;',capture)
-        self.assertIn('finally {\\n            temp.delete();',capture)
+        self.assertIn('noProgressReads = 0;\n                    length += count;',capture)
+        self.assertIn('finally {\n            temp.delete();',capture)
 
     def test_native_saveback_reports_error_and_rejects_empty_files(self):
         self.run_phase('source')
