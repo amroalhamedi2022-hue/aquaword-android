@@ -10,10 +10,11 @@ AUTOMATION_COMPLETE: BLOCKED
 - No extra paid API or paid CI was used.
 
 ## This iteration — actual production fix
-- **FIX PROPOSED / TEST PENDING:** Native Writer SAVE now opens and schedules a post-edit recovery snapshot *before* copying the temp document back to the Android SAF provider. Previously it only captured a saved revision after provider writeback succeeded. A provider that rejects or partially writes the stream could therefore leave the user with no post-edit recovery version. A zero-byte native temp file is not recorded as a saved revision.
+- **FIX PROPOSED / SOURCE TEST PASS:** Native Writer SAVE now opens and schedules a post-edit recovery snapshot *before* copying the temp document back to the Android SAF provider. Previously it only captured a saved revision after provider writeback succeeded. A provider that rejects or partially writes the stream could therefore leave the user with no post-edit recovery version. A zero-byte native temp file is not recorded as a saved revision.
 - Production source: `scripts/apply_to_collabora.py`; generated target: `android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java` at the pinned upstream commit.
 - Test source: `tests/test_overlay.py::AquaWordIntegrationTests::test_failed_saf_writeback_keeps_native_post_edit_recovery`. Asserts exact callback ordering, idempotent overlay, no false SAVE broadcast on provider failure, and zero-length guard. **This is a source contract, not proof of actual Android provider failure handling.**
 - Latest production change commit: `935b21851f05bb57fdf558bb9f273e2c6ce1c87f`; test commit: `c7e146c37c0d37d457d7fd696a1878063eb152ce`.
+- **PR #7 source CI PASS at `bb52b148409a24a634f7d415aebf7374d13ef45a`:** [Fast Source and SAF Contract run 39945100480](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/39945100480), [Integration Tests run 39945100693](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/39945100693). Both completed successfully on 2026-10-23. These prove overlay/contract checks, not Android-device acceptance.
 - Relevant prior native CI: `39916261052` failed on duplicate Stylelint selector after ARM64 engine compilation. That source blocker was fixed on main and source/integration CI passed for `919d777ce30bdeec788687e42d2590b36e2876c0`: [fast source](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/39929096055), [integration](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/39929096270).
 - Current native builds at inspection: [run 39926074349](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/39926074349) in progress (older `bfac03b`), [run 39929109992](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/39929109992) pending (older `919d777`). **Neither tests this PR's source.** Do not start another expensive native build for this small patch.
 
@@ -22,7 +23,7 @@ AUTOMATION_COMPLETE: BLOCKED
 | --- | --- | --- |
 | Native Writer source overlay and real DOCX blank asset | PASS — source contract only | Prior fast-source and integration tests on `919d777`; runtime not proven. |
 | Post-edit recovery when SAF saveback fails | NOT TESTED on Android | Code and new source contract in this PR; provider failure needs an instrumented runtime test. |
-| Source contract and integration tests for this exact PR SHA | NOT TESTED | Await PR CI; check exact SHA and logs before changing this row. |
+| Source contract and integration tests for tested PR code SHA `bb52b148` | PASS — CI only | Both GitHub Actions runs 39945100480 and 39945100693 succeeded; Android runtime still untested. |
 | Native ARM64 APK compile, package ID, launch | NOT TESTED on this SHA | Native builds for older SHAs queued/running; no current-device proof. |
 | New Document UI and full Arabic/English DOCX roundtrip | NOT TESTED on Android | Requires install/open/edit/save/close/reopen and rich fixtures. |
 | SAF read-only/cloud/failed-stream, restore, process death | NOT TESTED on Android | Source tests exist; no device/provider proof. |
@@ -35,4 +36,4 @@ AUTOMATION_COMPLETE: BLOCKED
 After all gates are supported by current-SHA evidence, independently rebuild/review, run Android ARM64 editor on a compatible device, exercise positive and negative SAF flows, roundtrip Arabic/English complex DOCX, PDF/print, focus mode, history restore and process death, compare reference UI, and verify privacy/security/CPU/RAM. Do **not** change `AUTOMATION_COMPLETE` to VERIFIED until then.
 
 ## Next bounded action
-Review PR fast-source/integration results and fix any regression. When existing native build capacity is available, validate this patch on Android with a mock SAF provider that rejects or truncates writes and ensure a post-edit recovery version remains accessible. Do not claim this test already ran.
+The fast-source and integration contracts passed for the tested code SHA. Review any further PR CI runs after documentation-only updates. When existing native build capacity is available, validate this patch on Android with a mock SAF provider that rejects or truncates writes and ensure a post-edit recovery version remains accessible. Do not claim this test already ran.
