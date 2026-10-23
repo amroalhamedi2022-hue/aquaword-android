@@ -91,6 +91,9 @@ public class AquaWordHistoryTest {
             AquaWordHistory.restore(repaired, repairedData);
             check(Arrays.equals(sameBytes, repairedData.toByteArray()), "fresh copy must be readable");
 
+            // Preflight must succeed while the private recovery bytes are
+            // intact, before a SAF provider is opened in truncating mode.
+            AquaWordHistory.verifyForRestore(s);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             AquaWordHistory.restore(s, out);
             check(Arrays.equals(unicode, out.toByteArray()), "roundtrip");
@@ -100,11 +103,26 @@ public class AquaWordHistoryTest {
             try (FileOutputStream flip = new FileOutputStream(s.file)) {
                 flip.write(new byte[]{9,9,9,9,9});
             }
+            // Simulate a previously captured snapshot being corrupted.
+            // In Android the preflight runs before ContentResolver opens
+            // a potentially destructive "wt"/"rwt" output stream.
+            boolean preflightRejected = false;
+            try { AquaWordHistory.verifyForRestore(s); }
+            catch (IOException expected) { preflightRejected = true; }
+            check(preflightRejected, "corrupt snapshot was accepted for provider write");
             ByteArrayOutputStream corrupt = new ByteArrayOutputStream();
             boolean rejected = false;
             try { AquaWordHistory.restore(s, corrupt); }
             catch (IOException expected) { rejected = true; }
             check(rejected && corrupt.size() == 0, "corrupt data rejected before write");
+            AquaWordHistory.Snapshot missing = AquaWordHistory.capture(
+                root, new ByteArrayInputStream("missing-file-test".getBytes("UTF-8")),
+                "missing-file.docx", "content://missing/provider");
+            check(missing.file.delete(), "could not simulate lost recovery snapshot");
+            boolean missingRejected = false;
+            try { AquaWordHistory.verifyForRestore(missing); }
+            catch (IOException expected) { missingRejected = true; }
+            check(missingRejected, "missing snapshot was accepted for provider write");
             byte[] huge = new byte[1024];
             for (int i = 0; i < 65; i++) {
                 AquaWordHistory.capture(root, new ByteArrayInputStream(huge), "sample"+i+".odt");
