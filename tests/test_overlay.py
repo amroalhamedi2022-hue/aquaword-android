@@ -213,7 +213,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('version.file.getName().equals(previousSnapshotId)', activity)
         self.assertIn('persistDocumentPermission(destination, data);', activity)
         self.assertIn('persistDocumentPermission(target, data);', activity)
-        self.assertIn('if (finished)\\n                                open(target);', activity)
+        self.assertIn('if (finished)', activity)
+        self.assertIn('open(target); // The recovered document is genuinely editable.', activity)
         self.assertIn('if (written < 500L)', activity)
         self.assertIn('catch (Exception problem)', activity)
 
