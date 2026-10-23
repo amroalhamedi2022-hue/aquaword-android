@@ -750,7 +750,9 @@ def copy_debug_qa_file_provider(repo: Path) -> int:
         (source_dir / 'aquaword_qa_file_paths.xml',
          repo / 'android/app/src/debug/res/xml/aquaword_qa_file_paths.xml'),
         (source_dir / 'QaOpenDocumentActivity.java',
-         repo / 'android/app/src/debug/java/org/libreoffice/androidapp/qa/QaOpenDocumentActivity.java')
+         repo / 'android/app/src/debug/java/org/libreoffice/androidapp/qa/QaOpenDocumentActivity.java'),
+        (source_dir / 'QaFixtureFileProvider.java',
+         repo / 'android/app/src/debug/java/org/libreoffice/androidapp/qa/QaFixtureFileProvider.java')
     ]
     for src, dst in pairs:
         require(src)

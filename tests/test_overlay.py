@@ -456,10 +456,36 @@ class AquaWordIntegrationTests(unittest.TestCase):
         debug=self.path/'android/app/src/debug'
         manifest=(debug/'AndroidManifest.xml').read_text(encoding='utf-8')
         paths=(debug/'res/xml/aquaword_qa_file_paths.xml').read_text(encoding='utf-8')
-        self.assertIn('androidx.core.content.FileProvider',manifest)
-        self.assertIn('qa-documents',manifest)
-        self.assertIn('android:exported="false"',manifest)
+        # Native run 39929109992 failed because the debug manifest used the
+        # exact same provider class as upstream's main FileProvider. Android
+        # manifest merging matches provider declarations by android:name.
+        # A distinct subclass preserves BOTH authorities and path mappings,
+        # rather than tools:replace silently breaking upstream file sharing.
+        import xml.etree.ElementTree as ET
+        android='{http://schemas.android.com/apk/res/android}'
+        provider=ET.fromstring(manifest).find('./application/provider')
+        self.assertIsNotNone(provider)
+        self.assertEqual(provider.get(android+'name'),
+                         'org.libreoffice.androidapp.qa.QaFixtureFileProvider')
+        self.assertNotEqual(provider.get(android+'name'),
+                            'androidx.core.content.FileProvider')
+        self.assertEqual(provider.get(android+'authorities'),
+                         '${applicationId}.qa-documents')
+        self.assertEqual(provider.get(android+'exported'), 'false')
+        self.assertEqual(provider.get(android+'grantUriPermissions'), 'true')
+        metadata=provider.find('meta-data')
+        self.assertIsNotNone(metadata)
+        self.assertEqual(metadata.get(android+'name'),
+                         'android.support.FILE_PROVIDER_PATHS')
+        self.assertEqual(metadata.get(android+'resource'),
+                         '@xml/aquaword_qa_file_paths')
+        self.assertNotIn('tools:replace',manifest)
         self.assertIn('files-path name="fixtures"',paths)
+        subclass=debug/'java/org/libreoffice/androidapp/qa/QaFixtureFileProvider.java'
+        source=subclass.read_text(encoding='utf-8')
+        self.assertIn('class QaFixtureFileProvider extends FileProvider',source)
+        self.assertIn('public QaFixtureFileProvider()',source)
+        self.assertFalse((self.path/'android/app/src/main/java/org/libreoffice/androidapp/qa/QaFixtureFileProvider.java').exists())
         launch=(debug/'java/org/libreoffice/androidapp/qa/QaOpenDocumentActivity.java').read_text(encoding='utf-8')
         self.assertIn('FileProvider.getUriForFile',launch)
         self.assertIn('FLAG_GRANT_WRITE_URI_PERMISSION',launch)
