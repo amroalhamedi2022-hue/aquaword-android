@@ -658,8 +658,16 @@ def patch_history_activity(path: Path) -> bool:
                         try (OutputStream output = opened) {
                             AquaWordHistory.restore(item, output);
                         }
-                        // Only open the recovered document after restore and
-                        // output close both succeed. On failure keep snapshot.
+                        // AQUAWORD_RESTORE_READBACK_BARRIER: a provider can
+                        // accept and close every write yet silently persist
+                        // truncated or stale bytes. Never launch Writer or
+                        // report restore success until readback matches the
+                        // private, SHA-256-validated snapshot.
+                        try (InputStream readback = getContentResolver().openInputStream(target)) {
+                            AquaWordHistory.verifyProviderWriteback(item, readback);
+                        }
+                        // Readback proves immediate provider-visible bytes,
+                        // not eventual remote cloud synchronization.
                         success = true;
                     } catch (Exception failure) {
                         Log.e(LOGTAG, "AquaWord safety copy restore failed", failure);
