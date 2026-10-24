@@ -523,10 +523,17 @@ def patch_history_activity(path: Path) -> bool:
 
         final Intent i = getIntentToEdit(uri);
         // Provider metadata can block on cloud/network IPC: resolve it on the worker.
+        // AQUAWORD_CANCELABLE_PREEDIT: a cloud provider can stall indefinitely.
+        // Back dismisses the waiting dialog without opening an unprotected
+        // document when the worker eventually completes.
+        final java.util.concurrent.atomic.AtomicBoolean cancelled =
+                new java.util.concurrent.atomic.AtomicBoolean(false);
         final AlertDialog progress = new AlertDialog.Builder(this)
                 .setTitle(R.string.aquaword_safety_copies)
                 .setMessage(R.string.aquaword_creating_safety_copy)
-                .setCancelable(false).create();
+                .setCancelable(true).create();
+        progress.setCanceledOnTouchOutside(false);
+        progress.setOnCancelListener(dialog -> cancelled.set(true));
         progress.show();
         new Thread(() -> {
             String problem = null;
@@ -549,7 +556,7 @@ def patch_history_activity(path: Path) -> bool:
             final String message = problem;
             runOnUiThread(() -> {
                 progress.dismiss();
-                if (isFinishing() || isDestroyed()) return;
+                if (cancelled.get() || isFinishing() || isDestroyed()) return;
                 if (message == null) {
                     startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
                 } else {

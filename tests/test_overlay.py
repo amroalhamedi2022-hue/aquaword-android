@@ -251,6 +251,28 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('if (!isFinishing() && !isDestroyed())', history)
         self.assertIn('}, "AquaWordHistoryList").start();', history)
 
+    def test_preedit_cloud_wait_can_be_cancelled_without_opening_editor(self):
+        """Back must dismiss a stalled provider wait and suppress late editor launch.
+
+        Source/overlay contract only; Android dialog and cloud provider runtime
+        behavior remain NOT TESTED until final-device acceptance.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # no duplicated listener after reapplying overlay
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        opening=activity.split('final Intent i = getIntentToEdit(uri);', 1)[1].split(
+            '}, "AquaWordSafetyCopy").start();', 1)[0]
+        self.assertEqual(opening.count('AQUAWORD_CANCELABLE_PREEDIT'), 1)
+        self.assertIn('new java.util.concurrent.atomic.AtomicBoolean(false)', opening)
+        self.assertIn('.setCancelable(true).create();', opening)
+        self.assertIn('progress.setCanceledOnTouchOutside(false);', opening)
+        self.assertIn('progress.setOnCancelListener(dialog -> cancelled.set(true));', opening)
+        self.assertLess(opening.index('progress.setOnCancelListener('), opening.index('progress.show();'))
+        self.assertIn('if (cancelled.get() || isFinishing() || isDestroyed()) return;', opening)
+        self.assertLess(opening.index('if (cancelled.get() || isFinishing() || isDestroyed()) return;'),
+                        opening.index('startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);'))
+        self.assertIn('AquaWordHistory.capture(getFilesDir(), data, name, uri.toString());', opening)
+
     def test_writer_creation_uses_real_docx_mime(self):
         self.run_phase('source')
         activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
