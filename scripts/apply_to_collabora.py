@@ -118,6 +118,9 @@ def patch_native_save_checkpoints(path: Path) -> bool:
             Log.e(TAG, "AquaWord cannot save: missing editable Writer source");
             return;
         }
+        // Freeze the resolved local destination for this SAVE: later Activity
+        // changes must not redirect an already queued writeback.
+        final java.io.File resolvedAtSave = mResolvedFile;
         final String sourceIdentity = original.toString();
         final String fallbackName = original.getLastPathSegment() == null ?
                 "Document.docx" : original.getLastPathSegment();
@@ -149,16 +152,23 @@ def patch_native_save_checkpoints(path: Path) -> bool:
                     // Write the immutable verified revision, not mTempFile:
                     // subsequent Writer saves must not change the payload.
                     boolean written = directWriterFile ||
-                            copyTempBackToIntent(checkpoint.file, original);
+                            copyTempBackToIntent(checkpoint.file, original, resolvedAtSave);
                     // AQUAWORD_SAF_READBACK_BARRIER: a provider can silently
                     // truncate/corrupt bytes while accepting all writes.
-                    // Only acknowledge a content:// SAVE if reopening it
-                    // returns the exact fsynced recovery checkpoint bytes.
-                    // Keep the checkpoint on any failure or stale readback.
-                    if (written && !directWriterFile && mResolvedFile == null) {
-                        try (InputStream providerReadback =
-                                     getContentResolver().openInputStream(original)) {
-                            AquaWordHistory.verifyProviderWriteback(checkpoint, providerReadback);
+                    // AQUAWORD_RESOLVED_FILE_READBACK: the local resolved-file
+                    // path needs the same SHA-256 gate before SAVE broadcast.
+                    // Keep the checkpoint on any failed/stale readback.
+                    if (written && !directWriterFile) {
+                        if (resolvedAtSave != null) {
+                            try (InputStream localReadback =
+                                         new FileInputStream(resolvedAtSave)) {
+                                AquaWordHistory.verifyProviderWriteback(checkpoint, localReadback);
+                            }
+                        } else {
+                            try (InputStream providerReadback =
+                                         getContentResolver().openInputStream(original)) {
+                                AquaWordHistory.verifyProviderWriteback(checkpoint, providerReadback);
+                            }
                         }
                     }
                     if (written) {
@@ -240,8 +250,9 @@ def patch_native_saf_saveback(path: Path) -> bool:
             'reportSaveToFileFailed();' not in direct or
             'MediaScannerConnection.scanFile' not in direct):
         raise PatchError('Upstream direct-file save semantics drifted')
-    direct = direct.replace('private void copyTempBackToFile()', 'private boolean copyTempBackToFile(java.io.File sourceFile)', 1)
+    direct = direct.replace('private void copyTempBackToFile()', 'private boolean copyTempBackToFile(java.io.File sourceFile, java.io.File resolvedFile)', 1)
     direct = direct.replace('new FileInputStream(mTempFile)', 'new FileInputStream(sourceFile)')
+    direct = direct.replace('        final File resolvedFile = mResolvedFile;\n', '', 1)
     direct = direct.replace('            return;', '            return false;')
     # Successful copy and rename is the only path allowed to acknowledge SAVE.
     direct = direct.replace('            MediaScannerConnection.scanFile(this, new String[]{resolvedFile.getAbsolutePath()}, null, null);',
@@ -251,13 +262,13 @@ def patch_native_saf_saveback(path: Path) -> bool:
     if ('return true;' not in direct or direct.count('return false;') < 3):
         raise PatchError('Could not make direct-file save report its completion state')
     replacement = '''    // AQUAWORD_NATIVE_SAF_SAVE_BACK: never silently report incomplete writes.
-    private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination) {
+    private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination, java.io.File resolvedAtSave) {
         if (!isDocEditable || sourceFile == null || !sourceFile.isFile() ||
                 destination == null ||
                 !ContentResolver.SCHEME_CONTENT.equals(destination.getScheme()))
             return false;
-        if (mResolvedFile != null) {
-            return copyTempBackToFile(sourceFile);
+        if (resolvedAtSave != null) {
+            return copyTempBackToFile(sourceFile, resolvedAtSave);
         }
         try (InputStream input = new FileInputStream(sourceFile)) {
             if (sourceFile.length() <= 0L)
