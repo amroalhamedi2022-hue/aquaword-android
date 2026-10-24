@@ -143,6 +143,11 @@ def patch_native_save_checkpoints(path: Path) -> bool:
         }
         try {
             mAquaWordSaveExecutor.execute(() -> {
+                // A direct file:// save is already on disk. If history
+                // capture fails before source verification starts, preserve
+                // Writer's native success notification. A mismatched source
+                // checksum must NOT be mistaken for a history-only failure.
+                boolean writerReadbackStarted = false;
                 // AQUAWORD_LOCAL_RECOVERY_NAME: no provider metadata IPC on
                 // the SAVE callback or in the recovery-critical path.
                 try (java.io.InputStream stream = saved) {
@@ -156,6 +161,16 @@ def patch_native_save_checkpoints(path: Path) -> bool:
                     if (checkpoint == null || checkpoint.sizeBytes <= 0L)
                         throw new java.io.IOException("Empty native recovery checkpoint");
                     AquaWordHistory.verifyForRestore(checkpoint);
+                    // AQUAWORD_WRITER_SOURCE_STABILITY: the FileInputStream
+                    // opened on SAVE is not an immutable snapshot if Writer
+                    // overwrites the same inode before the worker runs.
+                    // Refuse stale/torn checkpoints BEFORE truncating SAF.
+                    // This read is performed on the save worker, never UI.
+                    writerReadbackStarted = true;
+                    try (java.io.InputStream writerReadback =
+                                 new java.io.FileInputStream(writerOutput)) {
+                        AquaWordHistory.verifyProviderWriteback(checkpoint, writerReadback);
+                    }
                     // Write the immutable verified revision, not mTempFile:
                     // subsequent Writer saves must not change the payload.
                     boolean written = directWriterFile ||
@@ -187,13 +202,15 @@ def patch_native_save_checkpoints(path: Path) -> bool:
                     }
                 } catch (Exception failure) {
                     if (directWriterFile && writerOutput.isFile() && writerOutput.length() > 0L) {
-                        // A history quota/I/O failure must not turn an already
-                        // persisted native file:// SAVE into a false failure.
-                        // Recovery is degraded; record it without claiming
-                        // that a safety copy exists.
-                        Log.w(TAG, "Native file saved by Writer, but recovery checkpoint failed", failure);
-                        sendBroadcast(saveMessage[0], saveMessage[1]);
-                        return;
+                        // Only failures BEFORE source-readback can be treated
+                        // as best-effort history failures. If the Writer
+                        // bytes differ from the checkpoint, do not broadcast
+                        // a false success for the mismatched revision.
+                        if (!writerReadbackStarted) {
+                            Log.w(TAG, "Native file saved by Writer, but recovery checkpoint failed", failure);
+                            sendBroadcast(saveMessage[0], saveMessage[1]);
+                            return;
+                        }
                     }
                     Log.e(TAG, "AquaWord post-save recovery or writeback failed", failure);
                     runOnUiThread(() -> {

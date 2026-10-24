@@ -585,6 +585,32 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('catch (java.util.concurrent.RejectedExecutionException shutdown)',lib)
         self.assertIn('saved.close()',lib)
 
+    def test_native_writer_source_stability_before_any_provider_truncation(self):
+        """Source contract only: a queued FileInputStream is NOT immutable.
+
+        A later Writer save can rewrite the same inode. Re-read the actual
+        Writer file and compare SHA-256 with the durable checkpoint before
+        copying to SAF or acknowledging a direct-file save. No APK is built.
+        """
+        self.run_phase('source')
+        self.run_phase('source')
+        lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        checkpoint=lib.split('private void captureNativeSaveCheckpoint(',1)[1].split(
+            'private boolean documentLoaded',1)[0]
+        self.assertEqual(checkpoint.count('AQUAWORD_WRITER_SOURCE_STABILITY'),1)
+        self.assertIn('boolean writerReadbackStarted = false;',checkpoint)
+        self.assertIn('writerReadbackStarted = true;',checkpoint)
+        self.assertIn('new java.io.FileInputStream(writerOutput)',checkpoint)
+        self.assertIn('AquaWordHistory.verifyProviderWriteback(checkpoint, writerReadback);',checkpoint)
+        self.assertLess(checkpoint.index('AquaWordHistory.verifyForRestore(checkpoint);'),
+                        checkpoint.index('writerReadbackStarted = true;'))
+        self.assertLess(checkpoint.index('AquaWordHistory.verifyProviderWriteback(checkpoint, writerReadback);'),
+                        checkpoint.index('copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)'))
+        self.assertIn('if (!writerReadbackStarted)',checkpoint)
+        self.assertLess(checkpoint.index('if (!writerReadbackStarted)'),
+                        checkpoint.rindex('sendBroadcast(saveMessage[0], saveMessage[1]);'))
+        self.assertIn('AquaWord post-save recovery or writeback failed',checkpoint)
+
     def test_stalled_saf_provider_cannot_queue_unbounded_native_saves(self):
         """Source contract only: cap queued open Writer descriptors on stalled SAF.
 
