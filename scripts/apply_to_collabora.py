@@ -558,8 +558,8 @@ def patch_history_activity(path: Path) -> bool:
                 if (cancelled.get() || isFinishing() || isDestroyed()) return;
                 if (message == null) {
                     // AQUAWORD_RECENTS_AFTER_OPEN: only record an actual launch.
-                    addDocumentToRecents(uri);
                     startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
+                    addDocumentToRecents(uri);
                 } else {
                     new AlertDialog.Builder(this)
                         .setTitle(R.string.aquaword_copy_failed)
@@ -567,8 +567,8 @@ def patch_history_activity(path: Path) -> bool:
                         .setPositiveButton(R.string.aquaword_open_anyway,
                             (dialog, which) -> {
                                 if (cancelled.get() || isFinishing() || isDestroyed()) return;
-                                addDocumentToRecents(uri);
                                 startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
+                                addDocumentToRecents(uri);
                             })
                         .setNegativeButton(android.R.string.cancel, null)
                         .show();

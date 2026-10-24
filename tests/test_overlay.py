@@ -277,8 +277,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         first_guard = 'if (cancelled.get() || isFinishing() || isDestroyed()) return;'
         self.assertNotIn('addDocumentToRecents(uri);', opening.split(first_guard, 1)[0])
         self.assertIn('AQUAWORD_RECENTS_AFTER_OPEN', opening)
-        self.assertIn('addDocumentToRecents(uri);\n                    startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);', opening)
-        self.assertIn('if (cancelled.get() || isFinishing() || isDestroyed()) return;\n                                addDocumentToRecents(uri);', opening)
+        self.assertIn('startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);\n                    addDocumentToRecents(uri);', opening)
+        self.assertIn('if (cancelled.get() || isFinishing() || isDestroyed()) return;\n                                startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);\n                                addDocumentToRecents(uri);', opening)
 
     def test_writer_creation_uses_real_docx_mime(self):
         self.run_phase('source')
