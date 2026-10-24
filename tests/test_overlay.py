@@ -105,6 +105,49 @@ class AquaWordIntegrationTests(unittest.TestCase):
         stopWatchingForHardwareKeyboard();
         super.onDestroy();
     }
+    void exportResult(int requestCode, int resultCode, Intent intent) {
+        switch (requestCode) {
+            case REQUEST_EXPORT_FILE: {
+                if (intent == null || mPendingExportSourcePath == null) {
+                    mPendingExportSourcePath = null;
+                    return;
+                }
+                File srcFile = new File(mPendingExportSourcePath);
+                mPendingExportSourcePath = null;
+                InputStream inputStream = null;
+                OutputStream outputStream = null;
+                try {
+                    inputStream = new FileInputStream(srcFile);
+                    try {
+                        outputStream = getContentResolver().openOutputStream(intent.getData(), "wt");
+                    } catch (FileNotFoundException e) {
+                        Log.i(TAG, "failed with wt mode");
+                        outputStream = getContentResolver().openOutputStream(intent.getData());
+                    }
+                    byte[] buffer = new byte[4096];
+                    int len;
+                    while ((len = inputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, len);
+                    }
+                    outputStream.flush();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    try {
+                        if (inputStream != null)
+                            inputStream.close();
+                        if (outputStream != null)
+                            outputStream.close();
+                    } catch (Exception e) {
+                    }
+                    srcFile.delete();
+                }
+                return;
+            }
+            case REQUEST_SAVEAS_PDF:
+                return;
+        }
+    }
 ''')
 
         make('android/app/build.gradle','''android {
@@ -302,6 +345,36 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('throw new IOException("Document input stream made no progress")',capture)
         self.assertIn('noProgressReads = 0;\n                    length += count;',capture)
         self.assertIn('finally {\n            temp.delete();',capture)
+
+    def test_exportfile_pdf_copy_is_async_verified_and_retains_failure_source(self):
+        self.run_phase('source')
+        native=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        marker='AQUAWORD_VERIFIED_ASYNC_EXPORT'
+        self.assertEqual(native.count(marker),1)
+        section=native.split('case REQUEST_EXPORT_FILE: {',1)[1].split(
+            'case REQUEST_SAVEAS_PDF:',1)[0]
+        self.assertIn('mAquaWordSaveExecutor.execute(() ->',section)
+        self.assertIn('resultCode != RESULT_OK',section)
+        self.assertIn('exportSource.length() <= 0L',section)
+        self.assertIn('getContentResolver().openInputStream(exportTarget)',section)
+        self.assertIn('readBytes != written',section)
+        self.assertIn('java.util.Arrays.equals(expected.digest(), observed.digest())',section)
+        self.assertIn('if (verified && !exportSource.delete())',section)
+        self.assertIn('RejectedExecutionException',section)
+        self.assertNotIn('srcFile.delete();',section)
+        self.assertLess(section.index('output.flush();'),
+                        section.index('openInputStream(exportTarget)'))
+        self.run_phase('source')
+        self.assertEqual(native,(self.path/
+            'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text())
+
+    def test_exportfile_upstream_drift_rejected(self):
+        native=self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java'
+        native.write_text(native.read_text().replace(
+            'openOutputStream(intent.getData(), "wt")',
+            'openOutputStream(intent.getData(), "w")'),encoding='utf-8')
+        with self.assertRaises(M.PatchError):
+            M.patch_native_export_writeback(native)
 
     def test_native_saveback_reports_error_and_rejects_empty_files(self):
         self.run_phase('source')
