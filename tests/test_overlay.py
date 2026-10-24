@@ -565,15 +565,17 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.run_phase('source')
         self.run_phase('source')  # overlay remains idempotent
         lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        queue=lib.split('// AQUAWORD_NATIVE_SAVE_CHECKPOINT:',1)[1].split(
+            'private void captureNativeSaveCheckpoint(',1)[0]
         checkpoint=lib.split('private void captureNativeSaveCheckpoint(',1)[1].split(
             'private boolean documentLoaded',1)[0]
-        self.assertEqual(checkpoint.count('AQUAWORD_BOUNDED_SAVE_QUEUE'),1)
-        self.assertIn('AQUAWORD_MAX_PENDING_SAVES = 8;',checkpoint)
-        self.assertIn('new java.util.concurrent.ThreadPoolExecutor(',checkpoint)
-        self.assertIn('new java.util.concurrent.ArrayBlockingQueue<Runnable>(',checkpoint)
-        self.assertIn('AQUAWORD_MAX_PENDING_SAVES)',checkpoint)
-        self.assertIn('new java.util.concurrent.ThreadPoolExecutor.AbortPolicy()',checkpoint)
-        self.assertNotIn('Executors.newSingleThreadExecutor(',checkpoint)
+        self.assertEqual(queue.count('AQUAWORD_BOUNDED_SAVE_QUEUE'),1)
+        self.assertIn('AQUAWORD_MAX_PENDING_SAVES = 8;',queue)
+        self.assertIn('new java.util.concurrent.ThreadPoolExecutor(',queue)
+        self.assertIn('new java.util.concurrent.ArrayBlockingQueue<Runnable>(',queue)
+        self.assertIn('AQUAWORD_MAX_PENDING_SAVES)',queue)
+        self.assertIn('new java.util.concurrent.ThreadPoolExecutor.AbortPolicy()',queue)
+        self.assertNotIn('Executors.newSingleThreadExecutor(',queue)
         self.assertIn('catch (java.util.concurrent.RejectedExecutionException shutdown)',checkpoint)
         rejected=checkpoint.split(
             'catch (java.util.concurrent.RejectedExecutionException shutdown)',1)[1]
