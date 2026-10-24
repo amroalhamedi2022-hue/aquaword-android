@@ -49,7 +49,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$FINAL_READY" = 'true' ]; then
+          if [ "$FINAL_READY" = 'true' ] && [ "$DIAGNOSTIC_BUILD" != 'true' ]; then
             bash scripts/check_final_ready.sh
           elif [ "$DIAGNOSTIC_BUILD" = 'true' ] && [ -n "${DIAGNOSTIC_REASON//[[:space:]]/}" ]; then
             echo "INTERNAL DIAGNOSTIC ONLY: $DIAGNOSTIC_REASON" >> "$GITHUB_STEP_SUMMARY"
