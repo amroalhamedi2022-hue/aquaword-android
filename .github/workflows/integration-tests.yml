@@ -107,8 +107,11 @@ jobs:
           mkdir -p build/history-classes
           javac -encoding UTF-8 -d build/history-classes \
             history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java \
-            history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java
+            history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java \
+            history/src/org/libreoffice/androidapp/ui/AquaWordPdfPreflight.java \
+            history/test/org/libreoffice/androidapp/ui/AquaWordPdfPreflightTest.java
           java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordHistoryTest
+          java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordPdfPreflightTest
       # Show acceptance report in the run itself; the account's
       # Actions artifact storage is full, so avoid upload-artifact entirely.
       - name: Attach acceptance matrix to GitHub run summary

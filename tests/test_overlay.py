@@ -397,6 +397,23 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertEqual(native,(self.path/
             'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text())
 
+    def test_pdf_export_trailer_preflight_is_before_saf_truncation(self):
+        """Source contract for preflight; JVM tests exercise the helper itself."""
+        self.run_phase('source')
+        native=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        section=native.split('case REQUEST_EXPORT_FILE: {',1)[1].split(
+            'case REQUEST_SAVEAS_PDF:',1)[0]
+        self.assertEqual(section.count('AQUAWORD_PDF_TRAILER_PREFLIGHT'),1)
+        self.assertIn('AquaWordPdfPreflight.requirePlausiblePdf(exportSource);',section)
+        self.assertLess(section.index('requirePlausiblePdf(exportSource)'),
+                        section.index('openOutputStream(exportTarget'))
+        helper=self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordPdfPreflight.java'
+        self.assertTrue(helper.is_file())
+        self.assertIn('Native PDF export has no trailing EOF marker',helper.read_text())
+        initial=helper.read_bytes()
+        self.run_phase('source')
+        self.assertEqual(initial,helper.read_bytes())
+
     def test_pdf_export_feedback_is_localized_in_native_library(self):
         """Export success is shown only after SHA readback; lib owns R.string."""
         import xml.etree.ElementTree as ET

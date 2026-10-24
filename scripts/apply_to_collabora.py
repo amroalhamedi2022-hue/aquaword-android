@@ -410,7 +410,11 @@ def patch_native_export_writeback(path: Path) -> bool:
                             java.security.MessageDigest expected =
                                     java.security.MessageDigest.getInstance("SHA-256");
                             long written = 0L;
-                            // AQUAWORD_PDF_SIGNATURE_AND_TRUNCATION: validate
+                            // AQUAWORD_PDF_TRAILER_PREFLIGHT: reject incomplete
+                             // native PDFs before opening/truncating SAF.
+                             // This is screening, not full PDF parsing.
+                             AquaWordPdfPreflight.requirePlausiblePdf(exportSource);
+                             // AQUAWORD_PDF_SIGNATURE_AND_TRUNCATION: validate
                             // native output before opening (and potentially
                             // truncating) a user's SAF destination. Android's
                             // default "w" mode is NOT guaranteed to truncate.
@@ -1160,6 +1164,17 @@ def copy_native_export_strings(repo: Path) -> int:
     return changed
 
 
+def copy_pdf_preflight_source(repo: Path) -> bool:
+    src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordPdfPreflight.java')
+    target = repo/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordPdfPreflight.java'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file():
+        if target.read_bytes() == src.read_bytes(): return False
+        raise PatchError('Conflicting pre-existing AquaWordPdfPreflight.java in upstream')
+    shutil.copyfile(src, target)
+    return True
+
+
 def copy_history_source(repo: Path) -> bool:
     src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
     target = repo/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java'
@@ -1223,6 +1238,7 @@ def source(repo: Path) -> None:
     print('SAF native saveback error detection:', patch_native_saf_saveback(targets[11]))
     print('Verified asynchronous native PDF export:', patch_native_export_writeback(targets[11]))
     print('History storage class:', copy_history_source(repo))
+    print('Native PDF preflight class:', copy_pdf_preflight_source(repo))
     print('Native PDF export locale resources:', copy_native_export_strings(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Debug-only real ContentProvider test route:', copy_debug_qa_file_provider(repo))
