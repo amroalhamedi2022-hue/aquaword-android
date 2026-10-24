@@ -267,6 +267,39 @@ public final class AquaWordHistory {
             throw new IOException("Recovery snapshot missing or checksum mismatch");
     }
 
+    /**
+     * SAF read-after-write contract: verify bytes actually returned by the
+     * provider match the already fsynced private recovery checkpoint.
+     * This does not prove cloud sync, atomicity, or power-loss durability.
+     * The caller owns/closes providerInput; do not hold the history lock
+     * during slow remote provider I/O.
+     */
+    public static void verifyProviderWriteback(Snapshot snapshot, InputStream providerInput)
+            throws IOException {
+        if (snapshot == null || providerInput == null)
+            throw new IOException("SAF provider readback unavailable");
+        MessageDigest checksum = digest();
+        byte[] buffer = new byte[64 * 1024];
+        long received = 0L;
+        int noProgress = 0;
+        int count;
+        while ((count = providerInput.read(buffer)) != -1) {
+            if (count == 0) {
+                if (++noProgress >= 8)
+                    throw new IOException("SAF provider readback made no progress");
+                continue;
+            }
+            noProgress = 0;
+            received += count;
+            if (received > snapshot.sizeBytes)
+                throw new IOException("SAF provider returned extra bytes");
+            checksum.update(buffer, 0, count);
+        }
+        if (received != snapshot.sizeBytes ||
+                !hex(checksum.digest()).equals(snapshot.sha256))
+            throw new IOException("SAF provider readback checksum/size mismatch");
+    }
+
     // Keep retention/trim from deleting a snapshot midway through restore.
     public static synchronized void restore(Snapshot snapshot, OutputStream target) throws IOException {
         if (snapshot == null || target == null) throw new IOException("Missing recovery destination");
