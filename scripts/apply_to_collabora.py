@@ -519,8 +519,7 @@ def patch_history_activity(path: Path) -> bool:
 
         Intent i = getIntentToEdit(uri);
         startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);'''
-    replacement = '''        addDocumentToRecents(uri);
-
+    replacement = '''        // A canceled or failed safety-copy attempt must not enter Recents.
         final Intent i = getIntentToEdit(uri);
         // Provider metadata can block on cloud/network IPC: resolve it on the worker.
         // AQUAWORD_CANCELABLE_PREEDIT: a cloud provider can stall indefinitely.
@@ -558,13 +557,19 @@ def patch_history_activity(path: Path) -> bool:
                 progress.dismiss();
                 if (cancelled.get() || isFinishing() || isDestroyed()) return;
                 if (message == null) {
+                    // AQUAWORD_RECENTS_AFTER_OPEN: only record an actual launch.
+                    addDocumentToRecents(uri);
                     startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
                 } else {
                     new AlertDialog.Builder(this)
                         .setTitle(R.string.aquaword_copy_failed)
                         .setMessage(getString(R.string.aquaword_copy_failed_body) + "\\\\n" + message)
                         .setPositiveButton(R.string.aquaword_open_anyway,
-                            (dialog, which) -> startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE))
+                            (dialog, which) -> {
+                                if (cancelled.get() || isFinishing() || isDestroyed()) return;
+                                addDocumentToRecents(uri);
+                                startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
+                            })
                         .setNegativeButton(android.R.string.cancel, null)
                         .show();
                 }
