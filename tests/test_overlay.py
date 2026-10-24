@@ -506,7 +506,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
                         method.index('boolean written = directWriterFile ||'))
         self.assertIn('if (directWriterFile && writerOutput.isFile() && writerOutput.length() > 0L)',method)
         self.assertIn('Native file saved by Writer, but recovery checkpoint failed',method)
-        self.assertIn('sendBroadcast(saveMessage[0], saveMessage[1]);\n                        return;',method)
+        self.assertIn('if (!writerReadbackStarted) {',method)
+        self.assertIn('sendBroadcast(saveMessage[0], saveMessage[1]);\n                            return;',method)
         # The content:// branch still has the durability barrier and refuses
         # a SAVE broadcast when its explicit provider writeback fails.
         self.assertIn('AquaWord SAVE not acknowledged',method)
