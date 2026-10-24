@@ -63,17 +63,30 @@ public final class AquaWordPdfPreflight {
 
     private static void verifyCrossReference(RandomAccessFile source, long offset)
             throws IOException {
+        // Bound the probe even for very large PDFs. A plausible object header
+        // alone is NOT evidence of a PDF cross-reference stream: otherwise a
+        // startxref pointing at any ordinary object could pass preflight.
         source.seek(offset);
-        byte[] sample = new byte[(int) Math.min(96L, source.length() - offset)];
+        byte[] sample = new byte[(int) Math.min(8192L, source.length() - offset)];
         source.readFully(sample);
         String start = new String(sample, StandardCharsets.US_ASCII);
-        // Classic xref table OR a PDF 1.5+ cross-reference stream object.
-        if (start.startsWith("xref") &&
-                (start.length() == 4 || Character.isWhitespace(start.charAt(4))))
+        // A classic table needs a subsection and at least one real entry.
+        if (start.matches("(?s)^xref\\s+[0-9]+\\s+[0-9]+\\s+" +
+                "[0-9]{10}\\s+[0-9]{5}\\s+[nf]\\b.*"))
             return;
-        if (start.matches("(?s)^[0-9]+\\s+[0-9]+\\s+obj(?:\\s|<|\\[).*"))
-            return;
-        throw new IOException("PDF startxref does not reference a cross-reference structure");
+        // PDF 1.5+ cross-reference streams must be indirect objects whose
+        // dictionary explicitly declares /Type /XRef before stream data.
+        // This is a conservative bounded screen, NOT a complete PDF parser.
+        if (!start.matches("(?s)^[0-9]+\\s+[0-9]+\\s+obj\\s*<<.*"))
+            throw new IOException("PDF startxref does not reference a cross-reference structure");
+        int stream = start.indexOf("stream");
+        int dictionary = start.indexOf("<<");
+        if (stream < 0 || dictionary < 0 || dictionary >= stream)
+            throw new IOException("PDF cross-reference stream header is incomplete");
+        String header = start.substring(dictionary, stream);
+        if (!header.matches("(?s).*?/Type\\s*/XRef\\b.*") ||
+                !header.matches("(?s).*>>\\s*"))
+            throw new IOException("PDF startxref object is not a cross-reference stream");
     }
 
     public static void requirePlausiblePdf(File file) throws IOException {
