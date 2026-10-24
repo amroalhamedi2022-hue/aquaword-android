@@ -735,6 +735,9 @@ def patch_async_new_document_creation(path: Path) -> bool:
                     opened = getContentResolver().openOutputStream(uri, "rwt");
                 if (opened == null)
                     throw new IOException("No truncating writable document URI");
+                // AQUAWORD_NEW_DOC_READBACK: reject corrupted provider output.
+                final java.security.MessageDigest expectedDigest =
+                        java.security.MessageDigest.getInstance("SHA-256");
                 long written = 0L;
                 try (OutputStream output = opened) {
                     byte[] buffer = new byte[64 * 1024];
@@ -742,6 +745,7 @@ def patch_async_new_document_creation(path: Path) -> bool:
                     while ((bytesRead = template.read(buffer)) != -1) {
                         if (bytesRead > 0) {
                             output.write(buffer, 0, bytesRead);
+                            expectedDigest.update(buffer, 0, bytesRead);
                             written += bytesRead;
                         }
                     }
@@ -750,7 +754,34 @@ def patch_async_new_document_creation(path: Path) -> bool:
                 // Never launch Writer on an empty/incomplete template stream.
                 if (written <= 0L)
                     throw new IOException("Empty document template");
-                // Successful close of both streams is required before opening.
+                // Read back after closing output: some providers silently
+                // truncate, append, or corrupt the written DOCX bytes.
+                final java.security.MessageDigest actualDigest =
+                        java.security.MessageDigest.getInstance("SHA-256");
+                long verified = 0L;
+                int noProgressReads = 0;
+                try (InputStream readback = getContentResolver().openInputStream(uri)) {
+                    if (readback == null)
+                        throw new IOException("Document provider returned no readable stream");
+                    byte[] verifyBuffer = new byte[64 * 1024];
+                    int count;
+                    while ((count = readback.read(verifyBuffer)) != -1) {
+                        if (count == 0) {
+                            if (++noProgressReads >= 8)
+                                throw new IOException("New document readback made no progress");
+                            continue;
+                        }
+                        noProgressReads = 0;
+                        verified += count;
+                        if (verified > written)
+                            throw new IOException("New document provider returned extra bytes");
+                        actualDigest.update(verifyBuffer, 0, count);
+                    }
+                }
+                if (verified != written ||
+                        !java.util.Arrays.equals(expectedDigest.digest(), actualDigest.digest()))
+                    throw new IOException("New document failed SHA-256 readback verification");
+                // Byte-for-byte verification precedes native Writer launch.
             } catch (Exception error) {
                 failed = true;
                 Log.e(LOGTAG, "AquaWord document creation failed", error);
