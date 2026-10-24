@@ -31,6 +31,40 @@ public class AquaWordHistoryTest {
                 root, new ByteArrayInputStream("saved writer revision".getBytes("UTF-8")),
                 "قصتي.docx", "content://new/document", "saved");
             check("saved".equals(savedVersion.kind), "saved checkpoint metadata lost");
+            // A provider may accept every output.write yet silently return
+            // stale, truncated, appended or corrupted bytes on readback.
+            byte[] expectedWriteback = "saved writer revision".getBytes("UTF-8");
+            AquaWordHistory.verifyProviderWriteback(savedVersion,
+                    new ByteArrayInputStream(expectedWriteback));
+            boolean shortReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion,
+                    new ByteArrayInputStream("saved writer".getBytes("UTF-8"))); }
+            catch (IOException expected) { shortReadbackRejected = true; }
+            check(shortReadbackRejected, "truncated SAF readback accepted");
+            byte[] wrongWriteback = Arrays.copyOf(expectedWriteback, expectedWriteback.length);
+            wrongWriteback[0] ^= 1;
+            boolean corruptedReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion,
+                    new ByteArrayInputStream(wrongWriteback)); }
+            catch (IOException expected) { corruptedReadbackRejected = true; }
+            check(corruptedReadbackRejected, "same-size corrupted SAF readback accepted");
+            boolean appendedReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion,
+                    new ByteArrayInputStream((new String(expectedWriteback, "UTF-8") + "x").getBytes("UTF-8"))); }
+            catch (IOException expected) { appendedReadbackRejected = true; }
+            check(appendedReadbackRejected, "appended SAF readback accepted");
+            boolean missingReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion, null); }
+            catch (IOException expected) { missingReadbackRejected = true; }
+            check(missingReadbackRejected, "null SAF readback accepted");
+            InputStream zeroReadback = new InputStream() {
+                @Override public int read() { return 0; }
+                @Override public int read(byte[] b, int off, int len) { return 0; }
+            };
+            boolean stalledReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion, zeroReadback); }
+            catch (IOException expected) { stalledReadbackRejected = true; }
+            check(stalledReadbackRejected, "non-progressing SAF readback accepted");
             AquaWordHistory.Snapshot matchingPreEdit = AquaWordHistory.capture(
                 root, new ByteArrayInputStream("saved writer revision".getBytes("UTF-8")),
                 "قصتي.docx", "content://new/document", "pre-edit");
