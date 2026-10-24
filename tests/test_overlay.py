@@ -345,6 +345,35 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('snapshot == null || !verifyBytes(snapshot)',helper)
         self.assertIn('public static synchronized void restore(Snapshot snapshot, OutputStream target)',helper)
 
+    def test_restored_saf_docx_readback_matches_snapshot_before_open(self):
+        """A successful close is insufficient: verify provider-visible bytes.
+
+        This is an overlay/source regression contract, NOT an Android provider
+        or cloud synchronization test. The JVM helper tests exercise corrupt,
+        short and extra readbacks separately.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # overlay idempotence
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        restore=activity.split('case AQUAWORD_RESTORE_REQUEST_CODE:',1)[1].split(
+            'case LO_ACTIVITY_REQUEST_CODE:',1)[0]
+        self.assertEqual(restore.count('AQUAWORD_RESTORE_READBACK_BARRIER'), 1)
+        self.assertEqual(restore.count('openInputStream(target)'), 1)
+        self.assertEqual(restore.count('AquaWordHistory.verifyProviderWriteback(item, readback);'), 1)
+        self.assertLess(restore.index('AquaWordHistory.verifyForRestore(item);'),
+                        restore.index('openOutputStream(target, "wt")'))
+        self.assertLess(restore.index('AquaWordHistory.restore(item, output);'),
+                        restore.index('openInputStream(target)'))
+        self.assertLess(restore.index('openInputStream(target)'),
+                        restore.index('AquaWordHistory.verifyProviderWriteback(item, readback);'))
+        self.assertLess(restore.index('AquaWordHistory.verifyProviderWriteback(item, readback);'),
+                        restore.index('success = true;'))
+        self.assertIn('catch (Exception failure)', restore)
+        self.assertIn('success = false;', restore)
+        self.assertIn('if (finished)\n                                open(target);', restore)
+        helper=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
+        self.assertIn('public static void verifyProviderWriteback(Snapshot snapshot, InputStream providerInput)', helper)
+
     def test_null_native_save_stream_retries_explicit_rwt(self):
         """A null wt stream from a crashed provider must try rwt, not w."""
         self.run_phase('source')
