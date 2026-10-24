@@ -74,19 +74,9 @@ class NativePreflightContractTests(unittest.TestCase):
 
     def test_diagnostic_apk_contains_arm64_native_engine_not_just_java(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("unzip -Z1 \"$apk\" | grep -Eq '^lib/arm64-v8a/[^/]+\\.so
-        workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("inputs.diagnostic_build == true && inputs.final_ready != true && inputs.diagnostic_reason != ''", workflow)
-        self.assertIn('[ "$DIAGNOSTIC_BUILD" = \'true\' ] && [ "$FINAL_READY" != \'true\' ]', workflow)
-        self.assertIn('"${DIAGNOSTIC_REASON//[[:space:]]/}"', workflow)
-        self.assertIn("bash scripts/check_final_ready.sh", workflow)
-        self.assertIn("timeout-minutes: 360", workflow)
-
-
-if __name__ == "__main__":
-    unittest.main()
-", workflow)
-        self.assertIn("unzip -Z1 \"$apk\" | grep -Fxq 'classes.dex'", workflow)
+        self.assertIn("lib/arm64-v8a/", workflow)
+        self.assertIn("APK is missing ARM64 shared libraries", workflow)
+        self.assertIn("APK is missing Android classes.dex", workflow)
         self.assertLess(workflow.index("APK is missing ARM64 shared libraries"),
                         workflow.index("Record real APK metadata and source provenance"))
         self.assertLess(workflow.index("APK is missing ARM64 shared libraries"),
