@@ -110,9 +110,13 @@ jobs:
           grep -q 'AQUAWORD_NATIVE_SAF_SAVE_BACK' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           # A native save must NEVER be acknowledged or snapshotted when the
           # actual Android document provider or resolved-file write fails.
-          grep -q 'private boolean copyTempBackToIntent()' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
-          grep -q 'private boolean copyTempBackToFile()' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
-          grep -q 'if (copyTempBackToIntent())' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          # These signatures must match the AquaWord serialized SAVE overlay,
+          # not the old upstream void methods removed by the patch.
+          # This preflight runs before any expensive native engine compilation.
+          grep -Fq 'private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination, java.io.File resolvedAtSave)' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -Fq 'private boolean copyTempBackToFile(java.io.File sourceFile, java.io.File resolvedFile)' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -Fq 'copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -Fq 'AquaWordHistory.verifyProviderWriteback(checkpoint, providerReadback)' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           grep -q 'AquaWord SAVE not acknowledged' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           git -C collabora diff --check
       - name: Check build interpreter dependencies before expensive compilation
