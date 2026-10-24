@@ -400,7 +400,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('AquaWord SAVE not acknowledged', method)
         # Only the failed SAF writeback branch must suppress SAVE. Native
         # file:// Writer saves are already persisted and are a separate case.
-        saf_failure=method.split('} else {', 1)[1].split('} catch (Exception failure)', 1)[0]
+        saf_failure=method.split('Log.e(TAG, "AquaWord SAVE not acknowledged', 1)[1].split(
+            '} catch (Exception failure)', 1)[0]
         self.assertNotIn('sendBroadcast(', saf_failure)
         self.assertIn('writerOutput.length() <= 0L', method)
 
@@ -489,7 +490,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         checkpoint=lib.split('private void captureNativeSaveCheckpoint(',1)[1].split(
             'private boolean documentLoaded',1)[0]
         direct=lib.split('private boolean copyTempBackToFile(java.io.File sourceFile, java.io.File resolvedFile) {',1)[1].split(
-            'private void reportSaveToFileFailed()',1)[0]
+            '\n    /**',1)[0]
         saf=lib.split('private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination, java.io.File resolvedAtSave) {',1)[1].split(
             '/** Copy the temp file back to the document. */',1)[0]
         self.assertEqual(checkpoint.count('AQUAWORD_RESOLVED_FILE_READBACK'),1)
@@ -518,7 +519,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         saf=lib.split('private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination, java.io.File resolvedAtSave) {',1)[1].split(
             '/** Copy the temp file back to the document. */',1)[0]
         direct=lib.split('private boolean copyTempBackToFile(java.io.File sourceFile, java.io.File resolvedFile) {',1)[1].split(
-            'private void reportSaveToFileFailed()',1)[0]
+            '\n    /**',1)[0]
         self.assertIn('return copyTempBackToFile(sourceFile, resolvedAtSave);',saf)
         self.assertIn('new FileInputStream(sourceFile)',saf)
         self.assertIn('new FileInputStream(sourceFile)',direct)
