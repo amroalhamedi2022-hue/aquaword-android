@@ -542,7 +542,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.run_phase('source')
         lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
         self.assertEqual(lib.count('AQUAWORD_DURABLE_SAVE_BARRIER'),1)
-        self.assertIn('java.util.concurrent.Executors.newSingleThreadExecutor(',lib)
+        self.assertIn('new java.util.concurrent.ThreadPoolExecutor(',lib)
         self.assertIn('mAquaWordSaveExecutor.shutdown();',lib)
         self.assertIn('copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)',lib)
         saf=lib.split('private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination, java.io.File resolvedAtSave) {',1)[1].split(
@@ -555,6 +555,31 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertNotIn('new FileInputStream(mTempFile)',saf+direct)
         self.assertIn('catch (java.util.concurrent.RejectedExecutionException shutdown)',lib)
         self.assertIn('saved.close()',lib)
+
+    def test_stalled_saf_provider_cannot_queue_unbounded_native_saves(self):
+        """Source contract only: cap queued open Writer descriptors on stalled SAF.
+
+        This does not interrupt a provider blocked inside read/write, and
+        does not establish Android runtime or memory-performance results.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # overlay remains idempotent
+        lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        checkpoint=lib.split('private void captureNativeSaveCheckpoint(',1)[1].split(
+            'private boolean documentLoaded',1)[0]
+        self.assertEqual(checkpoint.count('AQUAWORD_BOUNDED_SAVE_QUEUE'),1)
+        self.assertIn('AQUAWORD_MAX_PENDING_SAVES = 8;',checkpoint)
+        self.assertIn('new java.util.concurrent.ThreadPoolExecutor(',checkpoint)
+        self.assertIn('new java.util.concurrent.ArrayBlockingQueue<Runnable>(',checkpoint)
+        self.assertIn('AQUAWORD_MAX_PENDING_SAVES)',checkpoint)
+        self.assertIn('new java.util.concurrent.ThreadPoolExecutor.AbortPolicy()',checkpoint)
+        self.assertNotIn('Executors.newSingleThreadExecutor(',checkpoint)
+        self.assertIn('catch (java.util.concurrent.RejectedExecutionException shutdown)',checkpoint)
+        rejected=checkpoint.split(
+            'catch (java.util.concurrent.RejectedExecutionException shutdown)',1)[1]
+        self.assertIn('saved.close();',rejected)
+        self.assertNotIn('sendBroadcast(',rejected)
+        self.assertIn('mAquaWordSaveExecutor.shutdown();',lib)
 
     def test_save_callbacks_create_real_history_checkpoints(self):
         self.run_phase('source')
