@@ -580,6 +580,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         rejected=checkpoint.split(
             'catch (java.util.concurrent.RejectedExecutionException shutdown)',1)[1]
         self.assertIn('saved.close();',rejected)
+        self.assertIn('queue full or Activity destroyed',rejected)
+        self.assertIn('Toast.makeText(this, R.string.failed_to_save_file, Toast.LENGTH_LONG)',rejected)
         self.assertNotIn('sendBroadcast(',rejected)
         self.assertIn('mAquaWordSaveExecutor.shutdown();',lib)
 
