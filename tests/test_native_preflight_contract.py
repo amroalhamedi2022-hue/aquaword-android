@@ -76,7 +76,7 @@ class NativePreflightContractTests(unittest.TestCase):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("inputs.diagnostic_build == true && inputs.final_ready != true && inputs.diagnostic_reason != ''", workflow)
         self.assertIn('"$DIAGNOSTIC_BUILD" = \'true\' && [ "$FINAL_READY" != \'true\' ]', workflow)
-        self.assertIn('"\${DIAGNOSTIC_REASON//[[:space:]]/}"', workflow)
+        self.assertIn('"${DIAGNOSTIC_REASON//[[:space:]]/}"', workflow)
         self.assertIn("bash scripts/check_final_ready.sh", workflow)
         self.assertIn("timeout-minutes: 360", workflow)
 
