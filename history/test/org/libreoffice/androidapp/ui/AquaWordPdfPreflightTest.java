@@ -95,7 +95,12 @@ public final class AquaWordPdfPreflightTest {
 
             rejects(new File(temp, "missing.pdf"), "missing file should fail");
             rejects(null, "null source should fail");
-            System.out.println("PASS: PDF header, classic/stream/incremental xref, EOF, offsets and negative cases");
+            // CI may pass real PDFs exported by desktop LibreOffice here.
+            // This is a source-level compatibility check, not Android runtime.
+            for (String exported : args)
+                AquaWordPdfPreflight.requirePlausiblePdf(new File(exported));
+            System.out.println("PASS: PDF header, classic/stream/incremental xref, EOF, offsets and negative cases"
+                    + "; real LibreOffice exports checked: " + args.length);
         } finally {
             pdf.delete();
             temp.delete();
