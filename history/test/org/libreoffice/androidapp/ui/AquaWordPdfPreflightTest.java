@@ -53,6 +53,24 @@ public final class AquaWordPdfPreflightTest {
             Files.write(pdf.toPath(), ascii(incrementalPdf()));
             AquaWordPdfPreflight.requirePlausiblePdf(pdf);
 
+            // A legitimate xref-stream dictionary can extend beyond 96 bytes.
+            String header = "%PDF-1.7\n";
+            String largeDictionary = "1 0 obj\n<< /Length 0 " + " ".repeat(180) +
+                    " /Type /XRef /Size 2 /W [1 2 1] >>\nstream\n\nendstream\nendobj\n";
+            Files.write(pdf.toPath(), ascii(header + largeDictionary +
+                    "startxref\n" + header.length() + "\n%%EOF\n"));
+            AquaWordPdfPreflight.requirePlausiblePdf(pdf);
+
+            Files.write(pdf.toPath(), ascii("%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\n" +
+                    "endobj\nstartxref\n9\n%%EOF\n"));
+            rejects(pdf, "startxref pointing at a normal object must fail");
+            Files.write(pdf.toPath(), ascii("%PDF-1.7\n1 0 obj\n<< /Length 0 >>\n" +
+                    "stream\n\nendstream\nendobj\nstartxref\n9\n%%EOF\n"));
+            rejects(pdf, "xref stream without /Type /XRef must fail");
+            Files.write(pdf.toPath(), ascii(classicPdf().replace(
+                    "0000000000 65535 f", "not-an-xref-entry")));
+            rejects(pdf, "classic xref table without entries must fail");
+
             Files.write(pdf.toPath(), ascii(classicPdf().replace("%%EOF", "%EOX")));
             rejects(pdf, "missing %%EOF should fail before SAF write");
             Files.write(pdf.toPath(), ascii(classicPdf().replace("%PDF-1.7", "NOTPDF!!")));
