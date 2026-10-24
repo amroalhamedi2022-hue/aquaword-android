@@ -397,7 +397,7 @@ def patch_native_export_writeback(path: Path) -> bool:
                 final File exportSource = new File(pendingExport);
                 final Uri exportTarget = intent.getData();
                 if (!exportSource.isFile() || exportSource.length() <= 0L) {
-                    Toast.makeText(this, "Export source is missing or empty",
+                    Toast.makeText(this, R.string.aquaword_export_missing,
                             Toast.LENGTH_LONG).show();
                     return;
                 }
@@ -486,19 +486,27 @@ def patch_native_export_writeback(path: Path) -> bool:
                             Log.e(TAG, "AquaWord PDF export not verified; source retained", exportFailure);
                             runOnUiThread(() -> {
                                 if (!isFinishing() && !isDestroyed())
-                                    Toast.makeText(this,
-                                            "Export could not be verified. Please try again.",
+                                    Toast.makeText(this, R.string.aquaword_export_unverified,
                                             Toast.LENGTH_LONG).show();
                             });
                         }
                         if (verified && !exportSource.delete())
                             Log.w(TAG, "Verified export source cleanup deferred: " + exportSource);
+                        if (verified) {
+                            // AQUAWORD_EXPORT_VERIFIED_FEEDBACK: only report
+                            // success after provider SHA-256 readback matches.
+                            runOnUiThread(() -> {
+                                if (!isFinishing() && !isDestroyed())
+                                    Toast.makeText(this, R.string.aquaword_export_verified,
+                                            Toast.LENGTH_SHORT).show();
+                            });
+                        }
                     });
                 } catch (java.util.concurrent.RejectedExecutionException rejected) {
                     // Do not discard the native export when the bounded queue
                     // is full or this Activity is shutting down.
                     Log.e(TAG, "AquaWord export queue full; source retained", rejected);
-                    Toast.makeText(this, "Export is busy. Please try again.",
+                    Toast.makeText(this, R.string.aquaword_export_busy,
                             Toast.LENGTH_LONG).show();
                 }
                 return;
@@ -1130,6 +1138,28 @@ def copy_debug_qa_file_provider(repo: Path) -> int:
             changed += 1
     return changed
 
+def copy_native_export_strings(repo: Path) -> int:
+    """Install PDF export feedback in the native library resource namespace.
+
+    LOActivity belongs to :lib; app-only string definitions cannot satisfy
+    references in that module at Java compile time.
+    """
+    changed = 0
+    for qualifier, filename in (
+            ('values', 'native_export_strings.xml'),
+            ('values-ar', 'native_export_strings_ar.xml')):
+        src = require(ROOT/'branding'/filename)
+        target = repo/'android/lib/src/main/res'/qualifier/'aquaword_export.xml'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.is_file():
+            if target.read_bytes() != src.read_bytes():
+                raise PatchError(f'Conflicting native PDF export resources: {target}')
+            continue
+        shutil.copyfile(src, target)
+        changed += 1
+    return changed
+
+
 def copy_history_source(repo: Path) -> bool:
     src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
     target = repo/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java'
@@ -1193,6 +1223,7 @@ def source(repo: Path) -> None:
     print('SAF native saveback error detection:', patch_native_saf_saveback(targets[11]))
     print('Verified asynchronous native PDF export:', patch_native_export_writeback(targets[11]))
     print('History storage class:', copy_history_source(repo))
+    print('Native PDF export locale resources:', copy_native_export_strings(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Debug-only real ContentProvider test route:', copy_debug_qa_file_provider(repo))
     print('Icons copied:', copy_icons(repo))

@@ -284,3 +284,11 @@ The fast-source and integration contracts passed for the tested code SHA. Review
 - **Regression:** `test_pdf_export_checks_signature_before_saf_and_requires_truncate` verifies the ordering, no ambiguous `"w"` fallback, and overlay idempotence. Android provider behavior, full PDF structural validity, print flow, and end-to-end export remain **NOT TESTED**.
 - **Evidence:** Android ContentResolver documentation warns that `"w"` may not truncate; ISO 32000-1 section 7.5.2 defines the `%PDF-` header. This is source hardening, not a claim of runtime PDF correctness.
 - **CI status at edit:** pending new branch commit; do not infer a PASS from the prior green commit `da93d64a7d80da6a80d166d7031005daa875789f`.
+
+## 2026-10-24 — Native PDF export feedback localized in library (source only)
+
+- Added English and Palestinian-readable Arabic export messages in `android/lib` resource namespace (not only the app module), covering missing source, failed SHA-256 verification, saturated export queue, and verified success.
+- A success toast is scheduled only after byte-count and SHA-256 readback of the SAF destination; failed exports retain the native temporary file and never display a success message.
+- New source regression `test_pdf_export_feedback_is_localized_in_native_library` verifies both XML resource sets, Java references, ordering, and idempotent overlay.
+- **Android/SAF provider/runtime export still NOT TESTED**. This is localized source wiring, not proof of on-device PDF rendering or print support.
+- **CI at edit:** pending verification on the new commit; previous commit `dd739087c6c35db4790fd4b887d3d30076049a67` passed source/integration but cannot validate this follow-up.

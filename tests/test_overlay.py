@@ -397,6 +397,30 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertEqual(native,(self.path/
             'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text())
 
+    def test_pdf_export_feedback_is_localized_in_native_library(self):
+        """Export success is shown only after SHA readback; lib owns R.string."""
+        import xml.etree.ElementTree as ET
+        self.run_phase('source')
+        native=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        section=native.split('case REQUEST_EXPORT_FILE: {',1)[1].split(
+            'case REQUEST_SAVEAS_PDF:',1)[0]
+        keys=('aquaword_export_missing','aquaword_export_unverified',
+              'aquaword_export_busy','aquaword_export_verified')
+        for locale in ('values','values-ar'):
+            path=self.path/'android/lib/src/main/res'/locale/'aquaword_export.xml'
+            root=ET.parse(path).getroot()
+            values={element.attrib['name']:element.text
+                    for element in root.findall('string')}
+            self.assertEqual(set(values),set(keys))
+            self.assertTrue(all(values[k] and values[k].strip() for k in keys))
+        for key in keys:
+            self.assertIn('R.string.'+key,section)
+        self.assertIn('AQUAWORD_EXPORT_VERIFIED_FEEDBACK',section)
+        self.assertLess(section.index('readBytes != written'),
+                        section.index('if (verified) {'))
+        self.assertNotIn('"Export could not be verified. Please try again."',section)
+        self.run_phase('source')  # native resources are copied idempotently
+
     def test_exportfile_upstream_drift_rejected(self):
         native=self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java'
         native.write_text(native.read_text().replace(
