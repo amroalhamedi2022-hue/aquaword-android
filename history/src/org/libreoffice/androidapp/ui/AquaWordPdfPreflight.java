@@ -25,7 +25,7 @@ public final class AquaWordPdfPreflight {
                     header[3] != 'F' || header[4] != '-')
                 throw new IOException("Native export is not a PDF");
             // PDF incremental updates may have multiple EOF markers. The last
-            // one should be near the end; allow whitespace/trailing bytes.
+            // one must terminate the export with only PDF whitespace following.
             final int window = (int) Math.min(length, TRAILER_WINDOW_BYTES);
             byte[] tail = new byte[window];
             source.seek(length - window);
