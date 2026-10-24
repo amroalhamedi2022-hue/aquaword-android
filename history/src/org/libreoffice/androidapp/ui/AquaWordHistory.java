@@ -94,8 +94,17 @@ public final class AquaWordHistory {
             try (FileOutputStream output = new FileOutputStream(temp)) {
                 byte[] buffer = new byte[64 * 1024];
                 int count;
+                int noProgressReads = 0;
                 while ((count = input.read(buffer)) != -1) {
-                    if (count == 0) continue;
+                    // A nonconforming cloud/provider stream can repeatedly
+                    // return zero for a nonempty buffer. Never spin forever
+                    // while holding the synchronized history lock.
+                    if (count == 0) {
+                        if (++noProgressReads >= 8)
+                            throw new IOException("Document input stream made no progress");
+                        continue;
+                    }
+                    noProgressReads = 0;
                     length += count;
                     if (length > MAX_SINGLE_BYTES)
                         throw new IOException("Document exceeds local safety-copy size limit");
@@ -186,6 +195,33 @@ public final class AquaWordHistory {
         return results;
     }
 
+    /**
+     * Name a native post-save checkpoint using the latest pre-edit record.
+     * The pre-edit flow already resolved OpenableColumns on a background
+     * thread. Writer SAVE must never wait for a cloud provider metadata query
+     * before persisting the edited bytes.
+     *
+     * Source SHA-256 keeps identically named documents from being confused.
+     * Missing/corrupt metadata is only a naming failure, not a SAVE failure.
+     */
+    public static synchronized String preferredDisplayName(File appFilesDir,
+            String sourceIdentity, String fallbackName) {
+        final String fallback = sanitizeName(fallbackName);
+        if (sourceIdentity == null || sourceIdentity.isEmpty())
+            return fallback;
+        try {
+            final String sourceHash = hex(digest().digest(
+                    sourceIdentity.getBytes(StandardCharsets.UTF_8)));
+            for (Snapshot entry : readAll(folder(appFilesDir))) {
+                if (entry.sourceHash.equals(sourceHash) && "pre-edit".equals(entry.kind))
+                    return entry.displayName;
+            }
+        } catch (IOException failure) {
+            // A display name must never prevent an otherwise recoverable SAVE.
+        }
+        return fallback;
+    }
+
     public static synchronized List<Snapshot> list(File appFilesDir) throws IOException {
         return Collections.unmodifiableList(readAll(folder(appFilesDir)));
     }
@@ -220,16 +256,56 @@ public final class AquaWordHistory {
         }
     }
 
-    public static void restore(Snapshot snapshot, OutputStream target) throws IOException {
-        if (snapshot == null || target == null) throw new IOException("Missing recovery destination");
-        // Verify before writing any bytes to the selected user document.
+    /**
+     * Validate a private recovery snapshot BEFORE opening a SAF destination.
+     * Opening a provider output stream in "wt"/"rwt" may truncate its existing
+     * document immediately, even if restore() would later reject corrupt bytes.
+     * Call this before ContentResolver.openOutputStream(), not afterwards.
+     */
+    public static synchronized void verifyForRestore(Snapshot snapshot) throws IOException {
+        if (snapshot == null || !verifyBytes(snapshot))
+            throw new IOException("Recovery snapshot missing or checksum mismatch");
+    }
+
+    /**
+     * SAF read-after-write contract: verify bytes actually returned by the
+     * provider match the already fsynced private recovery checkpoint.
+     * This does not prove cloud sync, atomicity, or power-loss durability.
+     * The caller owns/closes providerInput; do not hold the history lock
+     * during slow remote provider I/O.
+     */
+    public static void verifyProviderWriteback(Snapshot snapshot, InputStream providerInput)
+            throws IOException {
+        if (snapshot == null || providerInput == null)
+            throw new IOException("SAF provider readback unavailable");
         MessageDigest checksum = digest();
-        try (DigestInputStream in = new DigestInputStream(new FileInputStream(snapshot.file), checksum)) {
-            byte[] buffer = new byte[64 * 1024];
-            while (in.read(buffer) != -1) { /* read to verify */ }
+        byte[] buffer = new byte[64 * 1024];
+        long received = 0L;
+        int noProgress = 0;
+        int count;
+        while ((count = providerInput.read(buffer)) != -1) {
+            if (count == 0) {
+                if (++noProgress >= 8)
+                    throw new IOException("SAF provider readback made no progress");
+                continue;
+            }
+            noProgress = 0;
+            received += count;
+            if (received > snapshot.sizeBytes)
+                throw new IOException("SAF provider returned extra bytes");
+            checksum.update(buffer, 0, count);
         }
-        if (!hex(checksum.digest()).equals(snapshot.sha256))
-            throw new IOException("Snapshot checksum mismatch — recovery cancelled");
+        if (received != snapshot.sizeBytes ||
+                !hex(checksum.digest()).equals(snapshot.sha256))
+            throw new IOException("SAF provider readback checksum/size mismatch");
+    }
+
+    // Keep retention/trim from deleting a snapshot midway through restore.
+    public static synchronized void restore(Snapshot snapshot, OutputStream target) throws IOException {
+        if (snapshot == null || target == null) throw new IOException("Missing recovery destination");
+        // Re-verify at copy time, since callers outside SAF may use restore()
+        // directly. Both this check and the provider preflight are intentional.
+        verifyForRestore(snapshot);
         try (InputStream in = new FileInputStream(snapshot.file)) {
             byte[] buffer = new byte[64 * 1024];
             int n;

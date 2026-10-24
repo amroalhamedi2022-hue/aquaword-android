@@ -31,6 +31,40 @@ public class AquaWordHistoryTest {
                 root, new ByteArrayInputStream("saved writer revision".getBytes("UTF-8")),
                 "قصتي.docx", "content://new/document", "saved");
             check("saved".equals(savedVersion.kind), "saved checkpoint metadata lost");
+            // A provider may accept every output.write yet silently return
+            // stale, truncated, appended or corrupted bytes on readback.
+            byte[] expectedWriteback = "saved writer revision".getBytes("UTF-8");
+            AquaWordHistory.verifyProviderWriteback(savedVersion,
+                    new ByteArrayInputStream(expectedWriteback));
+            boolean shortReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion,
+                    new ByteArrayInputStream("saved writer".getBytes("UTF-8"))); }
+            catch (IOException expected) { shortReadbackRejected = true; }
+            check(shortReadbackRejected, "truncated SAF readback accepted");
+            byte[] wrongWriteback = Arrays.copyOf(expectedWriteback, expectedWriteback.length);
+            wrongWriteback[0] ^= 1;
+            boolean corruptedReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion,
+                    new ByteArrayInputStream(wrongWriteback)); }
+            catch (IOException expected) { corruptedReadbackRejected = true; }
+            check(corruptedReadbackRejected, "same-size corrupted SAF readback accepted");
+            boolean appendedReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion,
+                    new ByteArrayInputStream((new String(expectedWriteback, "UTF-8") + "x").getBytes("UTF-8"))); }
+            catch (IOException expected) { appendedReadbackRejected = true; }
+            check(appendedReadbackRejected, "appended SAF readback accepted");
+            boolean missingReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion, null); }
+            catch (IOException expected) { missingReadbackRejected = true; }
+            check(missingReadbackRejected, "null SAF readback accepted");
+            InputStream zeroReadback = new InputStream() {
+                @Override public int read() { return 0; }
+                @Override public int read(byte[] b, int off, int len) { return 0; }
+            };
+            boolean stalledReadbackRejected = false;
+            try { AquaWordHistory.verifyProviderWriteback(savedVersion, zeroReadback); }
+            catch (IOException expected) { stalledReadbackRejected = true; }
+            check(stalledReadbackRejected, "non-progressing SAF readback accepted");
             AquaWordHistory.Snapshot matchingPreEdit = AquaWordHistory.capture(
                 root, new ByteArrayInputStream("saved writer revision".getBytes("UTF-8")),
                 "قصتي.docx", "content://new/document", "pre-edit");
@@ -54,6 +88,25 @@ public class AquaWordHistoryTest {
             AquaWordHistory.Snapshot sourceB = AquaWordHistory.capture(
                 root, new ByteArrayInputStream(sameBytes), "duplicate-name.docx", "content://provider-b/789");
             check(!sourceA.file.equals(sourceB.file), "distinct source identities were incorrectly merged");
+            // Native SAVE obtains its display name locally from the pre-edit
+            // snapshot, never from a possibly hung cloud ContentResolver.
+            check("duplicate-name.docx".equals(AquaWordHistory.preferredDisplayName(
+                    root, "content://provider-a/123", "opaque-a")),
+                    "same-source pre-edit name not recovered");
+            check("duplicate-name.docx".equals(AquaWordHistory.preferredDisplayName(
+                    root, "content://provider-b/789", "opaque-b")),
+                    "second provider source not resolved independently");
+            check("opaque_unknown".equals(AquaWordHistory.preferredDisplayName(
+                    root, "content://missing/0", "opaque/unknown")),
+                    "unknown source must use sanitized fallback");
+            check("Untitled Document".equals(AquaWordHistory.preferredDisplayName(
+                    root, null, null)), "missing source must have safe fallback");
+            AquaWordHistory.capture(root,
+                    new ByteArrayInputStream("later Writer revision".getBytes("UTF-8")),
+                    "wrong-saved-name.docx", "content://provider-a/123", "saved");
+            check("duplicate-name.docx".equals(AquaWordHistory.preferredDisplayName(
+                    root, "content://provider-a/123", "opaque-a")),
+                    "saved checkpoint must not override original pre-edit name");
             AquaWordHistory.Snapshot sourceAAgain = AquaWordHistory.capture(
                 root, new ByteArrayInputStream(sameBytes), "duplicate-name.docx", "content://provider-a/123");
             check(sourceAAgain.file.equals(sourceA.file), "unchanged same-source duplicate not deduplicated");
@@ -72,6 +125,9 @@ public class AquaWordHistoryTest {
             AquaWordHistory.restore(repaired, repairedData);
             check(Arrays.equals(sameBytes, repairedData.toByteArray()), "fresh copy must be readable");
 
+            // Preflight must succeed while the private recovery bytes are
+            // intact, before a SAF provider is opened in truncating mode.
+            AquaWordHistory.verifyForRestore(s);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             AquaWordHistory.restore(s, out);
             check(Arrays.equals(unicode, out.toByteArray()), "roundtrip");
@@ -81,11 +137,68 @@ public class AquaWordHistoryTest {
             try (FileOutputStream flip = new FileOutputStream(s.file)) {
                 flip.write(new byte[]{9,9,9,9,9});
             }
+            // Simulate a previously captured snapshot being corrupted.
+            // In Android the preflight runs before ContentResolver opens
+            // a potentially destructive "wt"/"rwt" output stream.
+            boolean preflightRejected = false;
+            try { AquaWordHistory.verifyForRestore(s); }
+            catch (IOException expected) { preflightRejected = true; }
+            check(preflightRejected, "corrupt snapshot was accepted for provider write");
             ByteArrayOutputStream corrupt = new ByteArrayOutputStream();
             boolean rejected = false;
             try { AquaWordHistory.restore(s, corrupt); }
             catch (IOException expected) { rejected = true; }
             check(rejected && corrupt.size() == 0, "corrupt data rejected before write");
+            AquaWordHistory.Snapshot missing = AquaWordHistory.capture(
+                root, new ByteArrayInputStream("missing-file-test".getBytes("UTF-8")),
+                "missing-file.docx", "content://missing/provider");
+            check(missing.file.delete(), "could not simulate lost recovery snapshot");
+            boolean missingRejected = false;
+            try { AquaWordHistory.verifyForRestore(missing); }
+            catch (IOException expected) { missingRejected = true; }
+            check(missingRejected, "missing snapshot was accepted for provider write");
+            // A broken SAF provider may violate InputStream's progress
+            // contract. Capture must fail promptly and clean partial files,
+            // rather than hold the synchronized history lock indefinitely.
+            int beforeStall = AquaWordHistory.list(root).size();
+            InputStream stalledProvider = new InputStream() {
+                @Override public int read() { return 0; }
+                @Override public int read(byte[] buffer, int off, int len) { return 0; }
+            };
+            boolean stallRejected = false;
+            try {
+                AquaWordHistory.capture(root, stalledProvider, "stalled.docx",
+                        "content://stalled/provider");
+            } catch (IOException expected) {
+                stallRejected = expected.getMessage().contains("no progress");
+            }
+            check(stallRejected, "zero-progress provider must fail without hanging");
+            check(AquaWordHistory.list(root).size() == beforeStall,
+                    "failed provider must not create a committed recovery snapshot");
+            File historyDir = new File(root, "aquaword-history");
+            File[] partials = historyDir.listFiles((dir, filename) ->
+                    filename.endsWith(".partial") || filename.endsWith(".meta-partial"));
+            check(partials != null && partials.length == 0,
+                    "failed provider left a temporary snapshot behind");
+
+            // A brief intermittent zero read is recoverable; a successful
+            // subsequent read must reset the consecutive-stall counter.
+            InputStream intermittentProvider = new InputStream() {
+                private int phase = 0;
+                @Override public int read() { return phase++ < 3 ? 0 : -1; }
+                @Override public int read(byte[] buffer, int off, int len) {
+                    if (phase++ < 3) return 0;
+                    if (phase == 4) { buffer[off] = 65; return 1; }
+                    return -1;
+                }
+            };
+            AquaWordHistory.Snapshot recoveredAfterPause = AquaWordHistory.capture(
+                    root, intermittentProvider, "intermittent.docx",
+                    "content://intermittent/provider");
+            ByteArrayOutputStream afterPause = new ByteArrayOutputStream();
+            AquaWordHistory.restore(recoveredAfterPause, afterPause);
+            check(Arrays.equals(new byte[]{65}, afterPause.toByteArray()),
+                    "intermittent provider lost valid document bytes");
             byte[] huge = new byte[1024];
             for (int i = 0; i < 65; i++) {
                 AquaWordHistory.capture(root, new ByteArrayInputStream(huge), "sample"+i+".odt");

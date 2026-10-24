@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="aquaword_export_missing">تعذّر تصدير PDF: الملف المؤقت مفقود أو فارغ.</string>
+    <string name="aquaword_export_unverified">تعذّر التحقق من تصدير PDF. تم الاحتفاظ بالنسخة المؤقتة.</string>
+    <string name="aquaword_export_busy">تصدير PDF مشغول حاليًا. حاول مرة أخرى.</string>
+    <string name="aquaword_export_verified">تم تصدير PDF بنجاح.</string>
+</resources>
