@@ -37,6 +37,14 @@ public final class AquaWordPdfPreflightTest {
                 out.write(padded);
             }
             rejects(pdf, "EOF outside bounded trailer window should fail");
+            Files.write(pdf.toPath(), "%PDF-1.7\n%%EOF\nTRAILING-JUNK\n".getBytes(StandardCharsets.US_ASCII));
+            rejects(pdf, "EOF followed by junk must not pass preflight");
+            Files.write(pdf.toPath(), "%PDF-1.7\n%%EOFnot-a-marker\n".getBytes(StandardCharsets.US_ASCII));
+            rejects(pdf, "embedded EOF prefix must not pass preflight");
+            Files.write(pdf.toPath(), "%PDF-1.7\nstream %%EOF\n".getBytes(StandardCharsets.US_ASCII));
+            rejects(pdf, "EOF inside a data line must not pass preflight");
+            Files.write(pdf.toPath(), "%PDF-1.7\r\n%%EOF\r\n \t\f".getBytes(StandardCharsets.US_ASCII));
+            AquaWordPdfPreflight.requirePlausiblePdf(pdf);
             Files.write(pdf.toPath(), "%PDF-1.7\n%%EOF\n1 0 obj\n%%EOF\n".getBytes(StandardCharsets.US_ASCII));
             AquaWordPdfPreflight.requirePlausiblePdf(pdf);
             rejects(new File(temp, "missing.pdf"), "missing file should fail");

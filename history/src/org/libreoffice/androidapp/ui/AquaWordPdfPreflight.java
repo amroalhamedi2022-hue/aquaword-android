@@ -30,17 +30,36 @@ public final class AquaWordPdfPreflight {
             byte[] tail = new byte[window];
             source.seek(length - window);
             source.readFully(tail);
+            // An EOF token inside a stream or followed by non-whitespace
+            // must not pass preflight. Incremental PDFs can have earlier
+            // markers; only a line-start marker with a clean suffix counts.
             boolean found = false;
-            for (int i = 0; i <= window - 5; i++) {
-                if (tail[i] == '%' && tail[i + 1] == '%' &&
-                        tail[i + 2] == 'E' && tail[i + 3] == 'O' &&
-                        tail[i + 4] == 'F') {
+            for (int i = window - 5; i >= 0; i--) {
+                if (tail[i] != '%' || tail[i + 1] != '%' ||
+                        tail[i + 2] != 'E' || tail[i + 3] != 'O' ||
+                        tail[i + 4] != 'F')
+                    continue;
+                if (i == 0 && length != window)
+                    continue; // Cannot verify the preceding line boundary.
+                if (i > 0 && tail[i - 1] != '\n' && tail[i - 1] != '\r')
+                    continue;
+                boolean cleanSuffix = true;
+                for (int j = i + 5; j < window; j++) {
+                    byte b = tail[j];
+                    // PDF whitespace: NUL, TAB, LF, FF, CR, SPACE.
+                    if (b != 0 && b != 9 && b != 10 &&
+                            b != 12 && b != 13 && b != 32) {
+                        cleanSuffix = false;
+                        break;
+                    }
+                }
+                if (cleanSuffix) {
                     found = true;
                     break;
                 }
             }
             if (!found)
-                throw new IOException("Native PDF export has no trailing EOF marker");
+                throw new IOException("Native PDF export lacks a final EOF line");
         }
     }
 }
