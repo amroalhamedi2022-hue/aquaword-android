@@ -31,6 +31,18 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertNotIn("grep -q 'private boolean copyTempBackToFile()'", workflow)
         self.assertNotIn("grep -q 'if (copyTempBackToIntent())'", workflow)
 
+    def test_pdf_export_source_gate_before_native_packaging(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        overlay = OVERLAY.read_text(encoding="utf-8")
+        fast = (ROOT / ".github/workflows/fast-source-contract.yml").read_text(encoding="utf-8")
+        self.assertIn("def patch_native_export_writeback(", overlay)
+        self.assertIn("AQUAWORD_VERIFIED_ASYNC_EXPORT", overlay)
+        self.assertIn("grep -q 'AQUAWORD_VERIFIED_ASYNC_EXPORT'", workflow)
+        self.assertIn("javalang.parse.parse(native_source)", fast)
+        self.assertIn("native_source.count('AQUAWORD_VERIFIED_ASYNC_EXPORT') == 1", fast)
+        self.assertLess(workflow.index("grep -q 'AQUAWORD_VERIFIED_ASYNC_EXPORT'"),
+                        workflow.index("- name: Build or safely reuse LibreOffice native ARM64 engine"))
+
     def test_preflight_runs_before_expensive_native_engine(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         preflight = workflow.index("grep -Fq '" + EXPECTED[0] + "'")
