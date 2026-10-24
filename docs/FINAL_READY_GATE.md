@@ -2,6 +2,13 @@
 
 Status: **BLOCKED**. Do not create an approval file or run native packaging while any acceptance requirement is incomplete.
 
+
+## Diagnostic build policy — 24 October 2026
+
+A purposeful internal build is allowed before final acceptance when source tests cannot answer a specific integration question (for example, ARM64 Collabora compile, SAF runtime persistence, or real-device PDF export). Record the question, source SHA, runner cost, outcome and NOT TESTED device gates before requesting it. Do not repeat builds without relevant changes. Diagnostic artifacts are **UNVERIFIED** and must never be presented as final releases.
+
+**Current workflow limitation:** `android-native.yml` and `queue-current-native-once.yml` still require Final-Ready approval. This document does **not** bypass that gate or authorize creating a false approval. A separate, explicit manual diagnostic input and guarded workflow implementation with source checks, deduplication and no public release must be reviewed before diagnostic builds can run. No automatic push-triggered packaging.
+
 ## Why this gate exists
 
 A previous `.github/workflows/queue-current-native-once.yml` automatically dispatched an APK-building workflow after a push modifying that queue file on `main`. The development-branch version is now manual-only. `android-native.yml` also requires an explicit manual boolean `final_ready=true`. Both require `scripts/check_final_ready.sh` to pass before any build/dispatch step. **These protections do not affect `main` until reviewed and merged by an authorized maintainer; this PR must remain Draft and is not auto-merged.**
