@@ -148,9 +148,22 @@ def patch_native_save_checkpoints(path: Path) -> bool:
                     AquaWordHistory.verifyForRestore(checkpoint);
                     // Write the immutable verified revision, not mTempFile:
                     // subsequent Writer saves must not change the payload.
-                    if (directWriterFile || copyTempBackToIntent(checkpoint.file, original)) {
-                        // file:// was already persisted by native Writer; the
-                        // content:// path needs explicit verified writeback.
+                    boolean written = directWriterFile ||
+                            copyTempBackToIntent(checkpoint.file, original);
+                    // AQUAWORD_SAF_READBACK_BARRIER: a provider can silently
+                    // truncate/corrupt bytes while accepting all writes.
+                    // Only acknowledge a content:// SAVE if reopening it
+                    // returns the exact fsynced recovery checkpoint bytes.
+                    // Keep the checkpoint on any failure or stale readback.
+                    if (written && !directWriterFile && mResolvedFile == null) {
+                        try (InputStream providerReadback =
+                                     getContentResolver().openInputStream(original)) {
+                            AquaWordHistory.verifyProviderWriteback(checkpoint, providerReadback);
+                        }
+                    }
+                    if (written) {
+                        // file:// was already persisted by native Writer;
+                        // resolved local copies use their own file write path.
                         sendBroadcast(saveMessage[0], saveMessage[1]);
                     } else {
                         Log.e(TAG, "AquaWord SAVE not acknowledged because the original document was not written");
