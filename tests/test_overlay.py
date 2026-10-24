@@ -656,6 +656,34 @@ class AquaWordIntegrationTests(unittest.TestCase):
                         create.index('final boolean completed = !failed;'))
         self.assertIn('if (completed)\n                    open(uri);',create)
 
+    def test_new_document_provider_readback_verifies_sha_before_writer(self):
+        """Source-only regression: corrupt/short/extra SAF bytes cannot launch Writer.
+
+        This is not an Android provider or native engine runtime test.
+        """
+        self.run_phase('source')
+        self.run_phase('source')  # patch remains idempotent
+        activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
+        create=activity.split('private void createNewFile(final Uri uri, final String extension) {',1)[1].split(
+            '/** Context menu item handling. */',1)[0]
+        self.assertEqual(create.count('AQUAWORD_NEW_DOC_READBACK'),1)
+        self.assertIn('java.security.MessageDigest.getInstance("SHA-256")',create)
+        self.assertEqual(create.count('java.security.MessageDigest.getInstance("SHA-256")'),2)
+        self.assertIn('expectedDigest.update(buffer, 0, bytesRead);',create)
+        self.assertIn('getContentResolver().openInputStream(uri)',create)
+        self.assertIn('if (readback == null)',create)
+        self.assertIn('if (++noProgressReads >= 8)',create)
+        self.assertIn('if (verified > written)',create)
+        self.assertIn('if (verified != written ||',create)
+        self.assertIn('!java.util.Arrays.equals(expectedDigest.digest(), actualDigest.digest())',create)
+        self.assertIn('throw new IOException("New document failed SHA-256 readback verification")',create)
+        self.assertLess(create.index('output.flush();'),create.index('readback.read(verifyBuffer)'))
+        self.assertLess(create.index('readback.read(verifyBuffer)'),
+                        create.index('final boolean completed = !failed;'))
+        self.assertLess(create.index('if (verified != written ||'),
+                        create.index('if (completed)\n                    open(uri);'))
+        self.assertNotIn('getContentResolver().openOutputStream(uri, "w")',create)
+
     def test_async_create_rejects_changed_upstream(self):
         path=self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java'
         path.write_text('public class Changed {}', encoding='utf-8')
