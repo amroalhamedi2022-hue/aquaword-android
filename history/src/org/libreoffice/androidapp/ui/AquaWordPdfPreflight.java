@@ -3,63 +3,115 @@ package org.libreoffice.androidlib;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
 
-/** Lightweight PDF header/trailer check before a SAF destination is truncated.
- * This is not a full PDF parser or a guarantee that every PDF object is valid.
+/**
+ * Conservative structural preflight before truncating a SAF PDF destination.
+ * Checks the final cross-reference pointer without loading the whole file.
+ * This is NOT a full PDF parser, signature check, or proof of valid rendering.
  */
 public final class AquaWordPdfPreflight {
     private static final int TRAILER_WINDOW_BYTES = 4096;
+    private static final byte[] EOF = "%%EOF".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] STARTXREF = "startxref".getBytes(StandardCharsets.US_ASCII);
 
     private AquaWordPdfPreflight() { }
+
+    private static boolean whitespace(byte b) {
+        return b == 0 || b == 9 || b == 10 || b == 12 || b == 13 || b == 32;
+    }
+
+    private static boolean lineStart(byte[] bytes, int index) {
+        return index == 0 || bytes[index - 1] == '\n' || bytes[index - 1] == '\r';
+    }
+
+    private static boolean matches(byte[] bytes, int start, byte[] token) {
+        if (start < 0 || start + token.length > bytes.length) return false;
+        for (int j = 0; j < token.length; j++)
+            if (bytes[start + j] != token[j]) return false;
+        return true;
+    }
+
+    private static long finalStartXref(byte[] tail, int eofIndex, long tailBase)
+            throws IOException {
+        // The nearest line-start "startxref" must be the one paired with
+        // the final %%EOF, including in incrementally updated documents.
+        for (int i = eofIndex - STARTXREF.length; i >= 0; i--) {
+            if (!matches(tail, i, STARTXREF) || !lineStart(tail, i)) continue;
+            int p = i + STARTXREF.length;
+            while (p < eofIndex && (tail[p] == ' ' || tail[p] == '\t')) p++;
+            if (p >= eofIndex || (tail[p] != '\r' && tail[p] != '\n'))
+                throw new IOException("Malformed final PDF startxref line");
+            while (p < eofIndex && whitespace(tail[p])) p++;
+            if (p >= eofIndex || tail[p] < '0' || tail[p] > '9')
+                throw new IOException("Missing PDF cross-reference offset");
+            long offset = 0;
+            do {
+                int digit = tail[p] - '0';
+                if (offset > (Long.MAX_VALUE - digit) / 10)
+                    throw new IOException("PDF cross-reference offset overflow");
+                offset = offset * 10 + digit;
+                p++;
+            } while (p < eofIndex && tail[p] >= '0' && tail[p] <= '9');
+            while (p < eofIndex && whitespace(tail[p])) p++;
+            if (p != eofIndex || offset < 9 || offset >= tailBase + i)
+                throw new IOException("Invalid final PDF cross-reference pointer");
+            return offset;
+        }
+        throw new IOException("Native PDF export lacks final startxref");
+    }
+
+    private static void verifyCrossReference(RandomAccessFile source, long offset)
+            throws IOException {
+        source.seek(offset);
+        byte[] sample = new byte[(int) Math.min(96L, source.length() - offset)];
+        source.readFully(sample);
+        String start = new String(sample, StandardCharsets.US_ASCII);
+        // Classic xref table OR a PDF 1.5+ cross-reference stream object.
+        if (start.startsWith("xref") &&
+                (start.length() == 4 || Character.isWhitespace(start.charAt(4))))
+            return;
+        if (start.matches("(?s)^[0-9]+\\s+[0-9]+\\s+obj(?:\\s|<|\\[).*"))
+            return;
+        throw new IOException("PDF startxref does not reference a cross-reference structure");
+    }
 
     public static void requirePlausiblePdf(File file) throws IOException {
         if (file == null || !file.isFile())
             throw new IOException("Native PDF export is missing");
         try (RandomAccessFile source = new RandomAccessFile(file, "r")) {
-            final long length = source.length();
-            if (length < 10L)
+            long length = source.length();
+            if (length < 24)
                 throw new IOException("Native PDF export is too short");
-            byte[] header = new byte[5];
+            byte[] header = new byte[8];
             source.readFully(header);
             if (header[0] != '%' || header[1] != 'P' || header[2] != 'D' ||
-                    header[3] != 'F' || header[4] != '-')
-                throw new IOException("Native export is not a PDF");
-            // PDF incremental updates may have multiple EOF markers. The last
-            // one must terminate the export with only PDF whitespace following.
-            final int window = (int) Math.min(length, TRAILER_WINDOW_BYTES);
+                    header[3] != 'F' || header[4] != '-' ||
+                    !((header[5] == '1' && header[6] == '.' &&
+                            header[7] >= '0' && header[7] <= '7') ||
+                      (header[5] == '2' && header[6] == '.' && header[7] == '0')))
+                throw new IOException("Native export has no supported PDF version header");
+            int window = (int) Math.min(length, TRAILER_WINDOW_BYTES);
+            long base = length - window;
             byte[] tail = new byte[window];
-            source.seek(length - window);
+            source.seek(base);
             source.readFully(tail);
-            // An EOF token inside a stream or followed by non-whitespace
-            // must not pass preflight. Incremental PDFs can have earlier
-            // markers; only a line-start marker with a clean suffix counts.
-            boolean found = false;
-            for (int i = window - 5; i >= 0; i--) {
-                if (tail[i] != '%' || tail[i + 1] != '%' ||
-                        tail[i + 2] != 'E' || tail[i + 3] != 'O' ||
-                        tail[i + 4] != 'F')
+            // The final EOF must start on a line and have only PDF whitespace
+            // afterwards. Earlier EOFs are allowed for incremental updates.
+            for (int i = window - EOF.length; i >= 0; i--) {
+                if (!matches(tail, i, EOF) || !lineStart(tail, i) ||
+                        (i == 0 && base != 0))
                     continue;
-                if (i == 0 && length != window)
-                    continue; // Cannot verify the preceding line boundary.
-                if (i > 0 && tail[i - 1] != '\n' && tail[i - 1] != '\r')
-                    continue;
-                boolean cleanSuffix = true;
-                for (int j = i + 5; j < window; j++) {
-                    byte b = tail[j];
-                    // PDF whitespace: NUL, TAB, LF, FF, CR, SPACE.
-                    if (b != 0 && b != 9 && b != 10 &&
-                            b != 12 && b != 13 && b != 32) {
-                        cleanSuffix = false;
-                        break;
-                    }
+                boolean clean = true;
+                for (int j = i + EOF.length; j < window; j++) {
+                    if (!whitespace(tail[j])) { clean = false; break; }
                 }
-                if (cleanSuffix) {
-                    found = true;
-                    break;
-                }
+                if (!clean) continue;
+                long offset = finalStartXref(tail, i, base);
+                verifyCrossReference(source, offset);
+                return;
             }
-            if (!found)
-                throw new IOException("Native PDF export lacks a final EOF line");
+            throw new IOException("Native PDF export lacks a final EOF line");
         }
     }
 }
