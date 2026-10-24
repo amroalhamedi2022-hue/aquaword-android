@@ -280,6 +280,113 @@ jobs:
           AAPT="$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt"
           while IFS= read -r apk; do
             unzip -t "$apk" >/dev/null
+            # Compilation alone is not proof that the ARM64 native engine was
+            # packaged. A Java-only APK must fail this diagnostic milestone.
+            unzip -Z1 "$apk" | grep -Eq '^lib/arm64-v8a/[^/]+\.so
+            for template in research_en research_ar clinical_case study_notes blank; do
+              unzip -p "$apk" "assets/aquaword/$template.docx" > "output/$template.package.docx"
+              test -s "output/$template.package.docx"
+              cmp -s "templates/generated/$template.docx" "output/$template.package.docx"
+              rm -f "output/$template.package.docx"
+            done
+            cp "$apk" "output/AquaWord-$(basename "$apk")"
+          done < output/apk-paths.txt
+          (cd output && sha256sum -- *.apk > SHA256SUMS)
+          cp upstream-version.txt output/
+      # The account's Actions artifact quota is full. Keep generated files on
+      # this runner for runtime verification, rather than a doomed artifact upload.
+      - name: Record real APK metadata and source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '## AquaWord native APK build evidence' >> "$GITHUB_STEP_SUMMARY"
+          echo "Source commit: \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pinned Collabora: \`$UPSTREAM_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          cat output/SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
+          df -h . | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Verify installation and Arabic DOCX on a real Android emulator
+        if: ${{ !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          script: bash scripts/run_android_smoke.sh "$(find output -type f -name 'AquaWord-*.apk' -print -quit)" "$PWD/smoke-evidence"
+      - name: Record runtime result without consuming Actions artifact storage
+        if: always()
+        shell: bash
+        run: |
+          if [ -s smoke-evidence/smoke-result.txt ]; then
+            echo '## Android runtime evidence' >> "$GITHUB_STEP_SUMMARY"
+            cat smoke-evidence/smoke-result.txt >> "$GITHUB_STEP_SUMMARY"
+            if [ -s smoke-evidence/required-vs-actual.md ]; then
+              cat smoke-evidence/required-vs-actual.md >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo 'Android runtime smoke not verified; no release is authorized.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # Only after real Android edit-save-reopen succeeds, store as UNPUBLISHED
+      # draft Release to avoid exhausted Actions artifact storage.
+      - name: Preserve emulator-verified APK in an unpublished QA draft
+        if: ${{ success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_qa_draft.sh
+      # If compilation and package verification passed, but runtime QA fails
+      # (e.g. unsupported ARM64 translation), keep the bytes for internal
+      # device debugging without claiming Android acceptance.
+      - name: Retain valid compiled APK when emulator certification is blocked
+        if: ${{ failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) }}
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if test -s output/SHA256SUMS; then
+            bash scripts/publish_qa_draft.sh --unverified
+          else
+            echo 'No verified build output; not preserving an APK.'
+          fi
+      # Compile-only diagnostic success retains checksummed APK as UNVERIFIED,
+      # never as an emulator-verified draft. No public release is created.
+      # Publishing any internal draft is NOT a completed user-facing release.
+      - name: Explain and preserve native build failure evidence in run summary
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo '## AquaWord native build failed — NO verified APK'
+            echo ''
+            echo "Source commit: \`$(git rev-parse HEAD)\`"
+            echo "Upstream Collabora commit: \`$UPSTREAM_SHA\`"
+            echo ''
+            echo '### Runner storage at failure'
+            df -h .
+            echo ''
+            echo '### Build filesystem footprint'
+            if test -d collabora/engine; then du -sh collabora/engine || true; fi
+            if test -d collabora/android; then du -sh collabora/android || true; fi
+            echo ''
+            echo '### APK candidates (not verified)'
+            find collabora/android -type f -name '*.apk' -print 2>/dev/null || true
+            echo ''
+            echo 'Failed job steps and the full compiler error remain in the GitHub Actions logs. No artifact was labeled as a release.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+ || {
+              echo 'APK is missing ARM64 shared libraries; cannot certify native packaging' >&2
+              exit 1
+            }
+            unzip -Z1 "$apk" | grep -Fxq 'classes.dex' || {
+              echo 'APK is missing Android classes.dex' >&2
+              exit 1
+            }
             "$AAPT" dump badging "$apk" | grep -q "package: name='com.aquaword.app.debug'"
             for template in research_en research_ar clinical_case study_notes blank; do
               unzip -p "$apk" "assets/aquaword/$template.docx" > "output/$template.package.docx"
