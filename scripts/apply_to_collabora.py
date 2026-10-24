@@ -374,10 +374,12 @@ def patch_native_export_writeback(path: Path) -> bool:
         return False
     start = '            case REQUEST_EXPORT_FILE: {'
     end = '            case REQUEST_SAVEAS_PDF:'
-    if body.count(start) != 1 or body.count(end) != 1:
+    if body.count(start) != 1:
         raise PatchError('Pinned upstream export handler anchor changed')
     a = body.index(start)
-    b = body.index(end, a)
+    b = body.find(end, a + len(start))
+    if b < 0:
+        raise PatchError('Pinned upstream export handler tail changed')
     previous = body[a:b]
     if ('srcFile.delete();' not in previous or
             'openOutputStream(intent.getData(), "wt")' not in previous or
