@@ -368,6 +368,35 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertEqual(native,(self.path/
             'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text())
 
+    def test_pdf_export_checks_signature_before_saf_and_requires_truncate(self):
+        """Source contract: reject bogus PDFs without touching destination.
+
+        ContentResolver.openOutputStream(uri) uses ambiguous "w" mode;
+        only explicit truncating modes are acceptable for PDF replacement.
+        This is not an Android ContentProvider runtime test.
+        """
+        self.run_phase('source')
+        native=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        section=native.split('case REQUEST_EXPORT_FILE: {',1)[1].split(
+            'case REQUEST_SAVEAS_PDF:',1)[0]
+        self.assertEqual(section.count('AQUAWORD_PDF_SIGNATURE_AND_TRUNCATION'),1)
+        self.assertIn('new java.io.DataInputStream(source).readFully(signature);',section)
+        self.assertIn('source.mark(5);',section)
+        self.assertIn('source.reset();',section)
+        self.assertIn('Native export is not a PDF',section)
+        self.assertLess(section.index('source.reset();'),
+                        section.index('openOutputStream(exportTarget, "rwt")'))
+        self.assertLess(section.index('Native export is not a PDF'),
+                        section.index('exportTarget, "wt"'))
+        self.assertIn('exportTarget, "wt"',section)
+        self.assertIn('openOutputStream(exportTarget, "rwt")',section)
+        self.assertNotIn('openOutputStream(exportTarget);',section)
+        self.assertNotIn('openOutputStream(exportTarget, "w")',section)
+        self.assertIn('Export provider returned no truncating output stream',section)
+        self.run_phase('source')  # idempotent
+        self.assertEqual(native,(self.path/
+            'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text())
+
     def test_exportfile_upstream_drift_rejected(self):
         native=self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java'
         native.write_text(native.read_text().replace(

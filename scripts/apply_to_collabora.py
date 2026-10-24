@@ -410,16 +410,31 @@ def patch_native_export_writeback(path: Path) -> bool:
                             java.security.MessageDigest expected =
                                     java.security.MessageDigest.getInstance("SHA-256");
                             long written = 0L;
-                            try (InputStream source = new FileInputStream(exportSource)) {
+                            // AQUAWORD_PDF_SIGNATURE_AND_TRUNCATION: validate
+                            // native output before opening (and potentially
+                            // truncating) a user's SAF destination. Android's
+                            // default "w" mode is NOT guaranteed to truncate.
+                            try (java.io.BufferedInputStream source =
+                                         new java.io.BufferedInputStream(new FileInputStream(exportSource))) {
+                                source.mark(5);
+                                byte[] signature = new byte[5];
+                                new java.io.DataInputStream(source).readFully(signature);
+                                source.reset();
+                                if (signature[0] != '%' || signature[1] != 'P' ||
+                                        signature[2] != 'D' || signature[3] != 'F' ||
+                                        signature[4] != '-')
+                                    throw new IOException("Native export is not a PDF");
                                 OutputStream destination;
                                 try {
                                     destination = getContentResolver().openOutputStream(
                                             exportTarget, "wt");
-                                } catch (FileNotFoundException unsupportedMode) {
-                                    destination = getContentResolver().openOutputStream(exportTarget);
+                                } catch (FileNotFoundException | UnsupportedOperationException unsupportedMode) {
+                                    destination = getContentResolver().openOutputStream(exportTarget, "rwt");
                                 }
                                 if (destination == null)
-                                    throw new IOException("Export provider returned no output stream");
+                                    destination = getContentResolver().openOutputStream(exportTarget, "rwt");
+                                if (destination == null)
+                                    throw new IOException("Export provider returned no truncating output stream");
                                 try (OutputStream output = destination) {
                                     byte[] bytes = new byte[64 * 1024];
                                     int n;
