@@ -272,6 +272,13 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertLess(opening.index('if (cancelled.get() || isFinishing() || isDestroyed()) return;'),
                         opening.index('startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);'))
         self.assertIn('AquaWordHistory.capture(getFilesDir(), data, name, uri.toString());', opening)
+        # Canceled/failed pre-edit attempts must not appear in Recents.
+        self.assertEqual(opening.count('addDocumentToRecents(uri);'), 2)
+        first_guard = 'if (cancelled.get() || isFinishing() || isDestroyed()) return;'
+        self.assertNotIn('addDocumentToRecents(uri);', opening.split(first_guard, 1)[0])
+        self.assertIn('AQUAWORD_RECENTS_AFTER_OPEN', opening)
+        self.assertIn('addDocumentToRecents(uri);\n                    startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);', opening)
+        self.assertIn('if (cancelled.get() || isFinishing() || isDestroyed()) return;\n                                addDocumentToRecents(uri);', opening)
 
     def test_writer_creation_uses_real_docx_mime(self):
         self.run_phase('source')
