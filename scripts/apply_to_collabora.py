@@ -97,11 +97,18 @@ def patch_native_save_checkpoints(path: Path) -> bool:
     method = '''    // AQUAWORD_NATIVE_SAVE_CHECKPOINT:
     // Serialize saves to preserve their order. The queue is Activity-owned;
     // shutdown on destroy drains already-accepted saves without cancelling.
-    private final java.util.concurrent.ExecutorService mAquaWordSaveExecutor =
-            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-                Thread worker = new Thread(r, "AquaWordNativeSaveCheckpoint");
-                return worker;
-            });
+    // AQUAWORD_BOUNDED_SAVE_QUEUE: cloud SAF writes can stall indefinitely.
+    // An unbounded queue would retain an open Writer file descriptor for
+    // every subsequent autosave, eventually exhausting process resources.
+    // Reject excess saves safely; the rejection handler closes their streams.
+    private static final int AQUAWORD_MAX_PENDING_SAVES = 8;
+    private final java.util.concurrent.ThreadPoolExecutor mAquaWordSaveExecutor =
+            new java.util.concurrent.ThreadPoolExecutor(
+                    1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS,
+                    new java.util.concurrent.ArrayBlockingQueue<Runnable>(
+                            AQUAWORD_MAX_PENDING_SAVES),
+                    r -> new Thread(r, "AquaWordNativeSaveCheckpoint"),
+                    new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
 
     private void captureNativeSaveCheckpoint(final String[] saveMessage) {
         final android.net.Uri original = getIntent().getData();
