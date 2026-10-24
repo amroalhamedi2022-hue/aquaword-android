@@ -357,6 +357,139 @@ def patch_native_saf_saveback(path: Path) -> bool:
     return store(path, with_file_patch[:a] + replacement + with_file_patch[b:])
 
 
+
+def patch_native_export_writeback(path: Path) -> bool:
+    """Make Collabora's exportfile SAF copy asynchronous and readback-verified.
+
+    The pinned upstream REQUEST_EXPORT_FILE handler copies on the UI thread,
+    deletes its only temporary PDF even on failure, and does not verify what
+    a provider actually stored. Reuse the bounded native SAVE executor; keep
+    the export source on failure so a failed copy cannot be reported as saved.
+    """
+    body = require(path).read_text(encoding='utf-8')
+    marker = 'AQUAWORD_VERIFIED_ASYNC_EXPORT'
+    if marker in body:
+        if body.count(marker) != 1 or 'exportSource.delete()' not in body:
+            raise PatchError('Partial AquaWord export integration')
+        return False
+    start = '            case REQUEST_EXPORT_FILE: {'
+    end = '            case REQUEST_SAVEAS_PDF:'
+    if body.count(start) != 1 or body.count(end) != 1:
+        raise PatchError('Pinned upstream export handler anchor changed')
+    a = body.index(start)
+    b = body.index(end, a)
+    previous = body[a:b]
+    if ('srcFile.delete();' not in previous or
+            'openOutputStream(intent.getData(), "wt")' not in previous or
+            'mPendingExportSourcePath = null;' not in previous):
+        raise PatchError('Pinned upstream export semantics changed')
+    replacement = '''            case REQUEST_EXPORT_FILE: {
+                // AQUAWORD_VERIFIED_ASYNC_EXPORT: no large PDF copies on the UI
+                // thread; a failed/truncated provider must never silently
+                // consume the only native export source.
+                final String pendingExport = mPendingExportSourcePath;
+                mPendingExportSourcePath = null;
+                if (resultCode != RESULT_OK || intent == null ||
+                        intent.getData() == null || pendingExport == null)
+                    return;
+                final File exportSource = new File(pendingExport);
+                final Uri exportTarget = intent.getData();
+                if (!exportSource.isFile() || exportSource.length() <= 0L) {
+                    Toast.makeText(this, "Export source is missing or empty",
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+                try {
+                    // Shares the bounded, serialized SAVE worker so stalled
+                    // providers cannot create an unlimited export thread pool.
+                    mAquaWordSaveExecutor.execute(() -> {
+                        boolean verified = false;
+                        try {
+                            java.security.MessageDigest expected =
+                                    java.security.MessageDigest.getInstance("SHA-256");
+                            long written = 0L;
+                            try (InputStream source = new FileInputStream(exportSource)) {
+                                OutputStream destination;
+                                try {
+                                    destination = getContentResolver().openOutputStream(
+                                            exportTarget, "wt");
+                                } catch (FileNotFoundException unsupportedMode) {
+                                    destination = getContentResolver().openOutputStream(exportTarget);
+                                }
+                                if (destination == null)
+                                    throw new IOException("Export provider returned no output stream");
+                                try (OutputStream output = destination) {
+                                    byte[] bytes = new byte[64 * 1024];
+                                    int n;
+                                    int noProgress = 0;
+                                    while ((n = source.read(bytes)) != -1) {
+                                        if (n == 0) {
+                                            if (++noProgress >= 8)
+                                                throw new IOException("Export source stalled");
+                                            continue;
+                                        }
+                                        noProgress = 0;
+                                        written += n;
+                                        expected.update(bytes, 0, n);
+                                        output.write(bytes, 0, n);
+                                    }
+                                    output.flush();
+                                }
+                            }
+                            if (written <= 0L)
+                                throw new IOException("Refusing empty PDF export");
+                            java.security.MessageDigest observed =
+                                    java.security.MessageDigest.getInstance("SHA-256");
+                            long readBytes = 0L;
+                            try (InputStream readback =
+                                         getContentResolver().openInputStream(exportTarget)) {
+                                if (readback == null)
+                                    throw new IOException("Export provider readback unavailable");
+                                byte[] bytes = new byte[64 * 1024];
+                                int n;
+                                int noProgress = 0;
+                                while ((n = readback.read(bytes)) != -1) {
+                                    if (n == 0) {
+                                        if (++noProgress >= 8)
+                                            throw new IOException("Export readback stalled");
+                                        continue;
+                                    }
+                                    noProgress = 0;
+                                    readBytes += n;
+                                    if (readBytes > written)
+                                        throw new IOException("Export provider appended data");
+                                    observed.update(bytes, 0, n);
+                                }
+                            }
+                            if (readBytes != written ||
+                                    !java.util.Arrays.equals(expected.digest(), observed.digest()))
+                                throw new IOException("Export provider checksum/size mismatch");
+                            verified = true;
+                        } catch (Exception exportFailure) {
+                            Log.e(TAG, "AquaWord PDF export not verified; source retained", exportFailure);
+                            runOnUiThread(() -> {
+                                if (!isFinishing() && !isDestroyed())
+                                    Toast.makeText(this,
+                                            "Export could not be verified. Please try again.",
+                                            Toast.LENGTH_LONG).show();
+                            });
+                        }
+                        if (verified && !exportSource.delete())
+                            Log.w(TAG, "Verified export source cleanup deferred: " + exportSource);
+                    });
+                } catch (java.util.concurrent.RejectedExecutionException rejected) {
+                    // Do not discard the native export when the bounded queue
+                    // is full or this Activity is shutting down.
+                    Log.e(TAG, "AquaWord export queue full; source retained", rejected);
+                    Toast.makeText(this, "Export is busy. Please try again.",
+                            Toast.LENGTH_LONG).show();
+                }
+                return;
+            }
+'''
+    return store(path, body[:a] + replacement + body[b:])
+
+
 def patch_periodic_native_autosave(path: Path) -> bool:
     """Use native save every 2 minutes while foreground editing.
 
@@ -1041,6 +1174,7 @@ def source(repo: Path) -> None:
     print('Lifecycle-aware native autosave:', patch_periodic_native_autosave(targets[11]))
     print('Native post-save recovery checkpoints:', patch_native_save_checkpoints(targets[11]))
     print('SAF native saveback error detection:', patch_native_saf_saveback(targets[11]))
+    print('Verified asynchronous native PDF export:', patch_native_export_writeback(targets[11]))
     print('History storage class:', copy_history_source(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Debug-only real ContentProvider test route:', copy_debug_qa_file_provider(repo))
