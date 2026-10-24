@@ -2,6 +2,12 @@ name: AquaWord Native Android (Internal CI)
 
 on:
   workflow_dispatch:
+    inputs:
+      final_ready:
+        description: 'Final source acceptance and independent recheck completed'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -12,6 +18,7 @@ concurrency:
 
 jobs:
   native-debug:
+    if: ${{ inputs.final_ready == true }}
     # One native build at a time; never cancel hours of native compilation on a push.
     # Heavy native builds are MANUAL only to avoid repeated hours-long runs on every workflow edit.
     runs-on: ubuntu-24.04
@@ -24,6 +31,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Enforce digest-bound Final-Ready approval before native work
+        run: bash scripts/check_final_ready.sh
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
