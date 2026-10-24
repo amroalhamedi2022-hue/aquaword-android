@@ -441,9 +441,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('ContentResolver.SCHEME_FILE.equals(original.getScheme())',method)
         self.assertIn('new java.io.File(original.getPath()) : mTempFile',method)
         self.assertIn('new java.io.FileInputStream(writerOutput)',method)
-        self.assertIn('if (directWriterFile || copyTempBackToIntent(checkpoint.file, original))',method)
+        self.assertIn('boolean written = directWriterFile ||',method)
+        self.assertIn('copyTempBackToIntent(checkpoint.file, original)',method)
         self.assertLess(method.index('AquaWordHistory.verifyForRestore(checkpoint);'),
-                        method.index('if (directWriterFile || copyTempBackToIntent('))
+                        method.index('boolean written = directWriterFile ||'))
         self.assertIn('if (directWriterFile && writerOutput.isFile() && writerOutput.length() > 0L)',method)
         self.assertIn('Native file saved by Writer, but recovery checkpoint failed',method)
         self.assertIn('sendBroadcast(saveMessage[0], saveMessage[1]);\n                        return;',method)
@@ -451,6 +452,31 @@ class AquaWordIntegrationTests(unittest.TestCase):
         # a SAVE broadcast when its explicit provider writeback fails.
         self.assertIn('AquaWord SAVE not acknowledged',method)
         self.assertIn('copyTempBackToIntent(checkpoint.file, original)',method)
+
+    def test_saf_writeback_readback_matches_durable_checkpoint(self):
+        """Source contract: never acknowledge a silently truncated SAF SAVE."""
+        self.run_phase('source')
+        self.run_phase('source')
+        lib=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
+        checkpoint=lib.split('private void captureNativeSaveCheckpoint(',1)[1].split(
+            'private boolean documentLoaded',1)[0]
+        self.assertEqual(checkpoint.count('AQUAWORD_SAF_READBACK_BARRIER'),1)
+        self.assertIn('boolean written = directWriterFile ||',checkpoint)
+        self.assertIn('if (written && !directWriterFile && mResolvedFile == null)',checkpoint)
+        self.assertIn('getContentResolver().openInputStream(original)',checkpoint)
+        self.assertIn('AquaWordHistory.verifyProviderWriteback(checkpoint, providerReadback);',checkpoint)
+        self.assertLess(checkpoint.index('copyTempBackToIntent(checkpoint.file, original)'),
+                        checkpoint.index('AquaWordHistory.verifyProviderWriteback(checkpoint, providerReadback);'))
+        self.assertLess(checkpoint.index('AquaWordHistory.verifyProviderWriteback(checkpoint, providerReadback);'),
+                        checkpoint.index('sendBroadcast(saveMessage[0], saveMessage[1]);'))
+        history=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
+        verify=history.split('public static void verifyProviderWriteback(',1)[1].split(
+            '// Keep retention/trim',1)[0]
+        self.assertIn('received > snapshot.sizeBytes',verify)
+        self.assertIn('received != snapshot.sizeBytes',verify)
+        self.assertIn('hex(checksum.digest()).equals(snapshot.sha256)',verify)
+        self.assertIn('noProgress >= 8',verify)
+        self.assertNotIn('synchronized',verify)
 
     def test_native_save_uses_immutable_snapshot_for_both_writeback_paths(self):
         """Source contract: avoid mutable Writer temp path after async SAVE."""
