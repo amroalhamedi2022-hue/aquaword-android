@@ -204,7 +204,13 @@ def patch_native_save_checkpoints(path: Path) -> bool:
             });
         } catch (java.util.concurrent.RejectedExecutionException shutdown) {
             try { saved.close(); } catch (java.io.IOException ignored) { }
-            Log.e(TAG, "AquaWord SAVE arrived after the Activity save queue closed", shutdown);
+            Log.e(TAG, "AquaWord SAVE rejected: checkpoint queue full or Activity destroyed", shutdown);
+            // Never silently lose a SAVE request when a stalled provider
+            // saturates the bounded queue. The original SAF file is untouched.
+            runOnUiThread(() -> {
+                if (!isFinishing() && !isDestroyed())
+                    Toast.makeText(this, R.string.failed_to_save_file, Toast.LENGTH_LONG).show();
+            });
         }
     }
 
