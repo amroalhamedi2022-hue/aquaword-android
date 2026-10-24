@@ -409,7 +409,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
                         section.index('openOutputStream(exportTarget'))
         helper=self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordPdfPreflight.java'
         self.assertTrue(helper.is_file())
-        self.assertIn('Native PDF export has no trailing EOF marker',helper.read_text())
+        helper_source=helper.read_text()
+        self.assertIn('Native PDF export lacks a final EOF line',helper_source)
+        self.assertIn('boolean cleanSuffix = true;',helper_source)
+        self.assertIn('tail[i - 1]',helper_source)
         initial=helper.read_bytes()
         self.run_phase('source')
         self.assertEqual(initial,helper.read_bytes())
