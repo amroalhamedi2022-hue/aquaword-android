@@ -60,6 +60,26 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertNotIn("pull_request:", trigger)
         self.assertNotIn("push:", trigger)
 
+    def test_diagnostic_compile_only_keeps_native_output_unverified(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("diagnostic_compile_only:", workflow)
+        self.assertIn("DIAGNOSTIC_COMPILE_ONLY: ${{ inputs.diagnostic_compile_only }}", workflow)
+        self.assertIn("inputs.diagnostic_compile_only == true && inputs.diagnostic_build != true", workflow)
+        self.assertIn('"$DIAGNOSTIC_COMPILE_ONLY" != \'true\'', workflow)
+        self.assertIn("if: ${{ !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) }}", workflow)
+        self.assertIn("if: ${{ success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) }}", workflow)
+        self.assertIn("if: ${{ failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) }}", workflow)
+        self.assertIn("bash scripts/publish_qa_draft.sh --unverified", workflow)
+        self.assertIn("No automatic native build dispatch on push", (ROOT / ".github/workflows/queue-current-native-once.yml").read_text(encoding="utf-8"))
+
+    def test_diagnostic_build_requires_reason_and_excludes_final_ready(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("inputs.diagnostic_build == true && inputs.final_ready != true && inputs.diagnostic_reason != ''", workflow)
+        self.assertIn('"$DIAGNOSTIC_BUILD" = \'true\' && [ "$FINAL_READY" != \'true\' ]', workflow)
+        self.assertIn('"\${DIAGNOSTIC_REASON//[[:space:]]/}"', workflow)
+        self.assertIn("bash scripts/check_final_ready.sh", workflow)
+        self.assertIn("timeout-minutes: 360", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

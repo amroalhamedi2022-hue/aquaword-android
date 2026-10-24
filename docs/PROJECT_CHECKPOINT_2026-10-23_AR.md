@@ -50,3 +50,13 @@
 - Fix: unique selector `body #toolbar-wrapper.hasnotebookbar` in the AquaWord skin, preserving the intended styling and avoiding upstream selector duplication.
 - Added pinned Stylelint `13.7.0`, with real upstream `browser/.stylelintrc.json` rules, to native preflight, fast-source tests, and integration tests *before* any long ARM64 engine compile.
 - This source fix is NOT proof of a finished APK; native build and on-device opening/edit/save/reopen remain release gates.
+
+## Active milestone M-NATIVE-01 — ARM64 compile and real Writer roundtrip (24 October 2026)
+
+**Goal:** independently demonstrate the pinned Collabora/LibreOffice ARM64 engine builds AquaWord, then verify real DOCX open/edit/save/cold-reopen and SAF behavior. Keep this milestone active until its acceptance criteria pass; do not mark UI parity or PDF/print as completed by source-only checks.
+
+**Acceptance:** (1) source and integration CI PASS at exact SHA; (2) a purpose-bound internal diagnostic build with native engine + Gradle + package/asset SHA256 checks PASS; (3) compatible Android runtime installs, opens Arabic/English Writer DOCX, edits and reopens without loss, and exercises SAF failure paths; (4) Android device/emulator evidence with precise ABI and reproducible logs; (5) independent final source review before user-facing APK. Each unrun gate is NOT TESTED.
+
+**Implementation slice:** the branch-local manual `android-native.yml` now separates diagnostic compile-only from runtime acceptance. Compile-only intentionally skips the x86_64 emulator when its ABI cannot prove ARM64, retains only an unpublished UNVERIFIED draft, and never satisfies the final approval digest gate. Native compile and real Android runtime are still NOT TESTED. `main` is unchanged. No automatic builds, no paid runners.
+
+**Next:** validate the new workflow via source CI; inspect the pinned native toolchain for actual compiler failures; launch one justified diagnostic build only through an available authorized manual dispatch path, then repair real failures and run Android device roundtrip. A successful compile-only diagnostic is not evidence of SAF or Writer runtime.
