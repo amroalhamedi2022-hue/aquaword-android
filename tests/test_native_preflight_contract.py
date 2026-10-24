@@ -42,7 +42,9 @@ class NativePreflightContractTests(unittest.TestCase):
     def test_native_apk_packaging_requires_manual_dispatch(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         trigger = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-        self.assertEqual(trigger.strip(), "workflow_dispatch:")
+        self.assertTrue(trigger.strip().startswith("workflow_dispatch:\n    inputs:"), trigger)
+        self.assertIn("final_ready:", trigger)
+        self.assertIn("default: false", trigger)
         self.assertNotIn("pull_request:", trigger)
         self.assertNotIn("push:", trigger)
 
