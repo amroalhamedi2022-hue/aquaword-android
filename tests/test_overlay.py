@@ -520,7 +520,11 @@ class AquaWordIntegrationTests(unittest.TestCase):
         helper=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
         self.assertIn('public static synchronized void verifyForRestore(Snapshot snapshot)',helper)
         self.assertIn('snapshot == null || snapshot.sizeBytes <= 0L || !verifyBytes(snapshot)',helper)
-        self.assertIn('public static synchronized void restore(Snapshot snapshot, OutputStream target)',helper)
+        self.assertIn('public static void restore(Snapshot snapshot, OutputStream target)',helper)
+        self.assertIn('try (WritebackLease lease = holdForWriteback(snapshot);',helper)
+        self.assertIn('InputStream in = new FileInputStream(snapshot.file)',helper)
+        self.assertLess(helper.index('holdForWriteback(snapshot);'),
+                        helper.index('target.write(buffer, 0, n);'))
 
     def test_restored_saf_docx_readback_matches_snapshot_before_open(self):
         """A successful close is insufficient: verify provider-visible bytes.
