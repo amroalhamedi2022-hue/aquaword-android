@@ -302,8 +302,9 @@ jobs:
           AAPT="$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt"
           while IFS= read -r apk; do
             unzip -t "$apk" >/dev/null
-            # Require the exact pinned ARM64 LibreOffice engine, byte-for-byte.
-            # Any unrelated .so or a wrong-ABI package must fail this gate.
+            # Require the pinned ARM64 LibreOffice engine (exact bytes or identical
+            # ELF loadable segments after Android Gradle debug-symbol stripping).
+            # Unrelated .so, altered executable bytes and wrong ABI must fail.
             python3 scripts/verify_native_apk.py --apk "$apk" --engine-dir collabora/engine --abi "$ABI"
             "$AAPT" dump badging "$apk" | grep -q "package: name='com.aquaword.app.debug'"
             for template in research_en research_ar clinical_case study_notes blank; do
