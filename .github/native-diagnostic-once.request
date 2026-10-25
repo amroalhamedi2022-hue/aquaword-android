@@ -22,3 +22,5 @@ Acceptance reporting: record exact commit SHA, native workflow run URL,
 PASS/FAIL/PENDING, APK architecture/manifest and SHA-256 only if actually
 produced. Real Writer Arabic/English DOCX edit/save/reopen, Android SAF and
 Xiaomi Pad 5 remain NOT TESTED until independent runtime evidence exists.
+
+Retry note (2026-10-25): initial push workflow run 40206331263 was SKIPPED (GitHub event did not satisfy the added-path job condition). Replaced that condition with an exact request commit-message guard; source tests were repaired and rechecked. This marker update is the only authorized retry. No native engine compilation was verified in the skipped run.
