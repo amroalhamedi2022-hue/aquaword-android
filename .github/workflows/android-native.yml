@@ -317,8 +317,9 @@ jobs:
           done < output/apk-paths.txt
           (cd output && sha256sum -- *.apk > SHA256SUMS)
           cp upstream-version.txt output/
-      # The account's Actions artifact quota is full. Keep generated files on
-      # this runner for runtime verification, rather than a doomed artifact upload.
+      # Prefer a one-day downloadable artifact for compile-only diagnostics.
+      # If free artifact storage is exhausted, report that explicitly and never
+      # turn a successful native build into a false compiler failure.
       - name: Record real APK metadata and source provenance
         shell: bash
         run: |
@@ -329,6 +330,43 @@ jobs:
           echo '' >> "$GITHUB_STEP_SUMMARY"
           cat output/SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
           df -h . | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload compile-only native APK for short-lived download
+        id: diagnostic_apk_artifact
+        if: ${{ success() && (inputs.diagnostic_compile_only == true || (github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce')) }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        continue-on-error: true
+        with:
+          name: aquaword-native-diagnostic-${{ github.sha }}
+          path: |
+            output/AquaWord-*.apk
+            output/SHA256SUMS
+            output/upstream-version.txt
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - name: Report diagnostic artifact availability
+        if: ${{ always() && (inputs.diagnostic_compile_only == true || (github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce')) }}
+        env:
+          ARTIFACT_OUTCOME: ${{ steps.diagnostic_apk_artifact.outcome }}
+          ARTIFACT_URL: ${{ steps.diagnostic_apk_artifact.outputs.artifact-url }}
+          ARTIFACT_ID: ${{ steps.diagnostic_apk_artifact.outputs.artifact-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s output/SHA256SUMS ]; then
+            if [ "$ARTIFACT_OUTCOME" = "success" ] && [ -n "$ARTIFACT_URL" ]; then
+              {
+                echo '## Downloadable internal diagnostic APK (expires after 1 day)'
+                echo "$ARTIFACT_URL"
+                echo "Artifact ID: $ARTIFACT_ID"
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo '## APK built and structurally verified, but artifact upload failed (likely quota/permission). No downloadable artifact was retained.' >> "$GITHUB_STEP_SUMMARY"
+            fi
+            cat output/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## No structurally verified APK was produced; no download artifact exists.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Verify installation and Arabic DOCX on a real Android emulator
         if: ${{ !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
         uses: reactivecircus/android-emulator-runner@v2
@@ -357,16 +395,18 @@ jobs:
       # Only after real Android edit-save-reopen succeeds, store as UNPUBLISHED
       # draft Release to avoid exhausted Actions artifact storage.
       - name: Preserve emulator-verified APK in an unpublished QA draft
+        id: verified_qa_draft
         if: ${{ success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/publish_qa_draft.sh
-      # If compilation and package verification passed, but runtime QA fails
-      # (e.g. unsupported ARM64 translation), keep the bytes for internal
-      # device debugging without claiming Android acceptance.
+      # A compile-only diagnostic already attempted short-lived artifact upload.
+      # Do not make a second, known-permission-sensitive release API call there.
       - name: Retain valid compiled APK when emulator certification is blocked
-        if: ${{ failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) || (success() && github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
+        id: unverified_qa_draft
+        if: ${{ failure() && hashFiles('output/SHA256SUMS') != '' && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
         continue-on-error: true
         shell: bash
         env:
@@ -377,6 +417,14 @@ jobs:
           else
             echo 'No verified build output; not preserving an APK.'
           fi
+      - name: Report QA draft persistence failure
+        if: ${{ steps.verified_qa_draft.outcome == 'failure' }}
+        shell: bash
+        run: echo 'APK/runtime checks completed, but the unpublished QA draft could not be persisted; no release or user delivery is claimed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Report unverified draft persistence failure
+        if: ${{ steps.unverified_qa_draft.outcome == 'failure' }}
+        shell: bash
+        run: echo 'The native APK was built but the unverified QA draft could not be persisted. Checksum evidence is in this run; no downloadable artifact is claimed.' >> "$GITHUB_STEP_SUMMARY"
       # Compile-only diagnostic success retains checksummed APK as UNVERIFIED,
       # never as an emulator-verified draft. No public release is created.
       # Publishing any internal draft is NOT a completed user-facing release.
