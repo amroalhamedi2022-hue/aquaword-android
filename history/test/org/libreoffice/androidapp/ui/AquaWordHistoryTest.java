@@ -203,6 +203,34 @@ public class AquaWordHistoryTest {
             check(partials != null && partials.length == 0,
                     "failed provider left a temporary snapshot behind");
 
+            // Simulate an app process killed midway through a capture. A
+            // subsequent list/open should reclaim old incomplete writes, but
+            // never delete orphan document bytes or a recent in-flight write.
+            long oldTimestamp = System.currentTimeMillis() - 15L * 24L * 60L * 60L * 1000L;
+            File oldDataPartial = new File(historyDir, "killed.partial");
+            File oldMetaPartial = new File(historyDir, "killed.meta-partial");
+            File orphanMetadata = new File(historyDir, "metadata-only.properties");
+            File orphanDocument = new File(historyDir, "only-document.snapshot");
+            File recentPartial = new File(historyDir, "still-active.partial");
+            for (File fixture : new File[]{oldDataPartial, oldMetaPartial,
+                    orphanMetadata, orphanDocument, recentPartial}) {
+                try (FileOutputStream stream = new FileOutputStream(fixture)) {
+                    stream.write(new byte[]{1, 2, 3});
+                }
+            }
+            for (File stale : new File[]{oldDataPartial, oldMetaPartial,
+                    orphanMetadata, orphanDocument})
+                check(stale.setLastModified(oldTimestamp), "could not age crash fixture");
+            int intactBeforeCleanup = AquaWordHistory.list(root).size();
+            check(!oldDataPartial.exists() && !oldMetaPartial.exists() &&
+                    !orphanMetadata.exists(), "week-old incomplete files not reclaimed");
+            check(orphanDocument.isFile(), "orphan recovery document bytes were destroyed");
+            check(recentPartial.isFile(), "recent in-flight snapshot was deleted");
+            check(savedVersion.file.isFile(), "valid recovery checkpoint was deleted");
+            check(AquaWordHistory.list(root).size() == intactBeforeCleanup,
+                    "cleanup changed the committed history");
+            check(recentPartial.delete(), "could not clean recent test fixture");
+
             // A brief intermittent zero read is recoverable; a successful
             // subsequent read must reset the consecutive-stall counter.
             InputStream intermittentProvider = new InputStream() {
