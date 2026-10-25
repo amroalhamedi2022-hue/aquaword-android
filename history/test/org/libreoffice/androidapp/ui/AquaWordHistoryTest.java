@@ -33,8 +33,8 @@ public class AquaWordHistoryTest {
     private static void testProcessDeathRecovery(File root) throws Exception {
         String executable = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")
                 ? "java.exe" : "java";
-        File java = new File(new File(System.getProperty("java.home"), "bin"), executable);
-        Process child = new ProcessBuilder(java.getAbsolutePath(), "-cp",
+        File javaExecutable = new File(new File(System.getProperty("java.home"), "bin"), executable);
+        Process child = new ProcessBuilder(javaExecutable.getAbsolutePath(), "-cp",
                 System.getProperty("java.class.path"), AquaWordHistoryTest.class.getName(),
                 "--crash-during-capture", root.getAbsolutePath())
                 .redirectErrorStream(true).start();
