@@ -73,7 +73,7 @@ def prepare_engine(engine: Path, abi: str) -> bool:
     target = artifact_path(engine, abi)
     stamps = (
         engine / "workdir" / "CustomTarget" / "android" / "source" / "done",
-        engine / "workdir" / "CustomTarget" / "android" / "loandroid3",
+        engine / "workdir" / "CustomTarget" / "android" / "loandroid3.done",
     )
     for path in (target, *stamps):
         if path.is_file() or path.is_symlink():
