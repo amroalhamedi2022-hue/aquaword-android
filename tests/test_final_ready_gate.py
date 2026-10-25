@@ -51,17 +51,26 @@ class FinalReadyGateTests(unittest.TestCase):
         self.assertNotIn("assembleDebug", body)
         self.assertNotIn("gh workflow run", body)
 
-    def test_native_and_queue_workflows_are_manual_only_and_gate_before_dispatch(self):
+    def test_native_diagnostic_one_shot_and_manual_final_gate(self):
         native = (ROOT / ".github/workflows/android-native.yml").read_text(encoding="utf-8")
         queue = (ROOT / ".github/workflows/queue-current-native-once.yml").read_text(encoding="utf-8")
-        for name, body in (("native", native), ("queue", queue)):
-            with self.subTest(name=name):
-                trigger = body.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-                self.assertIn("workflow_dispatch:", trigger)
-                self.assertNotIn("\n  push:", trigger)
-                self.assertNotIn("\n  pull_request:", trigger)
-                self.assertIn("inputs.final_ready == true", body)
-                self.assertIn("bash scripts/check_final_ready.sh", body)
+        native_trigger = native.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        queue_trigger = queue.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        for body in (native, queue):
+            self.assertIn("inputs.final_ready == true", body)
+            self.assertIn("bash scripts/check_final_ready.sh", body)
+        self.assertIn("workflow_dispatch:", native_trigger)
+        self.assertIn("workflow_dispatch:", queue_trigger)
+        self.assertNotIn("\n  push:", queue_trigger)
+        self.assertNotIn("\n  pull_request:", queue_trigger)
+        self.assertNotIn("\n  pull_request:", native_trigger)
+        # Native push is narrowly scoped to a newly ADDED request file on the
+        # single development branch. An edit or normal source push cannot build.
+        self.assertIn("branches: [fix/saf-save-failure-recovery-20261023]", native_trigger)
+        self.assertIn("paths: ['.github/native-diagnostic-once.request']", native_trigger)
+        self.assertIn("contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')", native)
+        self.assertIn("ONE_SHOT_MARKER_ADDED", native)
+        self.assertIn("Compile-only: yes.", native)
         self.assertLess(native.index("bash scripts/check_final_ready.sh"),
                         native.index("Build or safely reuse LibreOffice native ARM64 engine"))
         self.assertLess(queue.index("bash scripts/check_final_ready.sh"),
