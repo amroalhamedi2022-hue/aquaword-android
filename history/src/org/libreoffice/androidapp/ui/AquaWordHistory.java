@@ -408,10 +408,23 @@ public final class AquaWordHistory {
         try (WritebackLease lease = holdForWriteback(snapshot);
              InputStream in = new FileInputStream(snapshot.file)) {
             byte[] buffer = new byte[64 * 1024];
+            MessageDigest streamedHash = digest();
+            long streamedBytes = 0L;
             int n;
             while ((n = in.read(buffer)) != -1) {
-                if (n > 0) target.write(buffer, 0, n);
+                if (n == 0) continue;
+                streamedBytes += n;
+                if (streamedBytes > snapshot.sizeBytes)
+                    throw new IOException("Recovery source grew during restore");
+                streamedHash.update(buffer, 0, n);
+                target.write(buffer, 0, n);
             }
+            // A separate preflight SHA cannot freeze an inode: another Writer
+            // save may rewrite it while a slow provider consumes the copy.
+            // Never acknowledge success if the bytes actually streamed differ.
+            if (streamedBytes != snapshot.sizeBytes ||
+                    !hex(streamedHash.digest()).equals(snapshot.sha256))
+                throw new IOException("Recovery source changed during restore");
             target.flush();
         }
     }
