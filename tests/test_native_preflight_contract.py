@@ -60,7 +60,7 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertNotIn("pull_request:", trigger)
         self.assertIn("push:\n    branches: [fix/saf-save-failure-recovery-20261023]", trigger)
         self.assertIn("paths: ['.github/native-diagnostic-once.request']", trigger)
-        marker = "github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair'"
+        marker = "github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce'"
         self.assertIn(marker, workflow)
         self.assertIn("github.event_name == 'push' && " + marker, workflow)
         self.assertIn("ONE_SHOT_REQUEST_MATCH: ${{ " + marker + " }}", workflow)
@@ -71,7 +71,7 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertIn("DIAGNOSTIC_COMPILE_ONLY: ${{ inputs.diagnostic_compile_only }}", workflow)
         self.assertIn("inputs.diagnostic_compile_only == true && inputs.diagnostic_build != true", workflow)
         self.assertIn("DIAGNOSTIC_COMPILE_ONLY", workflow)
-        marker = "github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair'"
+        marker = "github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce'"
         self.assertIn("!(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(" + marker + ")", workflow)
         self.assertIn("success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(" + marker + ")", workflow)
         self.assertIn("failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) || (success() && " + marker + ")", workflow)
