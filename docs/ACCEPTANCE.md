@@ -55,3 +55,13 @@ The four packaged editable DOCX templates now persist grantable create-document 
 ## Retaining expensive compiled APKs without false runtime claims
 
 When SHA-256 checks and package/assets validation have passed but the Android emulator rejects the APK or its runtime checks fail, CI can keep that **UNVERIFIED** APK in a separate unpublished `qa-unverified-<commit>` draft Release. This avoids another hours-long engine rebuild when switching to a device-compatible test path. It is **not** a user-facing release and cannot satisfy runtime acceptance. The successful verified path still requires all Android smoke proof files, and both paths preserve draft-only visibility.
+
+
+## Native diagnostic build evidence — 25 October 2026 (supersedes stale "not built" wording above)
+
+- Run [#40215579687](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40215579687), request/source commit `7304b193355a4d0a6c45673de970c5f08e7f9890`, completed the pinned LibreOffice ARM64 engine, Collabora Android app build, Gradle debug APK packaging, package/assets/native-ELF verification and checksum steps successfully.
+- Native library: ARM64 `liblo-native-code.so`, 198,019,656 bytes, SHA-256 `ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2`.
+- APK: `AquaWord-app-arm64-v8a-debug.apk`, SHA-256 `956108363c9ed901cfd5c48f2d205bf200987a1c74bc4065787070fc40f7ffe4`. Package ID and five DOCX fixture payloads passed the workflow's checks.
+- The job completed successfully, but its attempt to retain the compile-only APK as an unpublished draft Release received HTTP 403 (resource not accessible by integration). Therefore **the APK was built and structurally verified, but is not currently downloadable**.
+- The branch now adds a one-day Actions artifact upload attempt for compile-only builds, pinned to verified MIT-licensed `actions/upload-artifact` commit `cf430e030ddbb5b0abf93d22962f4752f3646cd9`. The upload is best-effort because the repository previously reported exhausted artifact storage; the run summary must state explicitly if no artifact URL is produced.
+- Android emulator/device install, real Writer document-layer rendering, Arabic/English open-edit-save-cold-reopen, SAF provider-failure recovery, print/PDF behavior and Xiaomi Pad 5 remain **NOT TESTED**. Compile-only success does not close M-NATIVE-01 or authorize a user-ready release.
