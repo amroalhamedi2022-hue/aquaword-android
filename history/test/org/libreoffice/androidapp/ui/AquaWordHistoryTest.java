@@ -415,6 +415,80 @@ public class AquaWordHistoryTest {
             check(concurrentFailure.get() == null,
                     "concurrent history list failed: " + concurrentFailure.get());
             check(slowRestore.file.isFile(), "restore source lost after successful copy");
+
+            // Deterministically block the checksum preflight itself, not
+            // provider I/O. A lease must be registered under the monitor
+            // before hashing, but the SHA-256 read must not hold that monitor.
+            java.util.concurrent.CountDownLatch hashEntered =
+                    new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.CountDownLatch allowHash =
+                    new java.util.concurrent.CountDownLatch(1);
+            File slowHashFile = new File(slowRestore.file.getAbsolutePath()) {
+                @Override public boolean isFile() {
+                    hashEntered.countDown();
+                    try {
+                        if (!allowHash.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                            throw new IllegalStateException("Timed out waiting for checksum test");
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(interrupted);
+                    }
+                    return super.isFile();
+                }
+            };
+            java.lang.reflect.Field hashField =
+                    AquaWordHistory.Snapshot.class.getDeclaredField("sha256");
+            java.lang.reflect.Field sourceField =
+                    AquaWordHistory.Snapshot.class.getDeclaredField("sourceHash");
+            hashField.setAccessible(true);
+            sourceField.setAccessible(true);
+            java.lang.reflect.Constructor<AquaWordHistory.Snapshot> constructor =
+                    AquaWordHistory.Snapshot.class.getDeclaredConstructor(
+                            File.class, String.class, long.class, long.class,
+                            String.class, String.class, String.class);
+            constructor.setAccessible(true);
+            AquaWordHistory.Snapshot slowHashSnapshot = constructor.newInstance(
+                    slowHashFile, slowRestore.displayName, slowRestore.createdMillis,
+                    slowRestore.sizeBytes, (String) hashField.get(slowRestore),
+                    (String) sourceField.get(slowRestore), slowRestore.kind);
+            java.util.concurrent.atomic.AtomicReference<Throwable> hashFailure =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.atomic.AtomicReference<Throwable> listFailure =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            Thread checksumWorker = new Thread(() -> {
+                try (AquaWordHistory.WritebackLease lease =
+                             AquaWordHistory.holdForWriteback(slowHashSnapshot)) {
+                    check(slowRestore.file.isFile(), "leased source disappeared");
+                } catch (Throwable failure) { hashFailure.set(failure); }
+            }, "slow-recovery-checksum");
+            checksumWorker.start();
+            Thread listDuringHash = null;
+            boolean listedWhileHashBlocked = false;
+            try {
+                check(hashEntered.await(3, java.util.concurrent.TimeUnit.SECONDS),
+                        "recovery checksum never reached synthetic slow filesystem");
+                listDuringHash = new Thread(() -> {
+                    try { AquaWordHistory.list(root); }
+                    catch (Throwable failure) { listFailure.set(failure); }
+                }, "list-during-recovery-checksum");
+                listDuringHash.start();
+                listDuringHash.join(1500);
+                listedWhileHashBlocked = !listDuringHash.isAlive();
+            } finally {
+                allowHash.countDown();
+                checksumWorker.join(6000);
+                if (listDuringHash != null) listDuringHash.join(6000);
+            }
+            check(listedWhileHashBlocked,
+                    "large recovery checksum blocked unrelated history operations");
+            check(!checksumWorker.isAlive() &&
+                    (listDuringHash == null || !listDuringHash.isAlive()),
+                    "recovery checksum/list worker did not terminate");
+            check(hashFailure.get() == null,
+                    "leased checksum verification failed: " + hashFailure.get());
+            check(listFailure.get() == null,
+                    "history list during checksum failed: " + listFailure.get());
+
             System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, saved revision labels, verified deduplication, bit-rot recovery, separate source histories, changed revisions, retention");
         } finally {
             delete(root);
