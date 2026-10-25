@@ -2,7 +2,7 @@ name: AquaWord Native Android (Internal CI)
 
 on:
   # Purpose-bound, one-shot diagnostic on this feature branch only.
-  # The marker must be ADDED (not modified); later source pushes cannot rebuild.
+  # Only an exact purpose-bound commit message and marker-path change may run.
   push:
     branches: [fix/saf-save-failure-recovery-20261023]
     paths: ['.github/native-diagnostic-once.request']
@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   native-debug:
-    if: ${{ (((inputs.final_ready == true && inputs.diagnostic_build != true) || (inputs.diagnostic_build == true && inputs.final_ready != true && inputs.diagnostic_reason != '')) && !(inputs.diagnostic_compile_only == true && inputs.diagnostic_build != true)) || (github.event_name == 'push' && contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')) }}
+    if: ${{ (((inputs.final_ready == true && inputs.diagnostic_build != true) || (inputs.diagnostic_build == true && inputs.final_ready != true && inputs.diagnostic_reason != '')) && !(inputs.diagnostic_compile_only == true && inputs.diagnostic_build != true)) || (github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair') }}
     # One native build at a time; never cancel hours of native compilation on a push.
     # Heavy native builds are MANUAL only to avoid repeated hours-long runs on every workflow edit.
     runs-on: ubuntu-24.04
@@ -58,13 +58,13 @@ jobs:
           DIAGNOSTIC_COMPILE_ONLY: ${{ inputs.diagnostic_compile_only }}
           DIAGNOSTIC_REASON: ${{ inputs.diagnostic_reason }}
           RUN_EVENT: ${{ github.event_name }}
-          ONE_SHOT_MARKER_ADDED: ${{ contains(github.event.head_commit.added, '.github/native-diagnostic-once.request') }}
+          ONE_SHOT_REQUEST_MATCH: ${{ github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair' }}
         shell: bash
         run: |
           set -euo pipefail
           if [ "$FINAL_READY" = 'true' ] && [ "$DIAGNOSTIC_BUILD" != 'true' ] && [ "$DIAGNOSTIC_COMPILE_ONLY" != 'true' ]; then
             bash scripts/check_final_ready.sh
-          elif [ "$RUN_EVENT" = 'push' ] && [ "$ONE_SHOT_MARKER_ADDED" = 'true' ]; then
+          elif [ "$RUN_EVENT" = 'push' ] && [ "$ONE_SHOT_REQUEST_MATCH" = 'true' ]; then
             echo 'INTERNAL ONE-SHOT DIAGNOSTIC: Does pinned Collabora/LibreOffice ARM64 compile and package the current AquaWord overlay into a verifiable APK?' >> "$GITHUB_STEP_SUMMARY"
             echo "Source SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
             echo 'Compile-only: yes. Android Writer/SAF device behavior remains NOT TESTED.' >> "$GITHUB_STEP_SUMMARY"
@@ -324,7 +324,7 @@ jobs:
           cat output/SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
           df -h . | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Verify installation and Arabic DOCX on a real Android emulator
-        if: ${{ !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')) }}
+        if: ${{ !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair') }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -351,7 +351,7 @@ jobs:
       # Only after real Android edit-save-reopen succeeds, store as UNPUBLISHED
       # draft Release to avoid exhausted Actions artifact storage.
       - name: Preserve emulator-verified APK in an unpublished QA draft
-        if: ${{ success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')) }}
+        if: ${{ success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair') }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -360,7 +360,7 @@ jobs:
       # (e.g. unsupported ARM64 translation), keep the bytes for internal
       # device debugging without claiming Android acceptance.
       - name: Retain valid compiled APK when emulator certification is blocked
-        if: ${{ failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) || (success() && github.event_name == 'push' && contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')) }}
+        if: ${{ failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) || (success() && github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair') }}
         continue-on-error: true
         shell: bash
         env:
