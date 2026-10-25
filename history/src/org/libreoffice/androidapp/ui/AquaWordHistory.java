@@ -162,7 +162,7 @@ public final class AquaWordHistory {
                 while ((count = input.read(buffer)) != -1) {
                     // A nonconforming cloud/provider stream can repeatedly
                     // return zero for a nonempty buffer. Never spin forever
-                    // while holding the synchronized history lock.
+                    // while streaming a recovery copy outside the history lock.
                     if (count == 0) {
                         if (++noProgressReads >= 8)
                             throw new IOException("Document input stream made no progress");
