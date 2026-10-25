@@ -279,6 +279,68 @@ public class AquaWordHistoryTest {
                 // Earlier test intentionally corrupted s.
             } catch (IOException expected) { invalidLeaseRejected = true; }
             check(invalidLeaseRejected, "corrupt recovery source was pinned");
+            // A slow SAF/cloud destination must not monopolize the history
+            // monitor. Another document must remain listable while restore()
+            // is waiting for provider output. Retention must still pin bytes.
+            AquaWordHistory.Snapshot slowRestore = AquaWordHistory.capture(
+                    root, new ByteArrayInputStream("slow provider restore".getBytes("UTF-8")),
+                    "slow-restore.docx", "content://slow/restore", "saved");
+            java.util.concurrent.CountDownLatch restoreEntered =
+                    new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.CountDownLatch allowRestore =
+                    new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.atomic.AtomicReference<Throwable> restoreFailure =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.atomic.AtomicReference<Throwable> concurrentFailure =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            OutputStream blockedProvider = new OutputStream() {
+                private boolean firstWrite = true;
+                @Override public void write(int b) throws IOException {
+                    if (firstWrite) {
+                        firstWrite = false;
+                        restoreEntered.countDown();
+                        try {
+                            if (!allowRestore.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                                throw new IOException("Timed out waiting for simulated SAF provider");
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException(interrupted);
+                        }
+                    }
+                }
+            };
+            Thread restoreWorker = new Thread(() -> {
+                try { AquaWordHistory.restore(slowRestore, blockedProvider); }
+                catch (Throwable failure) { restoreFailure.set(failure); }
+            }, "blocked-saf-restore");
+            restoreWorker.start();
+            Thread otherDocument = null;
+            boolean listFinishedWhileProviderBlocked = false;
+            try {
+                check(restoreEntered.await(3, java.util.concurrent.TimeUnit.SECONDS),
+                        "SAF restore never reached simulated slow provider");
+                otherDocument = new Thread(() -> {
+                    try { AquaWordHistory.list(root); }
+                    catch (Throwable failure) { concurrentFailure.set(failure); }
+                }, "concurrent-history-list");
+                otherDocument.start();
+                otherDocument.join(1500);
+                listFinishedWhileProviderBlocked = !otherDocument.isAlive();
+                check(slowRestore.file.isFile(),
+                        "active restore snapshot disappeared during provider write");
+            } finally {
+                allowRestore.countDown();
+                restoreWorker.join(6000);
+                if (otherDocument != null) otherDocument.join(6000);
+            }
+            check(listFinishedWhileProviderBlocked,
+                    "slow SAF restore blocked unrelated history operations");
+            check(!restoreWorker.isAlive() && (otherDocument == null || !otherDocument.isAlive()),
+                    "restore/list worker did not terminate");
+            check(restoreFailure.get() == null, "restore failed: " + restoreFailure.get());
+            check(concurrentFailure.get() == null,
+                    "concurrent history list failed: " + concurrentFailure.get());
+            check(slowRestore.file.isFile(), "restore source lost after successful copy");
             System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, saved revision labels, verified deduplication, bit-rot recovery, separate source histories, changed revisions, retention");
         } finally {
             delete(root);
