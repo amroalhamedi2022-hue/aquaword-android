@@ -6,6 +6,10 @@ import java.util.*;
 import org.libreoffice.androidlib.AquaWordHistory;
 public class AquaWordHistoryTest {
     private static void crashDuringCapture(File root) throws Exception {
+        // First commit a complete recovery point, then kill the child during a second capture.
+        AquaWordHistory.capture(root, new ByteArrayInputStream(
+                "durable checkpoint — مرحبا".getBytes("UTF-8")), "durable.docx",
+                "content://durable/provider");
         InputStream interrupted = new InputStream() {
             private boolean wroteChunk;
             @Override public int read() {
@@ -47,12 +51,18 @@ public class AquaWordHistoryTest {
         File[] partials = dir.listFiles((parent, name) -> name.endsWith(".partial"));
         check(partials != null && partials.length == 1 && partials[0].length() > 0,
                 "process death did not leave a non-empty partial recovery write");
-        check(AquaWordHistory.list(root).isEmpty(),
-                "incomplete crash data was incorrectly published as a recovery snapshot");
+        List<AquaWordHistory.Snapshot> afterDeath = AquaWordHistory.list(root);
+        check(afterDeath.size() == 1 && "durable.docx".equals(afterDeath.get(0).displayName),
+                "completed checkpoint did not survive abrupt process death");
+        ByteArrayOutputStream durableBytes = new ByteArrayOutputStream();
+        AquaWordHistory.restore(afterDeath.get(0), durableBytes);
+        check(Arrays.equals("durable checkpoint — مرحبا".getBytes("UTF-8"),
+                durableBytes.toByteArray()), "persisted checkpoint bytes changed after process death");
         check(partials[0].isFile(), "recent incomplete write was deleted before grace period");
         long stale = System.currentTimeMillis() - 15L * 24L * 60L * 60L * 1000L;
         check(partials[0].setLastModified(stale), "could not age process-death fixture");
-        check(AquaWordHistory.list(root).isEmpty(), "stale partial created a committed snapshot");
+        List<AquaWordHistory.Snapshot> afterCleanup = AquaWordHistory.list(root);
+        check(afterCleanup.size() == 1, "stale partial changed the committed recovery history");
         check(!partials[0].exists(), "stale process-death partial was not reclaimed");
     }
 
