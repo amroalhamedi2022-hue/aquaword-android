@@ -74,8 +74,12 @@ class NativePreflightContractTests(unittest.TestCase):
         marker = "github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce'"
         self.assertIn("!(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(" + marker + ")", workflow)
         self.assertIn("success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(" + marker + ")", workflow)
-        self.assertIn("failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) || (success() && " + marker + ")", workflow)
+        self.assertIn("failure() && hashFiles('output/SHA256SUMS') != '' && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(" + marker + ")", workflow)
         self.assertIn("bash scripts/publish_qa_draft.sh --unverified", workflow)
+        self.assertIn("uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", workflow)
+        self.assertIn("retention-days: 1", workflow)
+        self.assertIn("compression-level: 0", workflow)
+        self.assertIn("steps.diagnostic_apk_artifact.outputs.artifact-url", workflow)
         self.assertIn("No automatic native build dispatch on push", (ROOT / ".github/workflows/queue-current-native-once.yml").read_text(encoding="utf-8"))
 
     def test_diagnostic_apk_contains_arm64_native_engine_not_just_java(self):
@@ -91,6 +95,27 @@ class NativePreflightContractTests(unittest.TestCase):
                         workflow.index("Record real APK metadata and source provenance"))
         self.assertLess(workflow.index(invocation),
                         workflow.index("Retain valid compiled APK when emulator certification is blocked"))
+
+
+    def test_compile_only_apk_upload_is_pinned_short_retention_and_does_not_call_release_api(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        verifier = workflow.index('python3 scripts/verify_native_apk.py --apk "$apk" --engine-dir collabora/engine --abi "$ABI"')
+        uploader = workflow.index("- name: Upload compile-only native APK for short-lived download")
+        report = workflow.index("- name: Report diagnostic artifact availability")
+        runtime = workflow.index("- name: Verify installation and Arabic DOCX on a real Android emulator")
+        self.assertLess(verifier, uploader)
+        self.assertLess(uploader, report)
+        self.assertLess(report, runtime)
+        self.assertIn("id: diagnostic_apk_artifact", workflow)
+        self.assertIn("uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", workflow)
+        self.assertIn("retention-days: 1", workflow)
+        self.assertIn("compression-level: 0", workflow)
+        self.assertIn("steps.diagnostic_apk_artifact.outputs.artifact-url", workflow)
+        retention = workflow.split("- name: Retain valid compiled APK when emulator certification is blocked", 1)[1]
+        condition = retention.split("\\n", 1)[0]
+        self.assertIn("failure() && hashFiles('output/SHA256SUMS') != ''", condition)
+        self.assertIn("!(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce')", condition)
+        self.assertIn("continue-on-error: true", workflow.split("- name: Preserve emulator-verified APK in an unpublished QA draft", 1)[1].split("- name:", 1)[0])
 
     def test_diagnostic_build_requires_reason_and_excludes_final_ready(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
