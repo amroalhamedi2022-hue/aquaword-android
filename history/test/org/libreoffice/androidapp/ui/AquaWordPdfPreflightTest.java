@@ -52,6 +52,24 @@ public final class AquaWordPdfPreflightTest {
             AquaWordPdfPreflight.requirePlausiblePdf(pdf);
             Files.write(pdf.toPath(), ascii(incrementalPdf()));
             AquaWordPdfPreflight.requirePlausiblePdf(pdf);
+            // A real classic xref may have multiple entries; check the
+            // bounded prefix rather than just the first line.
+            Files.write(pdf.toPath(), ascii(classicPdf().replace(
+                    "0 1\\n0000000000 65535 f \\n",
+                    "0 2\\n0000000000 65535 f \\n0000000009 00000 n \\n")));
+            AquaWordPdfPreflight.requirePlausiblePdf(pdf);
+            Files.write(pdf.toPath(), ascii(classicPdf().replace(
+                    "0 1\\n0000000000 65535 f \\n",
+                    "0 2\\n0000000000 65535 f \\n")));
+            rejects(pdf, "truncated second xref entry must fail");
+            Files.write(pdf.toPath(), ascii(classicPdf().replace(
+                    "0000000000 65535 f \\n", "0000000000 65535 f X\\n")));
+            rejects(pdf, "xref entry must use an exact 20-byte line");
+            Files.write(pdf.toPath(), ascii(xrefStreamPdf().replace(" /W [1 2 1]", "")));
+            rejects(pdf, "xref stream without required /W must fail");
+            Files.write(pdf.toPath(), ascii(xrefStreamPdf().replace(" /Size 2", "")));
+            rejects(pdf, "xref stream without required /Size must fail");
+
 
             // A legitimate xref-stream dictionary can extend beyond 96 bytes.
             String header = "%PDF-1.7\n";
