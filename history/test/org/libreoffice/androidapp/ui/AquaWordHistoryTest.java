@@ -5,12 +5,68 @@ import java.nio.file.*;
 import java.util.*;
 import org.libreoffice.androidlib.AquaWordHistory;
 public class AquaWordHistoryTest {
+    private static void crashDuringCapture(File root) throws Exception {
+        InputStream interrupted = new InputStream() {
+            private boolean wroteChunk;
+            @Override public int read() {
+                Runtime.getRuntime().halt(23);
+                return -1;
+            }
+            @Override public int read(byte[] buffer, int offset, int length) {
+                if (!wroteChunk) {
+                    wroteChunk = true;
+                    int count = Math.min(length, 4096);
+                    Arrays.fill(buffer, offset, offset + count, (byte) 'C');
+                    return count;
+                }
+                // Terminate the child JVM after bytes have reached the .partial file,
+                // bypassing capture()'s finally block and normal stream close.
+                Runtime.getRuntime().halt(23);
+                return -1;
+            }
+        };
+        AquaWordHistory.capture(root, interrupted, "process-killed.docx",
+                "content://crash/provider");
+        throw new AssertionError("crash fixture unexpectedly completed");
+    }
+
+    private static void testProcessDeathRecovery(File root) throws Exception {
+        String executable = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")
+                ? "java.exe" : "java";
+        File java = new File(new File(System.getProperty("java.home"), "bin"), executable);
+        Process child = new ProcessBuilder(java.getAbsolutePath(), "-cp",
+                System.getProperty("java.class.path"), AquaWordHistoryTest.class.getName(),
+                "--crash-during-capture", root.getAbsolutePath())
+                .redirectErrorStream(true).start();
+        if (!child.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)) {
+            child.destroyForcibly();
+            throw new AssertionError("crash fixture child did not terminate promptly");
+        }
+        check(child.exitValue() == 23, "child did not exit at the deliberate process-death point");
+        File dir = new File(root, "aquaword-history");
+        File[] partials = dir.listFiles((parent, name) -> name.endsWith(".partial"));
+        check(partials != null && partials.length == 1 && partials[0].length() > 0,
+                "process death did not leave a non-empty partial recovery write");
+        check(AquaWordHistory.list(root).isEmpty(),
+                "incomplete crash data was incorrectly published as a recovery snapshot");
+        check(partials[0].isFile(), "recent incomplete write was deleted before grace period");
+        long stale = System.currentTimeMillis() - 15L * 24L * 60L * 60L * 1000L;
+        check(partials[0].setLastModified(stale), "could not age process-death fixture");
+        check(AquaWordHistory.list(root).isEmpty(), "stale partial created a committed snapshot");
+        check(!partials[0].exists(), "stale process-death partial was not reclaimed");
+    }
+
     private static void check(boolean okay, String msg) {
         if (!okay) throw new AssertionError(msg);
     }
     public static void main(String[] args) throws Exception {
+        if (args.length == 2 && "--crash-during-capture".equals(args[0])) {
+            crashDuringCapture(new File(args[1]));
+            throw new AssertionError("crash fixture returned without halting");
+        }
         File root = Files.createTempDirectory("aquaword-history-test").toFile();
         try {
+            testProcessDeathRecovery(new File(root, "process-death-fixture"));
             byte[] unicode = "Hello—مرحبا بالعالم\n📕 PDF & DOCX".getBytes("UTF-8");
             AquaWordHistory.Snapshot s = AquaWordHistory.capture(
                 root, new ByteArrayInputStream(unicode), "قصتي.docx");
