@@ -60,10 +60,10 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertNotIn("pull_request:", trigger)
         self.assertIn("push:\n    branches: [fix/saf-save-failure-recovery-20261023]", trigger)
         self.assertIn("paths: ['.github/native-diagnostic-once.request']", trigger)
-        marker = "contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')"
+        marker = "github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair'"
         self.assertIn(marker, workflow)
         self.assertIn("github.event_name == 'push' && " + marker, workflow)
-        self.assertIn("ONE_SHOT_MARKER_ADDED: ${{ " + marker + " }}", workflow)
+        self.assertIn("ONE_SHOT_REQUEST_MATCH: ${{ " + marker + " }}", workflow)
 
     def test_diagnostic_compile_only_keeps_native_output_unverified(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -71,7 +71,7 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertIn("DIAGNOSTIC_COMPILE_ONLY: ${{ inputs.diagnostic_compile_only }}", workflow)
         self.assertIn("inputs.diagnostic_compile_only == true && inputs.diagnostic_build != true", workflow)
         self.assertIn("DIAGNOSTIC_COMPILE_ONLY", workflow)
-        marker = "github.event_name == 'push' && contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')"
+        marker = "github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair'"
         self.assertIn("!(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(" + marker + ")", workflow)
         self.assertIn("success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(" + marker + ")", workflow)
         self.assertIn("failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) || (success() && " + marker + ")", workflow)
