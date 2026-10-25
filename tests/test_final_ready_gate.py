@@ -68,7 +68,7 @@ class FinalReadyGateTests(unittest.TestCase):
         # single development branch AND exact request commit message. Normal pushes cannot build.
         self.assertIn("branches: [fix/saf-save-failure-recovery-20261023]", native_trigger)
         self.assertIn("paths: ['.github/native-diagnostic-once.request']", native_trigger)
-        self.assertIn("github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair'", native)
+        self.assertIn("github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce'", native)
         self.assertIn("ONE_SHOT_REQUEST_MATCH", native)
         self.assertIn("Compile-only: yes.", native)
         self.assertLess(native.index("bash scripts/check_final_ready.sh"),
