@@ -13,10 +13,11 @@ certification, device run, final release, auto-merge or main modification.
 The runner may take hours and may fail due to disk/toolchain limits.
 Only free GitHub-hosted runner resources are permitted.
 
-Trigger safety: android-native.yml responds to the *addition* of this file
-on fix/saf-save-failure-recovery-20261023. Editing this file or any other
-subsequent push must NOT trigger another diagnostic build. The existing
-manual workflow_dispatch path remains available for separately justified runs.
+Trigger safety: android-native.yml only accepts a push that changes this marker
+on fix/saf-save-failure-recovery-20261023 AND has the exact commit message
+AquaWordNativeDiagnosticRetryOnce. Ordinary pushes or marker edits with any other
+message must not trigger a native build. This file authorizes only the retry
+explicitly documented below; do not repeat it after the artifact outcome is known.
 
 Acceptance reporting: record exact commit SHA, native workflow run URL,
 PASS/FAIL/PENDING, APK architecture/manifest and SHA-256 only if actually
@@ -26,3 +27,6 @@ Xiaomi Pad 5 remain NOT TESTED until independent runtime evidence exists.
 Retry note (2026-10-25): initial push workflow run 40206331263 was SKIPPED (GitHub event did not satisfy the added-path job condition). Replaced that condition with an exact request commit-message guard; source tests were repaired and rechecked. This marker update is the only authorized retry. No native engine compilation was verified in the skipped run.
 
 Retry #2 authorization (2026-10-25, after source CI PASS): native run 40206631720 failed because restored engine workdir/instdir gbuild stamps lacked engine/android/jniLibs/arm64-v8a/liblo-native-code.so. Source/tests now invalidate the exact stale gbuild stamps, validate ELF AArch64/ET_DYN/SHA-256, and include jniLibs in the next cache key. Fast Source 40215454654 PASS; Integration 40215454659 PASS at code SHA 35c49242c5f22af506487040fba9e663f157ce10. This second diagnostic asks whether rebuilding the missing real native library fixes Gradle's missing-input failure and whether an APK can be structurally verified. Source tests cannot exercise the Android NDK linker or Gradle packaging. If native linking fails, stop before Gradle and report the precise error; do not fabricate an APK or claim device acceptance. This exact-marker push is the sole retry authorized here; subsequent pushes must not trigger a build.
+
+
+Retry #3 authorization (2026-10-25; artifact-delivery question only): source Fast Source CI passed on SHA 6e23edad5f1d2dec71249da4e985cc08e873363c after the workflow/test fix. The prior native run 40215579687 checked out 7304b193355a4d0a6c45673de970c5f08e7f9890 and successfully compiled/pacakged/verified an ARM64 APK, but retaining it failed with HTTP 403 from the draft-Release API. The workflow now attempts a one-day Actions artifact with a SHA-pinned official MIT action and reports an empty/failed upload explicitly. This single retry tests whether a downloadable artifact can be retained; the previous LibreOffice build cache was saved, and the native workflow runs its source/integration preflight before reusing/building. Android emulator/device acceptance remains NOT TESTED. If upload fails due quota/permissions, stop and report it; do not trigger another native retry.
