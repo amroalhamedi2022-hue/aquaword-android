@@ -279,6 +279,80 @@ public class AquaWordHistoryTest {
                 // Earlier test intentionally corrupted s.
             } catch (IOException expected) { invalidLeaseRejected = true; }
             check(invalidLeaseRejected, "corrupt recovery source was pinned");
+            // A slow SAF/cloud *input* must not block unrelated history
+            // operations while a pre-edit safety copy is being streamed.
+            java.util.concurrent.CountDownLatch captureEntered =
+                    new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.CountDownLatch allowCapture =
+                    new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.atomic.AtomicReference<Throwable> captureFailure =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.atomic.AtomicReference<Throwable> concurrentCaptureListFailure =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            byte[] cloudBytes = "blocked cloud safety copy".getBytes("UTF-8");
+            InputStream blockedCloudInput = new InputStream() {
+                private int offset;
+                private boolean firstRead = true;
+                @Override public int read() throws IOException {
+                    byte[] one = new byte[1];
+                    int count = read(one, 0, 1);
+                    return count == -1 ? -1 : one[0] & 0xff;
+                }
+                @Override public int read(byte[] buffer, int off, int len) throws IOException {
+                    if (firstRead) {
+                        firstRead = false;
+                        captureEntered.countDown();
+                        try {
+                            if (!allowCapture.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                                throw new IOException("Timed out waiting for cloud input");
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException(interrupted);
+                        }
+                    }
+                    if (offset == cloudBytes.length) return -1;
+                    int count = Math.min(len, cloudBytes.length - offset);
+                    System.arraycopy(cloudBytes, offset, buffer, off, count);
+                    offset += count;
+                    return count;
+                }
+            };
+            Thread captureWorker = new Thread(() -> {
+                try {
+                    AquaWordHistory.capture(root, blockedCloudInput,
+                            "cloud-input.docx", "content://slow/cloud-input");
+                } catch (Throwable failure) { captureFailure.set(failure); }
+            }, "blocked-cloud-capture");
+            captureWorker.start();
+            Thread listDuringCapture = null;
+            boolean listFinishedWhileInputBlocked = false;
+            try {
+                check(captureEntered.await(3, java.util.concurrent.TimeUnit.SECONDS),
+                        "capture never reached simulated cloud input");
+                listDuringCapture = new Thread(() -> {
+                    try { AquaWordHistory.list(root); }
+                    catch (Throwable failure) { concurrentCaptureListFailure.set(failure); }
+                }, "list-during-cloud-capture");
+                listDuringCapture.start();
+                listDuringCapture.join(1500);
+                listFinishedWhileInputBlocked = !listDuringCapture.isAlive();
+            } finally {
+                allowCapture.countDown();
+                captureWorker.join(6000);
+                if (listDuringCapture != null) listDuringCapture.join(6000);
+            }
+            check(listFinishedWhileInputBlocked,
+                    "slow SAF input blocked unrelated history operations");
+            check(!captureWorker.isAlive() &&
+                    (listDuringCapture == null || !listDuringCapture.isAlive()),
+                    "capture/list worker did not terminate");
+            check(captureFailure.get() == null,
+                    "cloud capture failed: " + captureFailure.get());
+            check(concurrentCaptureListFailure.get() == null,
+                    "history list during capture failed: " + concurrentCaptureListFailure.get());
+            check(AquaWordHistory.list(root).stream().anyMatch(x ->
+                    x.displayName.equals("cloud-input.docx") && x.sizeBytes == cloudBytes.length),
+                    "blocked cloud capture was not committed");
             // A slow SAF/cloud destination must not monopolize the history
             // monitor. Another document must remain listable while restore()
             // is waiting for provider output. Retention must still pin bytes.

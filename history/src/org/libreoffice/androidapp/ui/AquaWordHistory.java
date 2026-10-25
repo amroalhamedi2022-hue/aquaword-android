@@ -91,7 +91,7 @@ public final class AquaWordHistory {
 
     private static File folder(File appFilesDir) throws IOException {
         File target = new File(appFilesDir, FOLDER);
-        if (!target.isDirectory() && !target.mkdirs())
+        if (!target.isDirectory() && !target.mkdirs() && !target.isDirectory())
             throw new IOException("Unable to create app-private snapshot directory");
         pruneStaleIncompleteFiles(target);
         return target;
@@ -124,19 +124,19 @@ public final class AquaWordHistory {
         }
     }
 
-    public static synchronized Snapshot capture(File appFilesDir, InputStream input,
+    public static Snapshot capture(File appFilesDir, InputStream input,
                                                 String name) throws IOException {
         return capture(appFilesDir, input, name, "legacy-unspecified-source");
     }
 
     /** Source identity separates two distinct documents that share a file name. */
-    public static synchronized Snapshot capture(File appFilesDir, InputStream input,
+    public static Snapshot capture(File appFilesDir, InputStream input,
                                                 String name, String sourceIdentity) throws IOException {
         return capture(appFilesDir, input, name, sourceIdentity, "pre-edit");
     }
 
     /** Saved revisions and pre-edit recovery versions use the same validated format. */
-    public static synchronized Snapshot capture(File appFilesDir, InputStream input,
+    public static Snapshot capture(File appFilesDir, InputStream input,
                                                 String name, String sourceIdentity,
                                                 String kind) throws IOException {
         if (!"pre-edit".equals(kind) && !"saved".equals(kind))
@@ -182,36 +182,40 @@ public final class AquaWordHistory {
             if (length == 0L)
                 throw new IOException("Refusing empty document recovery snapshot");
             String newHash = hex(sha.digest());
-            // An unchanged document already has a safety copy; reopening it
-            // should not consume more storage. Compare with its newest entry.
-            for (Snapshot previous : readAll(dir)) {
-                if (!previous.displayName.equals(safeName) ||
-                        !previous.sourceHash.equals(sourceHash) ||
-                        !previous.kind.equals(kind))
-                    continue;
-                if (previous.sizeBytes == length && previous.sha256.equals(newHash)
-                        && verifyBytes(previous))
-                    return previous;
-                break; // A changed document needs its own point-in-time copy.
+            // Commit and retention are serialized, but potentially slow SAF
+            // input streaming above never holds the global history monitor.
+            synchronized (AquaWordHistory.class) {
+                // An unchanged document already has a safety copy; reopening it
+                // should not consume more storage. Compare with its newest entry.
+                for (Snapshot previous : readAll(dir)) {
+                    if (!previous.displayName.equals(safeName) ||
+                            !previous.sourceHash.equals(sourceHash) ||
+                            !previous.kind.equals(kind))
+                        continue;
+                    if (previous.sizeBytes == length && previous.sha256.equals(newHash)
+                            && verifyBytes(previous))
+                        return previous;
+                    break; // A changed document needs its own point-in-time copy.
+                }
+                Properties props = new Properties();
+                props.setProperty("name", safeName);
+                props.setProperty("timestamp", String.valueOf(System.currentTimeMillis()));
+                props.setProperty("size", String.valueOf(length));
+                props.setProperty("sha256", newHash);
+                // Store only the SHA of the document URI, never the original URI.
+                props.setProperty("source_sha256", sourceHash);
+                props.setProperty("kind", kind);
+                try (FileOutputStream metaOut = new FileOutputStream(pendingMeta)) {
+                    props.store(metaOut, "AquaWord private document snapshot");
+                    metaOut.getFD().sync();
+                }
+                if (!temp.renameTo(data)) throw new IOException("Could not commit snapshot bytes");
+                if (!pendingMeta.renameTo(meta)) throw new IOException("Could not commit snapshot metadata");
+                Snapshot saved = load(dir, data);
+                if (saved == null) throw new IOException("Snapshot validation failed");
+                trim(dir);
+                return saved;
             }
-            Properties props = new Properties();
-            props.setProperty("name", safeName);
-            props.setProperty("timestamp", String.valueOf(System.currentTimeMillis()));
-            props.setProperty("size", String.valueOf(length));
-            props.setProperty("sha256", newHash);
-            // Store only the SHA of the document URI, never the original URI.
-            props.setProperty("source_sha256", sourceHash);
-            props.setProperty("kind", kind);
-            try (FileOutputStream metaOut = new FileOutputStream(pendingMeta)) {
-                props.store(metaOut, "AquaWord private document snapshot");
-                metaOut.getFD().sync();
-            }
-            if (!temp.renameTo(data)) throw new IOException("Could not commit snapshot bytes");
-            if (!pendingMeta.renameTo(meta)) throw new IOException("Could not commit snapshot metadata");
-            Snapshot saved = load(dir, data);
-            if (saved == null) throw new IOException("Snapshot validation failed");
-            trim(dir);
-            return saved;
         } finally {
             temp.delete();
             pendingMeta.delete();
