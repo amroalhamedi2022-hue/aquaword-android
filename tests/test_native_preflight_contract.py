@@ -51,24 +51,30 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertLess(preflight, native_engine)
         self.assertLess(native_engine, packaging)
 
-    def test_native_apk_packaging_requires_manual_dispatch(self):
+    def test_native_apk_packaging_requires_explicit_manual_or_added_marker(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         trigger = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-        self.assertTrue(trigger.strip().startswith("workflow_dispatch:\n    inputs:"), trigger)
+        self.assertIn("workflow_dispatch:\n    inputs:", trigger)
         self.assertIn("final_ready:", trigger)
         self.assertIn("default: false", trigger)
         self.assertNotIn("pull_request:", trigger)
-        self.assertNotIn("push:", trigger)
+        self.assertIn("push:\n    branches: [fix/saf-save-failure-recovery-20261023]", trigger)
+        self.assertIn("paths: ['.github/native-diagnostic-once.request']", trigger)
+        marker = "contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')"
+        self.assertIn(marker, workflow)
+        self.assertIn("github.event_name == 'push' && " + marker, workflow)
+        self.assertIn("ONE_SHOT_MARKER_ADDED: ${{ " + marker + " }}", workflow)
 
     def test_diagnostic_compile_only_keeps_native_output_unverified(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("diagnostic_compile_only:", workflow)
         self.assertIn("DIAGNOSTIC_COMPILE_ONLY: ${{ inputs.diagnostic_compile_only }}", workflow)
         self.assertIn("inputs.diagnostic_compile_only == true && inputs.diagnostic_build != true", workflow)
-        self.assertIn('"$DIAGNOSTIC_COMPILE_ONLY" != \'true\'', workflow)
-        self.assertIn("if: ${{ !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) }}", workflow)
-        self.assertIn("if: ${{ success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) }}", workflow)
-        self.assertIn("if: ${{ failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) }}", workflow)
+        self.assertIn("DIAGNOSTIC_COMPILE_ONLY", workflow)
+        marker = "github.event_name == 'push' && contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')"
+        self.assertIn("!(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(" + marker + ")", workflow)
+        self.assertIn("success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(" + marker + ")", workflow)
+        self.assertIn("failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) || (success() && " + marker + ")", workflow)
         self.assertIn("bash scripts/publish_qa_draft.sh --unverified", workflow)
         self.assertIn("No automatic native build dispatch on push", (ROOT / ".github/workflows/queue-current-native-once.yml").read_text(encoding="utf-8"))
 
