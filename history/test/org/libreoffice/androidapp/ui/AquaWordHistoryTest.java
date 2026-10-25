@@ -157,6 +157,28 @@ public class AquaWordHistoryTest {
             try { AquaWordHistory.verifyForRestore(missing); }
             catch (IOException expected) { missingRejected = true; }
             check(missingRejected, "missing snapshot was accepted for provider write");
+            // A provider can return immediate EOF without an I/O error. Never
+            // publish an empty revision: restoring it could truncate the
+            // user's destination while pretending to recover their document.
+            int beforeEmpty = AquaWordHistory.list(root).size();
+            for (String kind : new String[]{"pre-edit", "saved"}) {
+                boolean emptyRejected = false;
+                try {
+                    AquaWordHistory.capture(root, new ByteArrayInputStream(new byte[0]),
+                            "empty-provider.docx", "content://empty/provider", kind);
+                } catch (IOException expected) {
+                    emptyRejected = expected.getMessage().contains("empty document");
+                }
+                check(emptyRejected, "immediate-EOF " + kind + " snapshot accepted");
+            }
+            check(AquaWordHistory.list(root).size() == beforeEmpty,
+                    "empty provider created a restorable recovery entry");
+            File emptyHistoryDir = new File(root, "aquaword-history");
+            File[] emptyPartials = emptyHistoryDir.listFiles((dir, filename) ->
+                    filename.endsWith(".partial") || filename.endsWith(".meta-partial"));
+            check(emptyPartials != null && emptyPartials.length == 0,
+                    "empty provider left incomplete recovery files");
+
             // A broken SAF provider may violate InputStream's progress
             // contract. Capture must fail promptly and clean partial files,
             // rather than hold the synchronized history lock indefinitely.
