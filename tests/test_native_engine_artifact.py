@@ -23,7 +23,7 @@ class NativeEngineArtifactTests(unittest.TestCase):
         self.lib = NATIVE.artifact_path(self.engine, "arm64-v8a")
         self.lib.parent.mkdir(parents=True)
         self.done = self.engine / "workdir" / "CustomTarget" / "android" / "source" / "done"
-        self.stamp = self.engine / "workdir" / "CustomTarget" / "android" / "loandroid3"
+        self.stamp = self.engine / "workdir" / "CustomTarget" / "android" / "loandroid3.done"
 
     def write_elf(self, machine=183, elf_class=2, e_type=3):
         header = bytearray(64)
