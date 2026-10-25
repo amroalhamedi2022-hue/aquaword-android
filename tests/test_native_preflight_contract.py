@@ -112,7 +112,7 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertIn("compression-level: 0", workflow)
         self.assertIn("steps.diagnostic_apk_artifact.outputs.artifact-url", workflow)
         retention = workflow.split("- name: Retain valid compiled APK when emulator certification is blocked", 1)[1]
-        condition = retention.split("\\n", 1)[0]
+        condition = retention.splitlines()[0]
         self.assertIn("failure() && hashFiles('output/SHA256SUMS') != ''", condition)
         self.assertIn("!(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce')", condition)
         self.assertIn("continue-on-error: true", workflow.split("- name: Preserve emulator-verified APK in an unpublished QA draft", 1)[1].split("- name:", 1)[0])
