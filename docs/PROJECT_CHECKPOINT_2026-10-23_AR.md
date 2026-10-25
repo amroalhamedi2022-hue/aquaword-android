@@ -76,3 +76,12 @@
 - Regression: JVM tests cover two overlapping leases, idempotent close, 65 additional captures under retention pressure, byte preservation and post-release trimming, and rejection of a corrupt checkpoint. Overlay test checks native SAVE lease scope.
 - Verification at commit creation: source CI PENDING; JVM integration PENDING; Collabora ARM64/Gradle APK NOT TESTED; Android Writer/SAF on Xiaomi Pad 5 NOT TESTED. No user-facing APK.
 - Next: inspect exact-SHA CI, repair any failures, then pursue one justified manual ARM64 diagnostic build and real Android DOCX/SAF roundtrip. Keep PR #7 draft and main untouched.
+
+
+## M-NATIVE-01 — 25 October 2026: nonblocking SAF recovery restore
+
+- **Production:** `f8ee1989ef88a9e6ac9b3531e5f1e31466392017` changes `AquaWordHistory.restore()` to acquire an integrity-checked, reference-counted `WritebackLease` under the history monitor, then stream to a possibly slow SAF/cloud destination **outside** that monitor. The lease prevents retention from deleting the source until the write finishes. Destination ownership remains with the caller; no new dependency.
+- **Regression:** `11f26eca87c279725e1e50bfd2fb985e46be9bd2` adds a deterministic JVM test with a blocked provider stream and a concurrent history-list operation. `ded063a8b0f1462534b22ef5fdab897ac0c941b1` updates the old source-contract assertion to require lease-based preflight rather than a globally synchronized restore. Initial Fast Source CI failed because the old assertion required `synchronized`; it was fixed, not ignored.
+- **CI:** Fast Source on `ded063a8` **PASS**: https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40175969310 . Integration on the same SHA: https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40175969323 (**PENDING at checkpoint update**). Only declare JVM concurrency test PASS if Integration completes successfully.
+- **NOT TESTED:** native ARM64 Collabora/Gradle APK, Writer Android runtime, actual slow/failing SAF providers, Xiaomi Pad 5, full DOCX roundtrip, PDF/print. No APK was built, no PR merged, main untouched.
+- **Next:** inspect exact-SHA Integration result; fix any failing JVM regression. Continue M-NATIVE-01 with a purpose-bound native ARM64 diagnostic build when supported, then real Android SAF/DOCX testing. Do not mark this milestone complete from source CI alone.
