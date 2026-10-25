@@ -489,6 +489,70 @@ public class AquaWordHistoryTest {
             check(listFailure.get() == null,
                     "history list during checksum failed: " + listFailure.get());
 
+            // Preflight does not freeze an inode. A Writer save may rewrite
+            // the second block after restore has already streamed the first.
+            // Reject the resulting SAF copy instead of reporting success.
+            byte[] multiBlock = new byte[128 * 1024];
+            Arrays.fill(multiBlock, (byte) 0x41);
+            AquaWordHistory.Snapshot changingDuringRestore = AquaWordHistory.capture(
+                    root, new ByteArrayInputStream(multiBlock), "mutating.docx",
+                    "content://mutation/restore", "saved");
+            ByteArrayOutputStream mutatedDestination = new ByteArrayOutputStream();
+            OutputStream mutateOnFirstWrite = new OutputStream() {
+                private boolean modified;
+                @Override public void write(int b) { mutatedDestination.write(b); }
+                @Override public void write(byte[] b, int off, int len) throws IOException {
+                    mutatedDestination.write(b, off, len);
+                    if (!modified) {
+                        modified = true;
+                        try (RandomAccessFile file = new RandomAccessFile(
+                                changingDuringRestore.file, "rw")) {
+                            file.seek(64L * 1024L + 13L);
+                            file.write(0x7f);
+                        }
+                    }
+                }
+            };
+            boolean changedSourceRejected = false;
+            try { AquaWordHistory.restore(changingDuringRestore, mutateOnFirstWrite); }
+            catch (IOException expected) {
+                changedSourceRejected = expected.getMessage().contains("changed during restore");
+            }
+            check(changedSourceRejected,
+                    "restore acknowledged bytes changed after SHA-256 preflight");
+
+            AquaWordHistory.Snapshot truncatedDuringRestore = AquaWordHistory.capture(
+                    root, new ByteArrayInputStream(multiBlock), "truncating.docx",
+                    "content://truncation/restore", "saved");
+            OutputStream truncateOnFirstWrite = new OutputStream() {
+                private boolean truncated;
+                @Override public void write(int b) { }
+                @Override public void write(byte[] b, int off, int len) throws IOException {
+                    if (!truncated) {
+                        truncated = true;
+                        try (RandomAccessFile file = new RandomAccessFile(
+                                truncatedDuringRestore.file, "rw")) {
+                            file.setLength(64L * 1024L);
+                        }
+                    }
+                }
+            };
+            boolean truncatedSourceRejected = false;
+            try { AquaWordHistory.restore(truncatedDuringRestore, truncateOnFirstWrite); }
+            catch (IOException expected) {
+                truncatedSourceRejected = expected.getMessage().contains("changed during restore");
+            }
+            check(truncatedSourceRejected,
+                    "restore acknowledged a source truncated during streaming");
+
+            AquaWordHistory.Snapshot stableDuringRestore = AquaWordHistory.capture(
+                    root, new ByteArrayInputStream(multiBlock), "stable.docx",
+                    "content://stable/restore", "saved");
+            ByteArrayOutputStream stableDestination = new ByteArrayOutputStream();
+            AquaWordHistory.restore(stableDuringRestore, stableDestination);
+            check(Arrays.equals(multiBlock, stableDestination.toByteArray()),
+                    "stable multiblock restore did not preserve exact bytes");
+
             System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, saved revision labels, verified deduplication, bit-rot recovery, separate source histories, changed revisions, retention");
         } finally {
             delete(root);
