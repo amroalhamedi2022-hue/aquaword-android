@@ -206,6 +206,7 @@ public class AquaWordHistoryTest {
             // Simulate an app process killed midway through a capture. A
             // subsequent list/open should reclaim old incomplete writes, but
             // never delete orphan document bytes or a recent in-flight write.
+            int intactBeforeCleanup = AquaWordHistory.list(root).size();
             long oldTimestamp = System.currentTimeMillis() - 15L * 24L * 60L * 60L * 1000L;
             File oldDataPartial = new File(historyDir, "killed.partial");
             File oldMetaPartial = new File(historyDir, "killed.meta-partial");
@@ -221,7 +222,7 @@ public class AquaWordHistoryTest {
             for (File stale : new File[]{oldDataPartial, oldMetaPartial,
                     orphanMetadata, orphanDocument})
                 check(stale.setLastModified(oldTimestamp), "could not age crash fixture");
-            int intactBeforeCleanup = AquaWordHistory.list(root).size();
+            AquaWordHistory.list(root); // opening history triggers crash cleanup
             check(!oldDataPartial.exists() && !oldMetaPartial.exists() &&
                     !orphanMetadata.exists(), "week-old incomplete files not reclaimed");
             check(orphanDocument.isFile(), "orphan recovery document bytes were destroyed");
