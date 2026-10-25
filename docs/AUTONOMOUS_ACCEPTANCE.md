@@ -310,3 +310,12 @@ The fast-source and integration contracts passed for the tested code SHA. Review
 - **Source/test commit**: `e2c7b3820972b9a8b489cde8b0356a4d6633b9d2`. **CI on the final documentation/comment SHA must be checked separately**; no Android runtime, SAF provider, native build, PDF rendering, or print claim is made.
 - **Residual risk**: a crafted PDF can still contain a syntactically plausible terminal marker but malformed objects; preflight is not a validator. A provider can fail after truncation, and the destination is not atomically replaced. Android real-device negative-path acceptance remains NOT TESTED.
 - **Build policy**: no APK/AAB packaging, no manual native dispatch, no auto-merge, no main changes. The branch-local Final-Ready gate remains required; main's workflow state is not altered by this PR.
+
+
+## 2026-10-25 — Native compile passed; short-retention artifact route being repaired
+
+- This entry supersedes earlier dated statements that native packaging must not be attempted in the current round. The current user policy permits a build when it answers a concrete question source tests cannot answer, with the question, exact source SHA, checksums, CI and runtime limitations recorded.
+- Run [40215579687](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40215579687) checked out `7304b193355a4d0a6c45673de970c5f08e7f9890`. Pinned LibreOffice ARM64 compilation, Collabora Android app compilation, Gradle packaging and APK structure/ABI/assets/checksum checks passed. APK SHA-256: `956108363c9ed901cfd5c48f2d205bf200987a1c74bc4065787070fc40f7ffe4`; native engine SHA-256: `ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2`.
+- The run had no artifact because the draft-Release fallback failed HTTP 403. The workflow is being changed to attempt a one-day Actions artifact using a SHA-pinned, MIT-licensed official action and to report retention failure without confusing it with compiler failure.
+- Source-only tests are the required gate before the next build. A further compile-only retry is justified only to validate this changed artifact route, not to repeat native compilation for its own sake; the prior successful run saved the LibreOffice engine cache.
+- Device/runtime and Xiaomi Pad 5 acceptance remain NOT TESTED. No final APK delivery is claimed until a verified downloadable file exists and the runtime gates pass.
