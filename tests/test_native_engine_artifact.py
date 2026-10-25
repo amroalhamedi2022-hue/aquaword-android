@@ -96,6 +96,19 @@ class NativeEngineArtifactTests(unittest.TestCase):
         self.assertTrue(outside.exists())
         self.assertFalse(self.lib.is_symlink())
 
+    def test_native_workflow_repairs_cache_before_gradle(self):
+        workflow = (ROOT / ".github" / "workflows" / "android-native.yml").read_text()
+        self.assertIn("collabora/engine/android/jniLibs", workflow)
+        self.assertIn("ndk29.0.14206865-v2", workflow)
+        self.assertIn("restore-keys:", workflow)
+        self.assertIn("native_engine_artifact.py prepare --engine-dir .", workflow)
+        self.assertIn("native_engine_artifact.py verify --engine-dir .", workflow)
+        self.assertIn("native_engine_artifact.py verify --engine-dir collabora/engine", workflow)
+        self.assertLess(workflow.index("native_engine_artifact.py prepare --engine-dir ."),
+                        workflow.index("make -j2"))
+        self.assertLess(workflow.index("native_engine_artifact.py verify --engine-dir collabora/engine"),
+                        workflow.index("./gradlew --no-daemon --stacktrace"))
+
     def test_cli_fails_before_gradle_for_missing_binary(self):
         result = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "native_engine_artifact.py"),
