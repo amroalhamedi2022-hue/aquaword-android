@@ -372,13 +372,19 @@ public final class AquaWordHistory {
             throw new IOException("SAF provider readback checksum/size mismatch");
     }
 
-    // Keep retention/trim from deleting a snapshot midway through restore.
-    public static synchronized void restore(Snapshot snapshot, OutputStream target) throws IOException {
+    /**
+     * Pin the verified snapshot under the history monitor, then stream without
+     * holding that monitor. A slow SAF/cloud OutputStream must not block other
+     * documents' checkpoint creation, history listing, or retention. The lease
+     * prevents trim() from evicting the source until the copy has finished.
+     * The caller still owns and closes the destination stream.
+     */
+    public static void restore(Snapshot snapshot, OutputStream target) throws IOException {
         if (snapshot == null || target == null) throw new IOException("Missing recovery destination");
-        // Re-verify at copy time, since callers outside SAF may use restore()
-        // directly. Both this check and the provider preflight are intentional.
-        verifyForRestore(snapshot);
-        try (InputStream in = new FileInputStream(snapshot.file)) {
+        // The lease re-verifies bytes before any potentially destructive SAF
+        // destination write, including when restore() is called directly.
+        try (WritebackLease lease = holdForWriteback(snapshot);
+             InputStream in = new FileInputStream(snapshot.file)) {
             byte[] buffer = new byte[64 * 1024];
             int n;
             while ((n = in.read(buffer)) != -1) {
