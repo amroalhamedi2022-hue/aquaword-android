@@ -126,5 +126,17 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 360", workflow)
 
 
+    def test_native_apk_signature_is_verified_and_evidence_is_retained(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn('APKSIGNER="$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner"', workflow)
+        verify = '"$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$signature_report"'
+        self.assertIn(verify, workflow)
+        self.assertIn("Verified using v2 scheme (APK Signature Scheme v2): true", workflow)
+        self.assertIn("Signer #1 certificate SHA-256 digest:", workflow)
+        self.assertIn("output/*.signature.txt", workflow)
+        self.assertLess(workflow.index(verify),
+                        workflow.index("- name: Record real APK metadata and source provenance"))
+
+
 if __name__ == "__main__":
     unittest.main()
