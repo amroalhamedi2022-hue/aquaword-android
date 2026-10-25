@@ -214,7 +214,10 @@ jobs:
           path: |
             collabora/engine/workdir
             collabora/engine/instdir
-          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v1
+            collabora/engine/android/jniLibs
+          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v2
+          restore-keys: |
+            aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v1
       - name: Build or safely reuse LibreOffice native ARM64 engine
         shell: bash
         run: |
@@ -227,18 +230,23 @@ jobs:
           --with-distro=CPAndroidAarch64
           EOF
           ./autogen.sh
-          # Require real LibreOffice output files; a cache-hit flag alone
-          # must never become false evidence that the engine compiled.
+          # A previous cache stored workdir/instdir, including gbuild .done
+          # markers, but NOT engine/android/jniLibs. The resulting Gradle
+          # failure was a missing liblo-native-code.so, not a Java error.
+          # Invalidate the two exact gbuild stamps if the real ELF is absent.
+          python3 ../../scripts/native_engine_artifact.py prepare --engine-dir . --abi "$ABI"
           if [ "${{ steps.engine_cache.outputs.cache-hit }}" = "true" ] &&
              test -s instdir/program/setuprc &&
-             test -s workdir/LinkTarget/StaticLibrary/liblibpng.a; then
-            echo "Reusing compiled LO ARM64 engine after validating required outputs"
+             test -s workdir/LinkTarget/StaticLibrary/liblibpng.a &&
+             test -s "android/jniLibs/$ABI/liblo-native-code.so"; then
+            echo "Reusing complete LO ARM64 engine and native shared object"
           else
-            echo "No complete valid LO ARM64 build cache; compiling native engine"
+            echo "Compiling/linking missing LibreOffice ARM64 engine outputs"
             make -j2
           fi
           test -s instdir/program/setuprc
           test -s workdir/LinkTarget/StaticLibrary/liblibpng.a
+          python3 ../../scripts/native_engine_artifact.py verify --engine-dir . --abi "$ABI"
       - name: Cache successful LibreOffice engine for next internal build
         if: success() && steps.engine_cache.outputs.cache-hit != 'true'
         continue-on-error: true
@@ -247,7 +255,8 @@ jobs:
           path: |
             collabora/engine/workdir
             collabora/engine/instdir
-          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v1
+            collabora/engine/android/jniLibs
+          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v2
       - name: Configure and compile Collabora Android app sources
         shell: bash
         run: |
@@ -263,6 +272,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Fail before Gradle/CMake if the engine cache is incomplete.
+          python3 scripts/native_engine_artifact.py verify --engine-dir collabora/engine --abi "$ABI"
           cd collabora/android
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:assembleDebug
