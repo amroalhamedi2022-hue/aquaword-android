@@ -519,7 +519,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('if (finished)\n                                open(target);',restore)
         helper=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
         self.assertIn('public static synchronized void verifyForRestore(Snapshot snapshot)',helper)
-        self.assertIn('snapshot == null || !verifyBytes(snapshot)',helper)
+        self.assertIn('snapshot == null || snapshot.sizeBytes <= 0L || !verifyBytes(snapshot)',helper)
         self.assertIn('public static synchronized void restore(Snapshot snapshot, OutputStream target)',helper)
 
     def test_restored_saf_docx_readback_matches_snapshot_before_open(self):
