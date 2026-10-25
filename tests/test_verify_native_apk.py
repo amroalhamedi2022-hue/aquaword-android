@@ -26,6 +26,12 @@ class VerifyNativeApkTests(unittest.TestCase):
         elf[:4] = b"\x7fELF"
         elf[4:7] = b"\x02\x01\x01"
         elf[16:20] = struct.pack("<HH", 3, 183)
+        elf[32:40] = struct.pack("<Q", 64)
+        elf[54:58] = struct.pack("<HH", 56, 1)
+        ph = struct.pack("<IIQQQQQQ", 1, 5, 256, 0x1000, 0, 64, 64, 4096)
+        elf.extend(ph)
+        elf.extend(b"\0" * (256 - len(elf)))
+        elf.extend(b"A" * 64)
         self.lib.write_bytes(bytes(elf) + b"\0" * MIN_NATIVE_BYTES)
         self.apk = self.root / "aqua.apk"
 
@@ -49,15 +55,21 @@ class VerifyNativeApkTests(unittest.TestCase):
 
     def test_wrong_library_contents_are_not_certified(self):
         corrupt = bytearray(self.lib.read_bytes())
-        corrupt[-1] = 1
+        corrupt[260] = 1
         self.package(lib=corrupt)
-        with self.assertRaisesRegex(NativeApkError, "SHA-256 differs"):
+        with self.assertRaisesRegex(NativeApkError, "loadable segments differ"):
             verify_native_apk(self.apk, self.engine, "arm64-v8a")
 
-    def test_wrong_library_size_is_not_certified(self):
-        self.package(lib=self.lib.read_bytes()[:-1])
-        with self.assertRaisesRegex(NativeApkError, "size differs"):
+    def test_truncated_load_segment_is_not_certified(self):
+        self.package(lib=self.lib.read_bytes()[:280])
+        with self.assertRaisesRegex(NativeApkError, "load segment bounds"):
             verify_native_apk(self.apk, self.engine, "arm64-v8a")
+
+    def test_stripped_nonloadable_debug_bytes_are_permitted(self):
+        # Android Gradle may strip debug sections without changing code.
+        self.package(lib=self.lib.read_bytes()[:-100])
+        proof = verify_native_apk(self.apk, self.engine, "arm64-v8a")
+        self.assertEqual(proof["abi"], "arm64-v8a")
 
     def test_wrong_abi_cannot_pass_from_unrelated_shared_library(self):
         self.package(abi="x86_64")
