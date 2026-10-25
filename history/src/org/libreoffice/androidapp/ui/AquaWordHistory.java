@@ -113,7 +113,11 @@ public final class AquaWordHistory {
                 }
                 output.getFD().sync();
             }
-            // A provider returning immediate EOF must not become a restorable\n            // zero-byte revision. SAF restore can truncate its destination.\n            if (length == 0L)\n                throw new IOException("Refusing empty document recovery snapshot");\n            String newHash = hex(sha.digest());
+            // A provider returning immediate EOF must not become a restorable
+            // zero-byte revision. SAF restore can truncate its destination.
+            if (length == 0L)
+                throw new IOException("Refusing empty document recovery snapshot");
+            String newHash = hex(sha.digest());
             // An unchanged document already has a safety copy; reopening it
             // should not consume more storage. Compare with its newest entry.
             for (Snapshot previous : readAll(dir)) {
