@@ -19,6 +19,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -32,6 +34,7 @@ public final class AquaWordHistory {
     private static final int MAX_SNAPSHOTS = 60;
     // Leave interrupted writes available for manual recovery for one week.
     private static final long INCOMPLETE_GRACE_MILLIS = 7L * 24L * 60L * 60L * 1000L;
+    private static final Map<String, Integer> ACTIVE_WRITEBACKS = new HashMap<>();
 
     private AquaWordHistory() { }
 
@@ -53,6 +56,37 @@ public final class AquaWordHistory {
             this.sourceHash = sourceHash;
             this.kind = kind;
         }
+    }
+
+    /** Retain verified recovery bytes while a slow SAF provider writes them. */
+    public static final class WritebackLease implements AutoCloseable {
+        private final File file;
+        private boolean closed;
+        private WritebackLease(File file) { this.file = file; }
+        @Override public void close() {
+            synchronized (AquaWordHistory.class) {
+                if (closed) return;
+                closed = true;
+                String key = file.getAbsolutePath();
+                Integer active = ACTIVE_WRITEBACKS.get(key);
+                if (active != null) {
+                    if (active <= 1) ACTIVE_WRITEBACKS.remove(key);
+                    else ACTIVE_WRITEBACKS.put(key, active - 1);
+                }
+                // Reapply retention once the provider no longer needs the bytes.
+                trim(file.getParentFile());
+            }
+        }
+    }
+
+    /** Acquire under the same monitor used by retention; no lock during I/O. */
+    public static synchronized WritebackLease holdForWriteback(Snapshot snapshot)
+            throws IOException {
+        verifyForRestore(snapshot);
+        String key = snapshot.file.getAbsolutePath();
+        Integer active = ACTIVE_WRITEBACKS.get(key);
+        ACTIVE_WRITEBACKS.put(key, active == null ? 1 : active + 1);
+        return new WritebackLease(snapshot.file);
     }
 
     private static File folder(File appFilesDir) throws IOException {
@@ -266,6 +300,10 @@ public final class AquaWordHistory {
         for (Snapshot item : all) total += item.sizeBytes;
         for (int index = all.size() - 1; index >= 0; index--) {
             Snapshot entry = all.get(index);
+            // Do not evict an active SAF source or the newest recovery point.
+            // Temporarily exceeding the cap is safer than losing a fresh save.
+            if (ACTIVE_WRITEBACKS.containsKey(entry.file.getAbsolutePath()) ||
+                    index == 0) continue;
             if (index >= MAX_SNAPSHOTS || total > MAX_TOTAL_BYTES) {
                 if (entry.file.delete()) {
                     new File(dir, entry.file.getName().replace(DATA_SUFFIX, META_SUFFIX)).delete();

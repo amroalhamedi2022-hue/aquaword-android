@@ -160,7 +160,10 @@ def patch_native_save_checkpoints(path: Path) -> bool:
                             getFilesDir(), stream, name, sourceIdentity, "saved");
                     if (checkpoint == null || checkpoint.sizeBytes <= 0L)
                         throw new java.io.IOException("Empty native recovery checkpoint");
-                    AquaWordHistory.verifyForRestore(checkpoint);
+                    // AQUAWORD_WRITEBACK_LEASE: protect the snapshot while
+                    // SAF performs potentially slow writes and readback.
+                    try (AquaWordHistory.WritebackLease lease =
+                                 AquaWordHistory.holdForWriteback(checkpoint)) {
                     // AQUAWORD_WRITER_SOURCE_STABILITY: the FileInputStream
                     // opened on SAVE is not an immutable snapshot if Writer
                     // overwrites the same inode before the worker runs.
@@ -200,6 +203,7 @@ def patch_native_save_checkpoints(path: Path) -> bool:
                     } else {
                         Log.e(TAG, "AquaWord SAVE not acknowledged because the original document was not written");
                     }
+                    } // release recovery lease after provider writeback
                 } catch (Exception failure) {
                     if (directWriterFile && writerOutput.isFile() && writerOutput.length() > 0L) {
                         // Only failures BEFORE source-readback can be treated

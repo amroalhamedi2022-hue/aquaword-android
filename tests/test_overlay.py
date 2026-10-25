@@ -801,6 +801,11 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('getFilesDir(), stream, name, sourceIdentity, "saved"',lib)
         self.assertIn('AquaWordNativeSaveCheckpoint',lib)
         self.assertIn('AquaWordHistory.preferredDisplayName(',lib)
+        self.assertEqual(lib.count('AQUAWORD_WRITEBACK_LEASE'),1)
+        self.assertIn('AquaWordHistory.holdForWriteback(checkpoint)',lib)
+        self.assertLess(lib.index('AquaWordHistory.holdForWriteback(checkpoint)'),
+                        lib.index('copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)'))
+        self.assertIn('} // release recovery lease after provider writeback',lib)
         self.assertNotIn('getContentResolver().query(', lib.split(
             'private void captureNativeSaveCheckpoint(',1)[1].split('private boolean documentLoaded',1)[0])
         self.assertIn('aquaword_snapshot_saved',browser)

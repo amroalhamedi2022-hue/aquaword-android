@@ -250,11 +250,35 @@ public class AquaWordHistoryTest {
             AquaWordHistory.restore(recoveredAfterPause, afterPause);
             check(Arrays.equals(new byte[]{65}, afterPause.toByteArray()),
                     "intermittent provider lost valid document bytes");
+            // Concurrent SAF writeback leases must survive retention pressure.
+            AquaWordHistory.Snapshot pinned = AquaWordHistory.capture(
+                root, new ByteArrayInputStream("in-flight SAF save".getBytes("UTF-8")),
+                "pinned.docx", "content://slow-provider/active", "saved");
+            AquaWordHistory.WritebackLease firstLease =
+                    AquaWordHistory.holdForWriteback(pinned);
+            AquaWordHistory.WritebackLease secondLease =
+                    AquaWordHistory.holdForWriteback(pinned);
+            firstLease.close();
+            firstLease.close(); // idempotent, must not release second lease
             byte[] huge = new byte[1024];
             for (int i = 0; i < 65; i++) {
                 AquaWordHistory.capture(root, new ByteArrayInputStream(huge), "sample"+i+".odt");
             }
-            check(AquaWordHistory.list(root).size() <= 60, "retention count");
+            check(pinned.file.isFile(), "active SAF source deleted during retention");
+            ByteArrayOutputStream pinnedCopy = new ByteArrayOutputStream();
+            AquaWordHistory.restore(pinned, pinnedCopy);
+            check("in-flight SAF save".equals(pinnedCopy.toString("UTF-8")),
+                    "pinned recovery bytes changed");
+            secondLease.close();
+            secondLease.close();
+            check(AquaWordHistory.list(root).size() <= 60,
+                    "retention not restored after releasing the lease");
+            boolean invalidLeaseRejected = false;
+            try (AquaWordHistory.WritebackLease ignored =
+                         AquaWordHistory.holdForWriteback(s)) {
+                // Earlier test intentionally corrupted s.
+            } catch (IOException expected) { invalidLeaseRejected = true; }
+            check(invalidLeaseRejected, "corrupt recovery source was pinned");
             System.out.println("PASS: UTF-8, atomic capture, metadata, restore, corrupted data, safe names, saved revision labels, verified deduplication, bit-rot recovery, separate source histories, changed revisions, retention");
         } finally {
             delete(root);
