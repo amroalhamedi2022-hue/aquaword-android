@@ -598,8 +598,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
             'private boolean documentLoaded', 1)[0]
         self.assertIn('AQUAWORD_DURABLE_SAVE_BARRIER', method)
         self.assertLess(method.index('AquaWordHistory.capture('),
-                        method.index('AquaWordHistory.verifyForRestore(checkpoint);'))
-        self.assertLess(method.index('AquaWordHistory.verifyForRestore(checkpoint);'),
+                        method.index('AquaWordHistory.holdForWriteback(checkpoint)'))
+        self.assertLess(method.index('AquaWordHistory.holdForWriteback(checkpoint)'),
                         method.index('copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)'))
         self.assertLess(method.index('copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)'),
                         method.index('sendBroadcast(saveMessage[0], saveMessage[1]);'))
@@ -650,7 +650,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('new java.io.FileInputStream(writerOutput)',method)
         self.assertIn('boolean written = directWriterFile ||',method)
         self.assertIn('copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)',method)
-        self.assertLess(method.index('AquaWordHistory.verifyForRestore(checkpoint);'),
+        self.assertLess(method.index('AquaWordHistory.holdForWriteback(checkpoint)'),
                         method.index('boolean written = directWriterFile ||'))
         self.assertIn('if (directWriterFile && writerOutput.isFile() && writerOutput.length() > 0L)',method)
         self.assertIn('Native file saved by Writer, but recovery checkpoint failed',method)
@@ -751,7 +751,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('writerReadbackStarted = true;',checkpoint)
         self.assertIn('new java.io.FileInputStream(writerOutput)',checkpoint)
         self.assertIn('AquaWordHistory.verifyProviderWriteback(checkpoint, writerReadback);',checkpoint)
-        self.assertLess(checkpoint.index('AquaWordHistory.verifyForRestore(checkpoint);'),
+        self.assertLess(checkpoint.index('AquaWordHistory.holdForWriteback(checkpoint)'),
                         checkpoint.index('writerReadbackStarted = true;'))
         self.assertLess(checkpoint.index('AquaWordHistory.verifyProviderWriteback(checkpoint, writerReadback);'),
                         checkpoint.index('copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)'))
