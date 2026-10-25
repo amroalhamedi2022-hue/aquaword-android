@@ -300,12 +300,18 @@ jobs:
           find collabora/android -type f -name '*debug*.apk' -print > output/apk-paths.txt
           test -s output/apk-paths.txt
           AAPT="$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt"
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner"
+          test -x "$APKSIGNER"
           while IFS= read -r apk; do
             unzip -t "$apk" >/dev/null
             # Require the pinned ARM64 LibreOffice engine (exact bytes or identical
             # ELF loadable segments after Android Gradle debug-symbol stripping).
             # Unrelated .so, altered executable bytes and wrong ABI must fail.
             python3 scripts/verify_native_apk.py --apk "$apk" --engine-dir collabora/engine --abi "$ABI"
+            signature_report="output/$(basename "$apk").signature.txt"
+            "$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$signature_report"
+            grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' "$signature_report"
+            grep -Fq 'Signer #1 certificate SHA-256 digest:' "$signature_report"
             "$AAPT" dump badging "$apk" | grep -q "package: name='com.aquaword.app.debug'"
             for template in research_en research_ar clinical_case study_notes blank; do
               unzip -p "$apk" "assets/aquaword/$template.docx" > "output/$template.package.docx"
@@ -329,6 +335,10 @@ jobs:
           echo "Pinned Collabora: \`$UPSTREAM_SHA\`" >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           cat output/SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
+          for report in output/*.signature.txt; do
+            test -s "$report"
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          done
           df -h . | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload compile-only native APK for short-lived download
         id: diagnostic_apk_artifact
@@ -340,6 +350,7 @@ jobs:
           path: |
             output/AquaWord-*.apk
             output/SHA256SUMS
+            output/*.signature.txt
             output/upstream-version.txt
           if-no-files-found: error
           retention-days: 1
