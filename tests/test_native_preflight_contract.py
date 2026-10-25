@@ -80,12 +80,16 @@ class NativePreflightContractTests(unittest.TestCase):
 
     def test_diagnostic_apk_contains_arm64_native_engine_not_just_java(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("lib/arm64-v8a/", workflow)
-        self.assertIn("APK is missing ARM64 shared libraries", workflow)
-        self.assertIn("APK is missing Android classes.dex", workflow)
-        self.assertLess(workflow.index("APK is missing ARM64 shared libraries"),
+        verifier = (ROOT / "scripts/verify_native_apk.py").read_text(encoding="utf-8")
+        invocation = 'python3 scripts/verify_native_apk.py --apk "$apk" --engine-dir collabora/engine --abi "$ABI"'
+        self.assertIn(invocation, workflow)
+        self.assertIn('member_name = f"lib/{abi}/liblo-native-code.so"', verifier)
+        self.assertIn('("classes.dex", member_name)', verifier)
+        self.assertIn("load_segments(extracted, total, abi)", verifier)
+        self.assertIn("load_segments(source, expected[\"size\"], abi)", verifier)
+        self.assertLess(workflow.index(invocation),
                         workflow.index("Record real APK metadata and source provenance"))
-        self.assertLess(workflow.index("APK is missing ARM64 shared libraries"),
+        self.assertLess(workflow.index(invocation),
                         workflow.index("Retain valid compiled APK when emulator certification is blocked"))
 
     def test_diagnostic_build_requires_reason_and_excludes_final_ready(self):
