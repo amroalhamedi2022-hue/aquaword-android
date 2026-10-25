@@ -79,14 +79,32 @@ public final class AquaWordHistory {
         }
     }
 
-    /** Acquire under the same monitor used by retention; no lock during I/O. */
-    public static synchronized WritebackLease holdForWriteback(Snapshot snapshot)
+    /**
+     * Pin the recovery bytes under the retention monitor, then hash them
+     * OUTSIDE it. A large local checkpoint must not block unrelated history
+     * operations while its SHA-256 is being verified before SAF writeback.
+     * On verification failure the lease is always released.
+     */
+    public static WritebackLease holdForWriteback(Snapshot snapshot)
             throws IOException {
-        verifyForRestore(snapshot);
-        String key = snapshot.file.getAbsolutePath();
-        Integer active = ACTIVE_WRITEBACKS.get(key);
-        ACTIVE_WRITEBACKS.put(key, active == null ? 1 : active + 1);
-        return new WritebackLease(snapshot.file);
+        if (snapshot == null || snapshot.sizeBytes <= 0L)
+            throw new IOException("Recovery snapshot missing or checksum mismatch");
+        final WritebackLease lease;
+        synchronized (AquaWordHistory.class) {
+            String key = snapshot.file.getAbsolutePath();
+            Integer active = ACTIVE_WRITEBACKS.get(key);
+            ACTIVE_WRITEBACKS.put(key, active == null ? 1 : active + 1);
+            lease = new WritebackLease(snapshot.file);
+        }
+        boolean verified = false;
+        try {
+            if (!verifyBytes(snapshot))
+                throw new IOException("Recovery snapshot missing or checksum mismatch");
+            verified = true;
+            return lease;
+        } finally {
+            if (!verified) lease.close();
+        }
     }
 
     private static File folder(File appFilesDir) throws IOException {
