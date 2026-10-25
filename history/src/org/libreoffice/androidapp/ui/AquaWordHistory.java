@@ -30,6 +30,8 @@ public final class AquaWordHistory {
     private static final long MAX_SINGLE_BYTES = 512L * 1024L * 1024L;
     private static final long MAX_TOTAL_BYTES = 1024L * 1024L * 1024L;
     private static final int MAX_SNAPSHOTS = 60;
+    // Leave interrupted writes available for manual recovery for one week.
+    private static final long INCOMPLETE_GRACE_MILLIS = 7L * 24L * 60L * 60L * 1000L;
 
     private AquaWordHistory() { }
 
@@ -57,7 +59,35 @@ public final class AquaWordHistory {
         File target = new File(appFilesDir, FOLDER);
         if (!target.isDirectory() && !target.mkdirs())
             throw new IOException("Unable to create app-private snapshot directory");
+        pruneStaleIncompleteFiles(target);
         return target;
+    }
+
+    /**
+     * A process kill can leave large temporary data or metadata files behind.
+     * Remove only week-old incomplete writes and metadata without its data.
+     * Never delete an orphan .snapshot: it may be the user's only recoverable
+     * document bytes even when its metadata was lost during a crash.
+     * All entry points using folder() hold the class monitor in this process.
+     */
+    private static void pruneStaleIncompleteFiles(File dir) {
+        File[] entries = dir.listFiles();
+        if (entries == null) return;
+        long cutoff = System.currentTimeMillis() - INCOMPLETE_GRACE_MILLIS;
+        for (File entry : entries) {
+            if (!entry.isFile()) continue;
+            long modified = entry.lastModified();
+            // An unreadable timestamp (0) is not evidence that deletion is safe.
+            if (modified <= 0L || modified >= cutoff) continue;
+            String name = entry.getName();
+            boolean incomplete = name.endsWith(".partial") ||
+                    name.endsWith(".meta-partial");
+            if (!incomplete && name.endsWith(META_SUFFIX)) {
+                String id = name.substring(0, name.length() - META_SUFFIX.length());
+                incomplete = !new File(dir, id + DATA_SUFFIX).isFile();
+            }
+            if (incomplete) entry.delete(); // best effort; never block recovery
+        }
     }
 
     public static synchronized Snapshot capture(File appFilesDir, InputStream input,
