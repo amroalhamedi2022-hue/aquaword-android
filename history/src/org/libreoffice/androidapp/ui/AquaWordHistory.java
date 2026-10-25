@@ -113,7 +113,7 @@ public final class AquaWordHistory {
                 }
                 output.getFD().sync();
             }
-            String newHash = hex(sha.digest());
+            // A provider returning immediate EOF must not become a restorable\n            // zero-byte revision. SAF restore can truncate its destination.\n            if (length == 0L)\n                throw new IOException("Refusing empty document recovery snapshot");\n            String newHash = hex(sha.digest());
             // An unchanged document already has a safety copy; reopening it
             // should not consume more storage. Compare with its newest entry.
             for (Snapshot previous : readAll(dir)) {
@@ -175,7 +175,7 @@ public final class AquaWordHistory {
             long length = Long.parseLong(props.getProperty("size", "-1"));
             long when = Long.parseLong(props.getProperty("timestamp", "0"));
             if (hash.length() != 64 || sourceHash.length() != 64 ||
-                    length != data.length() || when <= 0L)
+                    length <= 0L || length != data.length() || when <= 0L)
                 return null;
             return new Snapshot(data, name, when, length, hash, sourceHash, kind);
         } catch (IOException | IllegalArgumentException e) {
@@ -263,7 +263,7 @@ public final class AquaWordHistory {
      * Call this before ContentResolver.openOutputStream(), not afterwards.
      */
     public static synchronized void verifyForRestore(Snapshot snapshot) throws IOException {
-        if (snapshot == null || !verifyBytes(snapshot))
+        if (snapshot == null || snapshot.sizeBytes <= 0L || !verifyBytes(snapshot))
             throw new IOException("Recovery snapshot missing or checksum mismatch");
     }
 
@@ -276,7 +276,7 @@ public final class AquaWordHistory {
      */
     public static void verifyProviderWriteback(Snapshot snapshot, InputStream providerInput)
             throws IOException {
-        if (snapshot == null || providerInput == null)
+        if (snapshot == null || snapshot.sizeBytes <= 0L || providerInput == null)
             throw new IOException("SAF provider readback unavailable");
         MessageDigest checksum = digest();
         byte[] buffer = new byte[64 * 1024];
