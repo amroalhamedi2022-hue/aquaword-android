@@ -64,12 +64,12 @@ class FinalReadyGateTests(unittest.TestCase):
         self.assertNotIn("\n  push:", queue_trigger)
         self.assertNotIn("\n  pull_request:", queue_trigger)
         self.assertNotIn("\n  pull_request:", native_trigger)
-        # Native push is narrowly scoped to a newly ADDED request file on the
-        # single development branch. An edit or normal source push cannot build.
+        # Native push is narrowly scoped to a request file on the
+        # single development branch AND exact request commit message. Normal pushes cannot build.
         self.assertIn("branches: [fix/saf-save-failure-recovery-20261023]", native_trigger)
         self.assertIn("paths: ['.github/native-diagnostic-once.request']", native_trigger)
-        self.assertIn("contains(github.event.head_commit.added, '.github/native-diagnostic-once.request')", native)
-        self.assertIn("ONE_SHOT_MARKER_ADDED", native)
+        self.assertIn("github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair'", native)
+        self.assertIn("ONE_SHOT_REQUEST_MATCH", native)
         self.assertIn("Compile-only: yes.", native)
         self.assertLess(native.index("bash scripts/check_final_ready.sh"),
                         native.index("Build or safely reuse LibreOffice native ARM64 engine"))
