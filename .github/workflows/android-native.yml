@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   native-debug:
-    if: ${{ (((inputs.final_ready == true && inputs.diagnostic_build != true) || (inputs.diagnostic_build == true && inputs.final_ready != true && inputs.diagnostic_reason != '')) && !(inputs.diagnostic_compile_only == true && inputs.diagnostic_build != true)) || (github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair') }}
+    if: ${{ (((inputs.final_ready == true && inputs.diagnostic_build != true) || (inputs.diagnostic_build == true && inputs.final_ready != true && inputs.diagnostic_reason != '')) && !(inputs.diagnostic_compile_only == true && inputs.diagnostic_build != true)) || (github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
     # One native build at a time; never cancel hours of native compilation on a push.
     # Heavy native builds are MANUAL only to avoid repeated hours-long runs on every workflow edit.
     runs-on: ubuntu-24.04
@@ -58,7 +58,7 @@ jobs:
           DIAGNOSTIC_COMPILE_ONLY: ${{ inputs.diagnostic_compile_only }}
           DIAGNOSTIC_REASON: ${{ inputs.diagnostic_reason }}
           RUN_EVENT: ${{ github.event_name }}
-          ONE_SHOT_REQUEST_MATCH: ${{ github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair' }}
+          ONE_SHOT_REQUEST_MATCH: ${{ github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -324,7 +324,7 @@ jobs:
           cat output/SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
           df -h . | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Verify installation and Arabic DOCX on a real Android emulator
-        if: ${{ !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair') }}
+        if: ${{ !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -351,7 +351,7 @@ jobs:
       # Only after real Android edit-save-reopen succeeds, store as UNPUBLISHED
       # draft Release to avoid exhausted Actions artifact storage.
       - name: Preserve emulator-verified APK in an unpublished QA draft
-        if: ${{ success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair') }}
+        if: ${{ success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -360,7 +360,7 @@ jobs:
       # (e.g. unsupported ARM64 translation), keep the bytes for internal
       # device debugging without claiming Android acceptance.
       - name: Retain valid compiled APK when emulator certification is blocked
-        if: ${{ failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) || (success() && github.event_name == 'push' && github.event.head_commit.message == 'ci(native): request one-time ARM64 diagnostic after source-gate repair') }}
+        if: ${{ failure() || (success() && inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) || (success() && github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
         continue-on-error: true
         shell: bash
         env:
