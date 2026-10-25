@@ -61,6 +61,34 @@ public final class AquaWordPdfPreflight {
         throw new IOException("Native PDF export lacks final startxref");
     }
 
+    private static boolean plausibleClassicXref(String start) {
+        // ISO 32000-1 section 7.5.4: xref entries are exactly 20 bytes,
+        // including their two-byte line ending. Check a bounded prefix
+        // rather than accepting a single plausible-looking entry anywhere.
+        java.util.regex.Matcher header = java.util.regex.Pattern.compile(
+                "\\Axref[ \\t]*(?:\\r\\n|\\r|\\n)[ \\t]*[0-9]+[ \\t]+([0-9]+)[ \\t]*(?:\\r\\n|\\r|\\n)")
+                .matcher(start);
+        if (!header.find()) return false;
+        final int count;
+        try {
+            count = Integer.parseInt(header.group(1));
+        } catch (NumberFormatException invalidCount) {
+            return false;
+        }
+        // A zero-entry hybrid xref requires separate /XRefStm validation;
+        // conservatively reject it until that validation is implemented.
+        if (count <= 0) return false;
+        int position = header.end();
+        for (int i = 0; i < Math.min(count, 8); i++) {
+            if (position + 20 > start.length()) return false;
+            String entry = start.substring(position, position + 20);
+            if (!entry.matches("[0-9]{10} [0-9]{5} [nf](?: \\r| \\n|\\r\\n)"))
+                return false;
+            position += 20;
+        }
+        return true;
+    }
+
     private static void verifyCrossReference(RandomAccessFile source, long offset)
             throws IOException {
         // Bound the probe even for very large PDFs. A plausible object header
@@ -70,10 +98,9 @@ public final class AquaWordPdfPreflight {
         byte[] sample = new byte[(int) Math.min(8192L, source.length() - offset)];
         source.readFully(sample);
         String start = new String(sample, StandardCharsets.US_ASCII);
-        // A classic table needs a subsection and at least one real entry.
-        if (start.matches("(?s)^xref\\s+[0-9]+\\s+[0-9]+\\s+" +
-                "[0-9]{10}\\s+[0-9]{5}\\s+[nf]\\b.*"))
-            return;
+        // A classic table must have a subsection and correctly framed
+        // fixed-width entries, not just a matching prefix.
+        if (plausibleClassicXref(start)) return;
         // PDF 1.5+ cross-reference streams must be indirect objects whose
         // dictionary explicitly declares /Type /XRef before stream data.
         // This is a conservative bounded screen, NOT a complete PDF parser.
@@ -85,6 +112,8 @@ public final class AquaWordPdfPreflight {
             throw new IOException("PDF cross-reference stream header is incomplete");
         String header = start.substring(dictionary, stream);
         if (!header.matches("(?s).*?/Type\\s*/XRef\\b.*") ||
+                !header.matches("(?s).*?/Size\\s+[1-9][0-9]*\\b.*") ||
+                !header.matches("(?s).*?/W\\s*\\[\\s*[0-9]+\\s+[0-9]+\\s+[0-9]+\\s*\\].*") ||
                 !header.matches("(?s).*>>\\s*"))
             throw new IOException("PDF startxref object is not a cross-reference stream");
     }
