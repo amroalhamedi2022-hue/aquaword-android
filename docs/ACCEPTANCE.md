@@ -194,3 +194,13 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - Recovery Core JVM-only CI [#40394504450](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394504450): **PASS**; log includes `PASS: active writeback lease pins exact recovery bytes under retention pressure`.
 - Full Integration CI [#40394504512](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394504512): **IN PROGRESS** at this checkpoint; do not treat it as PASS until completed.
 - Android SAF provider behavior, native APK install/launch, real Writer Arabic/English round-trip, print/PDF and Xiaomi Pad 5 remain **NOT TESTED**.
+
+
+## 2026-10-27 — SAF restore staging gate (M-NATIVE-01)
+
+- Added AquaWordHistory.restoreToDestination(snapshot, opener): a private staging copy is written, fsynced, and checked for exact size/SHA-256 and canonical parent before the destination opener is invoked. Native restore now supplies the wt/fallback rwt open as a callback, so a corrupt or changing local recovery source is rejected before the SAF destination is opened.
+- Regression coverage mutates/truncates the original checkpoint during destination writes and changes it after staging but before opener invocation; the staged output must remain byte-identical and temporary files must be cleaned.
+- Tested head 35d8e8009604e9ca6d979f4bff6b5803f3ebf1b3: JVM Recovery Core [#40413364675 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40413364675); Fast Source/SAF [#40413364669 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40413364669); Integration [#40413364968 PENDING at checkpoint update](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40413364968).
+- NOT TESTED: real Android SAF provider failure/truncation, device process death, native Writer DOCX roundtrip, print/PDF, Xiaomi Pad 5 visual/performance, and device runtime. The staging design does not make a provider's mid-write failure atomic.
+- No APK build: JVM/overlay tests directly answer the source-staging ordering question; no fresh native build is authorized by the consumed one-shot diagnostic route.
+- Google Drive AquaWord — HANDOFF sync: FAILED / NOT AVAILABLE because this runtime exposes no Docs/Drive write connector; no Drive update is claimed. PR #7 stays Draft; main unchanged.

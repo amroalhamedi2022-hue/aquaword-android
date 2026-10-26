@@ -367,3 +367,12 @@ Current PR #7 head is `aea1a5792e90634080b85d7a1cd0a450beccb7d8`.
 - **PASS:** Full Integration [#40387367659](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40387367659) completed on documentation checkpoint `28e0a4c0c3640f8dcff10f4f1ffcd31b5fe45ef1`; production/test source remains `aea1a5792e90634080b85d7a1cd0a450beccb7d8`. LibreOffice desktop DOCX roundtrip and the integration suite passed. The older cancelled run #40384562866 is superseded. This still does not prove Android device/SAF acceptance.
 - **NOT TESTED:** Native Android install/launch, real SAF provider failure/truncation and recovery, Arabic/English native Writer roundtrip, PDF/print and Xiaomi Pad 5 visual/performance acceptance.
 - No APK/EXE packaging was dispatched by this source-status recheck. Google Drive Handoff sync remains unavailable because this runtime exposes no Docs/Drive write connector.
+
+
+## 2026-10-27 — SAF destination staging update
+
+- M-NATIVE-01 remains OPEN. Production now stages and verifies recovery bytes before opening a potentially truncating SAF destination. The snapshot is tied to its canonical history parent; the staged file is fsynced and SHA-256 checked before the destination callback is invoked.
+- Source/test head checked: 35d8e8009604e9ca6d979f4bff6b5803f3ebf1b3. Recovery Core [#40413364675 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40413364675); Fast Source/SAF [#40413364669 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40413364669); Integration [#40413364968 PENDING at checkpoint update](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40413364968).
+- Exact code/test commits: 091fee88160582cfd6c60a4dc154618cc2d6bce7, fd9609e4862f9204da232386881abf2d0fad3f66, d5b7e53f331c41a10c78f412e575c874f66d5480, 35d8e8009604e9ca6d979f4bff6b5803f3ebf1b3.
+- NOT TESTED: Android device runtime and real SAF failure/truncation, native Writer DOCX roundtrip, PDF/print and Xiaomi Pad 5 acceptance. No APK was built because source/JVM tests directly cover the change and the one-shot native diagnostic route must not be repeated.
+- Google Drive AquaWord — HANDOFF: FAILED / NOT AVAILABLE; no Docs/Drive write connector is exposed, and the specified document was not modified. Continue the same milestone; PR #7 remains Draft and main is unchanged.
