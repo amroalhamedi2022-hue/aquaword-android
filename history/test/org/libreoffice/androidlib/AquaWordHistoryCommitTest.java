@@ -26,6 +26,7 @@ public final class AquaWordHistoryCommitTest {
         try {
             testProcessDeathBetweenDataAndMetadataCommit(new File(root, "process-death"));
             testOpenedRestoreDescriptorRejectsSameSizeReplacement(new File(root, "opened-descriptor"));
+            testHistoryDirectorySymlinkRejected(new File(root, "history-symlink"));
             testMetadataRenameFailurePreservesBytes(new File(root, "rename-failure"));
             testRetentionPreservesLatestSnapshotPerDocument(new File(root, "retention"));
         } finally {
@@ -131,6 +132,43 @@ public final class AquaWordHistoryCommitTest {
         check(destination.size() == 0,
                 "restore emitted bytes before verifying the opened recovery descriptor");
         System.out.println("PASS: same-size path replacement is rejected before restore writes");
+    }
+
+    /**
+     * The history directory itself is part of the app-private storage boundary.
+     * A directory symlink must fail closed before listing or writing outside files.
+     */
+    private static void testHistoryDirectorySymlinkRejected(File root) throws Exception {
+        File appFiles = new File(root, "app-files");
+        File outside = new File(root, "outside");
+        check(appFiles.mkdirs() || appFiles.isDirectory(), "could not create app-files fixture");
+        check(outside.mkdirs() || outside.isDirectory(), "could not create outside fixture");
+        File marker = new File(outside, "keep.bin");
+        byte[] expected = "must remain unchanged".getBytes("UTF-8");
+        Files.write(marker.toPath(), expected);
+        File history = new File(appFiles, "aquaword-history");
+        try {
+            Files.createSymbolicLink(history.toPath(), outside.toPath());
+        } catch (IOException | UnsupportedOperationException | SecurityException unavailable) {
+            if (Files.isSymbolicLink(history.toPath())) throw unavailable;
+            System.out.println("SKIP: host does not permit history-directory symlink fixture");
+            return;
+        }
+
+        boolean rejected = false;
+        try {
+            AquaWordHistory.list(appFiles);
+        } catch (IOException expectedFailure) {
+            rejected = expectedFailure.getMessage() != null &&
+                    expectedFailure.getMessage().contains("app-private storage");
+        }
+        check(rejected, "history directory symlink was followed outside app-private storage");
+        check(Arrays.equals(expected, Files.readAllBytes(marker.toPath())),
+                "history scan changed data outside app-private storage");
+        File[] entries = outside.listFiles();
+        check(entries != null && entries.length == 1 && marker.isFile(),
+                "history scan created or removed files through the directory symlink");
+        System.out.println("PASS: history-directory symlink is rejected before external directory access");
     }
 
     private static void testMetadataRenameFailurePreservesBytes(File root) throws Exception {
