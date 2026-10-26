@@ -349,8 +349,9 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('ACTIVE_CAPTURE_WRITES.remove(tempKey);',capture)
         self.assertIn('ACTIVE_CAPTURE_WRITES.contains(entry.getAbsolutePath())',helper)
         self.assertIn('synchronized (AquaWordHistory.class) {',capture)
-        self.assertLess(capture.index('output.getFD().sync();'),
-                        capture.index('synchronized (AquaWordHistory.class) {'))
+        commit_comment = capture.index('// Commit and retention are serialized')
+        commit_lock = capture.index('synchronized (AquaWordHistory.class) {', commit_comment)
+        self.assertLess(capture.index('output.getFD().sync();'), commit_lock)
 
     def test_exportfile_pdf_copy_is_async_verified_and_retains_failure_source(self):
         self.run_phase('source')
