@@ -218,3 +218,11 @@
 - **قرار البناء:** لم يُنشأ APK جديد؛ التغيير محصور في سجل الاسترداد واختبارات JVM وOverlay، ولا يحتاج إلى إعادة بناء محرك LibreOffice المكلف للإجابة عن سؤال الاختبار. تشغيل Android/SAF الحقيقي ما زال NOT TESTED.
 - **Google Drive Handoff:** FAILED / NOT AVAILABLE؛ لا يتوفر موصل Google Docs للكتابة في بيئة التشغيل. لم يتم تعديل مستند AquaWord — HANDOFF ولم يُدّعَ نجاح المزامنة.
 - **المتبقي:** الحصول على Fast Source + Integration على SHA الحالي وإصلاح أي فشل؛ ثم اختبار قتل عملية Android الفعلية، وSAF read-only/provider failure، وDOCX عربي/إنجليزي مع الجداول والصور، والحفظ وإعادة الفتح وPDF/الطباعة على جهاز ARM64 متوافق. **M-NATIVE-01 يبقى OPEN**؛ لا دمج ولا تعديل `main`.
+
+## M-NATIVE-01 — 2026-10-26: protect live recovery captures from stale cleanup
+
+- **Production issue:** history scans prune week-old `.partial` files. A slow SAF/cloud-backed input stream can still be writing a capture when another history/list operation runs; if its partial timestamp is stale, cleanup could unlink the active file and make the capture fail at the final rename.
+- **Production fix:** register each active capture path under the history monitor before creating the temporary file. Stale cleanup checks the same registry while holding that monitor before deleting an incomplete file. The registry is released in the capture `finally` block after temporary-file cleanup. Recovery data and metadata commit ordering are unchanged.
+- **Regression test added:** a blocked input stream writes a first chunk, the test ages its active partial by 15 days, triggers history cleanup concurrently, then resumes the stream and verifies that capture commits and restores the exact Arabic/English UTF-8 bytes.
+- **Verification:** implementation and regression test are committed together. Exact-SHA Fast Source + Integration results must be inspected before marking source verification PASS. This is a host/JVM concurrency test, not a real Android SAF/cloud-provider or Xiaomi Pad 5 test.
+- **Acceptance limits:** native APK install/launch, Writer DOCX Arabic/English roundtrip, Android process death, SAF provider failure, print/PDF and target-device UI remain NOT TESTED. M-NATIVE-01 stays OPEN.
