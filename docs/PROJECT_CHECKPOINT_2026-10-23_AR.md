@@ -325,3 +325,14 @@
 - **الحالة:** Android/SAF الفعلي، موت العملية على الجهاز، تحرير DOCX عربي/إنجليزي وإعادة فتحه، PDF/الطباعة، التثبيت والتشغيل وXiaomi Pad 5 = **NOT TESTED**.
 - **Google Drive Handoff:** **FAILED / NOT AVAILABLE**؛ لا توجد أداة كتابة Google Docs/Drive في بيئة هذه الجولة. لم يُعدّل مستند `AquaWord — HANDOFF` المحدد، ولا ندّعي نجاح المزامنة.
 - **الاستئناف:** أبقِ M-NATIVE-01 مفتوحًا وPR #7 بوضع Draft؛ تحقّق من Integration على أحدث SHA ثم تابع قبول Writer/SAF على Android. `main` لم يتغير.
+
+
+
+## 2026-10-26 — تصحيح حالة Integration CI
+
+- SHA الحالي وقت الفحص: `13158c93fb1be65eeaf6154e98f278252826b62e`.
+- Fast Source and SAF Contract [#40358863204](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40358863204): **PASS**.
+- Integration [#40358863389](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40358863389): **CANCELLED** وليس PASS. أُلغيت خطوة استيراد DOCX وإعادة حفظه عبر LibreOffice المكتبي؛ لذا تم تجاوز اختبارات Java اللاحقة ولم يُثبت هذا التشغيل نجاح اختبار استبدال مسار الاسترداد برابط رمزي.
+- لا بناء APK لهذا التغيير التوثيقي؛ يلزم دليل تكامل محدود زمنيًا، ثم اختبار Android/SAF فعلي. تثبيت/تشغيل Android، تحرير DOCX عربي/إنجليزي وإعادة فتحه، الحفظ لدى مزود فاشل، PDF/الطباعة وXiaomi Pad 5 = **NOT TESTED**.
+- مزامنة Google Drive `AquaWord — HANDOFF`: **FAILED / NOT AVAILABLE** لغياب موصل كتابة Google Docs/Drive؛ لم تتم المزامنة.
+- الاستئناف: أبقِ `M-NATIVE-01` وPR #7 مفتوحين بوضع Draft، واعزل اختبار Java history-core في مسار تكامل محدود إذا تعذر إكمال مرحلة LibreOffice الحالية. لم يتغير `main`.

@@ -337,3 +337,14 @@ The fast-source and integration contracts passed for the tested code SHA. Review
 - **Build decision:** no APK build. This regression is directly tested in the JVM history core; a native build would not prove Android SAF or device-level durability.
 - **NOT TESTED:** real Android process death, SAF cloud/read-only/provider failure, native Writer roundtrip, PDF/print, install/launch and Xiaomi Pad 5 UI. M-NATIVE-01 remains OPEN.
 - **Google Drive AquaWord — HANDOFF sync:** FAILED / NOT AVAILABLE; no Google Docs/Drive write connector is exposed, and the specified document was not modified.
+
+
+## 2026-10-26 — current integration status correction
+
+- Current PR #7 code head at inspection: `13158c93fb1be65eeaf6154e98f278252826b62e`.
+- Fast Source and SAF Contract run [#40358863204](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40358863204): **PASS** on that SHA.
+- Integration run [#40358863389](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40358863389): **CANCELLED**, not PASS. The LibreOffice desktop DOCX import/re-save roundtrip was cancelled; downstream Java history-core and native smoke steps were skipped. Therefore the newest symlink-swap regression has not been proven by this integration run.
+- No APK build was run for this status correction. Source CI directly validates the fast source contract, but cannot establish real Android SAF provider behavior or the native Writer roundtrip.
+- Android install/launch, Arabic/English DOCX editing and cold reopen, SAF read-only/failing provider, process death on device, PDF/print and Xiaomi Pad 5 remain **NOT TESTED**. M-NATIVE-01 remains **OPEN** and PR #7 remains Draft/open.
+- Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** because this automation runtime exposes no Google Docs/Drive write connector. No successful sync is claimed.
+- Next: inspect whether a current-SHA integration rerun can complete without repeating an unbounded LibreOffice stage; otherwise isolate the Java history-core test in a focused, bounded workflow while preserving the existing integration suite.
