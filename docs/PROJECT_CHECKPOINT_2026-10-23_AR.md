@@ -380,3 +380,16 @@
 - **NOT TESTED:** تثبيت وتشغيل APK على Android، فشل/اقتطاع SAF الحقيقي والتعافي، دورة تحرير DOCX عربي/إنجليزي وإعادة فتحه في Writer الأصلي، PDF والطباعة، وقبول Xiaomi Pad 5.
 - مزامنة Google Drive لمستند AquaWord — HANDOFF: **FAILED / NOT AVAILABLE**؛ لم تتم كتابة المستند من هذه البيئة.
 - نقطة الاستئناف: أبقِ M-NATIVE-01 مفتوحًا، أكمل تكامل LibreOffice على SHA الحالي، ثم نفّذ اختبار Android/SAF حقيقيًا. لا تُعلن الاكتمال اعتمادًا على JVM أو فحص المصدر وحدهما.
+
+
+## 2026-10-26 — M-NATIVE-01 recovery retention sub-gate
+
+**Milestone:** M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip (still OPEN).
+
+- Added regression `testWritebackLeasePinsSnapshotDuringRetention` to prove a checkpoint currently being streamed to SAF cannot be evicted by retention when 60 newer distinct-document checkpoints arrive. It verifies the exact Arabic payload can still be restored and the retention cap remains 60.
+- Code/test SHA: `d24d8e44ec71df497b8f8d8a33ed4348876607fe`.
+- Recovery Core JVM-only CI [#40394504450](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394504450): **PASS** (compile, history/crash-window regressions, PDF preflight; new lease test explicitly passed).
+- Full Integration CI [#40394504512](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394504512): **IN PROGRESS** when recorded.
+- **Still NOT TESTED:** native ARM64 build at current head; APK install/launch; Android SAF provider refusal/truncation and recovery; native Writer DOCX Arabic/English edit-save-cold-reopen; print/PDF; Xiaomi Pad 5 visual/performance.
+- **Next:** finish the current full Integration run, then continue toward a purpose-bound native build only if the current source has a concrete compile/package question and a permitted one-shot route. Do not bypass the existing one-shot native diagnostic guard.
+- Google Drive AquaWord — HANDOFF sync: **FAILED / NOT AVAILABLE** in this runtime; no Docs/Drive write connector is exposed, so the specified Drive document was not modified.
