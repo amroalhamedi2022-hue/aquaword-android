@@ -499,12 +499,9 @@ public final class AquaWordHistory {
         long total = 0L;
         for (Snapshot item : all) total += item.sizeBytes;
 
-        // Keep the newest recovery point for each source URI hash. A global
-        // "newest only" rule can delete the only saved revision of document A
-        // merely because document B was saved more recently. That is especially
-        // dangerous when A's SAF writeback failed and its private checkpoint is
-        // the only recoverable copy. Older revisions of the same source remain
-        // eligible for eviction.
+        // Prefer retaining the newest recovery point for each source URI hash.
+        // A global "newest only" rule can delete the only saved revision of
+        // document A merely because document B was saved more recently.
         Set<String> newestSourceHashes = new HashSet<>();
         Set<String> protectedPaths = new HashSet<>();
         for (Snapshot entry : all) {
@@ -513,21 +510,35 @@ public final class AquaWordHistory {
         }
 
         int remainingCount = all.size();
+        // First evict older revisions. This preserves one recent recovery point
+        // per source whenever doing so is compatible with the configured caps.
         for (int index = all.size() - 1; index >= 0; index--) {
+            if (remainingCount <= MAX_SNAPSHOTS && total <= MAX_TOTAL_BYTES) break;
             Snapshot entry = all.get(index);
             String path = entry.file.getAbsolutePath();
-            // Retention limits are soft when enforcing them would delete the
-            // only/latest recovery point for a document or a live writeback.
-            // Old revisions are removed first; a later source's save must not
-            // make another document's newest recoverable revision disappear.
             if (ACTIVE_WRITEBACKS.containsKey(path) || protectedPaths.contains(path))
                 continue;
-            if (remainingCount > MAX_SNAPSHOTS || total > MAX_TOTAL_BYTES) {
-                if (entry.file.delete()) {
-                    new File(dir, entry.file.getName().replace(DATA_SUFFIX, META_SUFFIX)).delete();
-                    total -= entry.sizeBytes;
-                    remainingCount--;
-                }
+            if (entry.file.delete()) {
+                new File(dir, entry.file.getName().replace(DATA_SUFFIX, META_SUFFIX)).delete();
+                total -= entry.sizeBytes;
+                remainingCount--;
+            }
+        }
+
+        // Hard caps still win if there are more distinct documents than the
+        // retention budget can hold. In that case evict the oldest unpinned
+        // source checkpoints, but never remove the global newest point or a
+        // snapshot currently being streamed to a provider.
+        for (int index = all.size() - 1; index >= 0; index--) {
+            if (remainingCount <= MAX_SNAPSHOTS && total <= MAX_TOTAL_BYTES) break;
+            Snapshot entry = all.get(index);
+            String path = entry.file.getAbsolutePath();
+            if (index == 0 || ACTIVE_WRITEBACKS.containsKey(path)) continue;
+            if (!protectedPaths.contains(path)) continue;
+            if (entry.file.delete()) {
+                new File(dir, entry.file.getName().replace(DATA_SUFFIX, META_SUFFIX)).delete();
+                total -= entry.sizeBytes;
+                remainingCount--;
             }
         }
     }
