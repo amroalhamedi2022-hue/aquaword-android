@@ -192,6 +192,8 @@ public class AquaWordHistoryTest {
             AquaWordHistory.list(root); // invokes stale-incomplete cleanup
             check(partials[0].isFile(),
                     "stale cleanup unlinked a capture that was still actively streaming");
+            check(partials[0].lastModified() <= stale,
+                    "blocked active capture timestamp changed before the stream resumed");
         } finally {
             allowFinish.countDown();
             worker.join(6000L);
