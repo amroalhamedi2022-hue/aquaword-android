@@ -340,12 +340,14 @@ public final class AquaWordHistory {
             if (!pending.renameTo(meta)) return null;
 
             Snapshot recovered = load(dir, data);
-            if (recovered == null || !verifyBytes(recovered)) {
+            if (recovered == null) {
                 // Preserve the original bytes; let a later history scan retry.
                 meta.delete();
                 return null;
             }
-            return recovered;
+            // Do not hash a large orphan a second time while history operations
+            // are serialized. restore()/verifyForRestore() rechecks the actual
+            // bytes before any destructive SAF destination is opened.
         } catch (IOException | SecurityException failure) {
             return null;
         } finally {
