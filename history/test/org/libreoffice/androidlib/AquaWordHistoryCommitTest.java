@@ -25,6 +25,7 @@ public final class AquaWordHistoryCommitTest {
         try {
             testProcessDeathBetweenDataAndMetadataCommit(new File(root, "process-death"));
             testMetadataRenameFailurePreservesBytes(new File(root, "rename-failure"));
+            testRetentionPreservesLatestSnapshotPerDocument(new File(root, "retention"));
         } finally {
             deleteRecursively(root);
         }
@@ -124,6 +125,63 @@ public final class AquaWordHistoryCommitTest {
         check(Arrays.equals(payload, restored.toByteArray()),
                 "recovered document bytes differ from the original Arabic/English DOCX");
         System.out.println("PASS: failed metadata rename preserves and recovers fsynced DOCX bytes");
+    }
+
+
+    /**
+     * Retention must remove an older revision of a busy document before it
+     * removes another document's only recovery point. This matters when a
+     * newer save on one URI follows a failed SAF writeback on another URI.
+     */
+    private static void testRetentionPreservesLatestSnapshotPerDocument(File root) throws Exception {
+        check(root.mkdirs() || root.isDirectory(), "could not create retention fixture directory");
+        try {
+            AquaWordHistory.capture(root, bytes("A-recoverable"), "A.docx",
+                    "content://test/provider/document-A", "saved");
+            Thread.sleep(3L);
+            AquaWordHistory.capture(root, bytes("B-old"), "B.docx",
+                    "content://test/provider/document-B", "saved");
+            Thread.sleep(3L);
+            AquaWordHistory.capture(root, bytes("B-new"), "B.docx",
+                    "content://test/provider/document-B", "saved");
+            for (int i = 0; i < 58; i++) {
+                AquaWordHistory.capture(root, bytes("other-" + i), "other-" + i + ".txt",
+                        "content://test/provider/other-" + i, "saved");
+            }
+
+            List<AquaWordHistory.Snapshot> snapshots = AquaWordHistory.list(root);
+            check(snapshots.size() == 60,
+                    "retention should remove one older duplicate revision to stay within the count cap");
+            AquaWordHistory.Snapshot a = null;
+            AquaWordHistory.Snapshot b = null;
+            int bRevisions = 0;
+            for (AquaWordHistory.Snapshot snapshot : snapshots) {
+                if ("A.docx".equals(snapshot.displayName)) a = snapshot;
+                if ("B.docx".equals(snapshot.displayName)) {
+                    b = snapshot;
+                    bRevisions++;
+                }
+            }
+            check(a != null,
+                    "retention deleted document A's only/latest recovery point when another URI was newer");
+            check(b != null && bRevisions == 1,
+                    "retention did not discard the older B revision first");
+            ByteArrayOutputStream restoredA = new ByteArrayOutputStream();
+            AquaWordHistory.restore(a, restoredA);
+            check(Arrays.equals("A-recoverable".getBytes("UTF-8"), restoredA.toByteArray()),
+                    "document A recovery bytes changed after retention");
+            ByteArrayOutputStream restoredB = new ByteArrayOutputStream();
+            AquaWordHistory.restore(b, restoredB);
+            check(Arrays.equals("B-new".getBytes("UTF-8"), restoredB.toByteArray()),
+                    "retention did not preserve B's newest saved revision");
+            System.out.println("PASS: retention preserves each document's latest recovery point and evicts older revisions first");
+        } finally {
+            deleteRecursively(root);
+        }
+    }
+
+    private static ByteArrayInputStream bytes(String value) throws IOException {
+        return new ByteArrayInputStream(value.getBytes("UTF-8"));
     }
 
     private static byte[] docxFixture() throws IOException {
