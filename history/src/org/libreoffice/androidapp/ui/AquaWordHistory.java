@@ -289,11 +289,25 @@ public final class AquaWordHistory {
         return n.isEmpty() ? "Untitled Document" : n;
     }
 
+    /**
+     * Derive the sidecar name by removing only the terminal data suffix.
+     * String.replace() is unsafe because a valid basename may itself contain
+     * the text ".snapshot".
+     */
+    private static File metadataFileForSnapshot(File dir, File data) {
+        if (dir == null || data == null) return null;
+        String name = data.getName();
+        if (!name.endsWith(DATA_SUFFIX)) return null;
+        String id = name.substring(0, name.length() - DATA_SUFFIX.length());
+        return new File(dir, id + META_SUFFIX);
+    }
+
     private static Snapshot load(File dir, File data) {
         if (!data.getParentFile().equals(dir) || !data.getName().endsWith(DATA_SUFFIX) ||
                 !data.isFile())
             return null;
-        File propsPath = new File(dir, data.getName().replace(DATA_SUFFIX, META_SUFFIX));
+        File propsPath = metadataFileForSnapshot(dir, data);
+        if (propsPath == null) return null;
         try {
             // A recovery entry is trusted only when both payload and metadata
             // resolve inside the app-private history directory. isFile() alone
@@ -546,7 +560,8 @@ public final class AquaWordHistory {
             if (ACTIVE_WRITEBACKS.containsKey(path) || protectedPaths.contains(path))
                 continue;
             if (entry.file.delete()) {
-                new File(dir, entry.file.getName().replace(DATA_SUFFIX, META_SUFFIX)).delete();
+                File metadata = metadataFileForSnapshot(dir, entry.file);
+                if (metadata != null) metadata.delete();
                 total -= entry.sizeBytes;
                 remainingCount--;
             }
@@ -563,7 +578,8 @@ public final class AquaWordHistory {
             if (index == 0 || ACTIVE_WRITEBACKS.containsKey(path)) continue;
             if (!protectedPaths.contains(path)) continue;
             if (entry.file.delete()) {
-                new File(dir, entry.file.getName().replace(DATA_SUFFIX, META_SUFFIX)).delete();
+                File metadata = metadataFileForSnapshot(dir, entry.file);
+                if (metadata != null) metadata.delete();
                 total -= entry.sizeBytes;
                 remainingCount--;
             }
