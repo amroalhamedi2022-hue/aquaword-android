@@ -73,10 +73,10 @@ public class AquaWordHistoryTest {
         ByteArrayOutputStream packageBytes = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(packageBytes)) {
             zip.putNextEntry(new ZipEntry("[Content_Types].xml"));
-            zip.write("<Types xmlns=\\"http://schemas.openxmlformats.org/package/2006/content-types\\"/>".getBytes("UTF-8"));
+            zip.write("<Types xmlns='http://schemas.openxmlformats.org/package/2006/content-types'/>".getBytes("UTF-8"));
             zip.closeEntry();
             zip.putNextEntry(new ZipEntry("word/document.xml"));
-            zip.write("<w:document xmlns:w=\\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\\"><w:body><w:p><w:r><w:t>مرحبا</w:t></w:r></w:p></w:body></w:document>".getBytes("UTF-8"));
+            zip.write("<w:document xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main'><w:body><w:p><w:r><w:t>مرحبا</w:t></w:r></w:p></w:body></w:document>".getBytes("UTF-8"));
             zip.closeEntry();
         }
         byte[] payload = packageBytes.toByteArray();
