@@ -184,3 +184,13 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - Full Integration: **PASS** on documentation checkpoint `28e0a4c0c3640f8dcff10f4f1ffcd31b5fe45ef1`, with production/test source unchanged at `aea1a5792e90634080b85d7a1cd0a450beccb7d8`: [run #40387367659](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40387367659). The complete LibreOffice desktop DOCX roundtrip and integration workflow finished successfully. Earlier run #40384562866 was cancelled and is superseded by this PASS.
 - Android native APK/device, actual SAF provider failure/truncation, Arabic/English Writer roundtrip, PDF/print and Xiaomi Pad 5 UI remain **NOT TESTED**.
 - Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** in this runtime; no Drive document write is claimed.
+
+
+## 2026-10-26 — writeback-lease retention regression (M-NATIVE-01)
+
+- Added a JVM regression proving an active `AquaWordHistory.WritebackLease` pins the exact Arabic recovery bytes while 60 distinct later checkpoints push the store over its 60-snapshot retention limit.
+- The test also verifies retention returns to the 60-entry cap and that a nested restore under the active lease returns byte-identical content.
+- Test commit: `d24d8e44ec71df497b8f8d8a33ed4348876607fe`.
+- Recovery Core JVM-only CI [#40394504450](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394504450): **PASS**; log includes `PASS: active writeback lease pins exact recovery bytes under retention pressure`.
+- Full Integration CI [#40394504512](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394504512): **IN PROGRESS** at this checkpoint; do not treat it as PASS until completed.
+- Android SAF provider behavior, native APK install/launch, real Writer Arabic/English round-trip, print/PDF and Xiaomi Pad 5 remain **NOT TESTED**.
