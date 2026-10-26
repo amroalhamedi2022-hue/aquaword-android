@@ -496,18 +496,37 @@ public final class AquaWordHistory {
 
     private static void trim(File dir) {
         List<Snapshot> all = readAll(dir);
-        long total = 0;
+        long total = 0L;
         for (Snapshot item : all) total += item.sizeBytes;
+
+        // Keep the newest recovery point for each source URI hash. A global
+        // "newest only" rule can delete the only saved revision of document A
+        // merely because document B was saved more recently. That is especially
+        // dangerous when A's SAF writeback failed and its private checkpoint is
+        // the only recoverable copy. Older revisions of the same source remain
+        // eligible for eviction.
+        Set<String> newestSourceHashes = new HashSet<>();
+        Set<String> protectedPaths = new HashSet<>();
+        for (Snapshot entry : all) {
+            if (newestSourceHashes.add(entry.sourceHash))
+                protectedPaths.add(entry.file.getAbsolutePath());
+        }
+
+        int remainingCount = all.size();
         for (int index = all.size() - 1; index >= 0; index--) {
             Snapshot entry = all.get(index);
-            // Do not evict an active SAF source or the newest recovery point.
-            // Temporarily exceeding the cap is safer than losing a fresh save.
-            if (ACTIVE_WRITEBACKS.containsKey(entry.file.getAbsolutePath()) ||
-                    index == 0) continue;
-            if (index >= MAX_SNAPSHOTS || total > MAX_TOTAL_BYTES) {
+            String path = entry.file.getAbsolutePath();
+            // Retention limits are soft when enforcing them would delete the
+            // only/latest recovery point for a document or a live writeback.
+            // Old revisions are removed first; a later source's save must not
+            // make another document's newest recoverable revision disappear.
+            if (ACTIVE_WRITEBACKS.containsKey(path) || protectedPaths.contains(path))
+                continue;
+            if (remainingCount > MAX_SNAPSHOTS || total > MAX_TOTAL_BYTES) {
                 if (entry.file.delete()) {
                     new File(dir, entry.file.getName().replace(DATA_SUFFIX, META_SUFFIX)).delete();
                     total -= entry.sizeBytes;
+                    remainingCount--;
                 }
             }
         }
