@@ -130,3 +130,15 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **NOT TESTED:** Android device storage behavior, real SAF/cloud-provider failure/readback, Android process death, native Writer Arabic/English DOCX edit-save-cold-reopen, print/PDF, and Xiaomi Pad 5 runtime.
 - **Google Drive Handoff:** **FAILED / NOT AVAILABLE**. No Google Docs/Drive write connector is exposed in this runtime; the specified AquaWord — HANDOFF document (ID `1AVpneu7vimB0YjJDdUs_oHKLrGUIQW4PSg5A5cW6j4I`) was not modified. No sync success is claimed.
 - **Next:** continue M-NATIVE-01 with real Android/SAF evidence; keep PR #7 Draft and do not modify `main`.
+
+
+## Recovery sidecar names with an embedded `.snapshot` token — 2026-10-26
+
+- **Finding:** deriving the metadata filename with Java `String.replace(DATA_SUFFIX, META_SUFFIX)` replaced every occurrence, not only the terminal data suffix. A valid orphan named `legacy.snapshot-copy.snapshot` therefore could not rebuild its expected `legacy.snapshot-copy.properties` sidecar, and retention could target the wrong metadata path.
+- **Production fix:** `AquaWordHistory.metadataFileForSnapshot()` now strips exactly one terminal `.snapshot` suffix. Loading and both retention eviction paths share the same derivation helper. Code commit: [`a8ccaa13749756794d7ec4fd13e79590dd627cca`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/a8ccaa13749756794d7ec4fd13e79590dd627cca).
+- **Regression:** `testSnapshotSuffixInsideBasename` builds a valid Arabic DOCX orphan with an embedded suffix, verifies exact-byte recovery and correct sidecar creation, then fills retention beyond 60 entries and verifies both the oldest snapshot and its matching sidecar are removed. Final code+test SHA: `8af527e334927cf73a16fe3e23d7c0c15367e9b8`.
+- **CI:** Fast Source [run #40330416847 — PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40330416847) on the exact code+test SHA. Integration [run #40330416884](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40330416884) was still in progress at the LibreOffice DOCX roundtrip step when this checkpoint was prepared; no Integration PASS is claimed until its Java history-core test completes on a current SHA.
+- **Build decision:** no APK build. The invariant is directly exercised by the JVM history test; a native package would not strengthen this filename/retention check.
+- **NOT TESTED:** Android runtime/SAF providers, real process death on device, native Writer Arabic/English edit-save-reopen, PDF/print, and Xiaomi Pad 5 visual/performance acceptance.
+- **Google Drive Handoff:** FAILED / NOT AVAILABLE — no Google Docs/Drive write connector is exposed in this runtime; the specified AquaWord — HANDOFF document was not modified.
+- **Milestone:** M-NATIVE-01 remains OPEN. Keep PR #7 Draft and `main` unchanged; continue with current-SHA integration evidence and real Android acceptance gates.
