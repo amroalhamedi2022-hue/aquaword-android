@@ -226,3 +226,7 @@
 - **Regression test added:** a blocked input stream writes a first chunk, the test ages its active partial by 15 days, triggers history cleanup concurrently, then resumes the stream and verifies that capture commits and restores the exact Arabic/English UTF-8 bytes.
 - **Verification:** implementation and regression test are committed together. Exact-SHA Fast Source + Integration results must be inspected before marking source verification PASS. This is a host/JVM concurrency test, not a real Android SAF/cloud-provider or Xiaomi Pad 5 test.
 - **Acceptance limits:** native APK install/launch, Writer DOCX Arabic/English roundtrip, Android process death, SAF provider failure, print/PDF and target-device UI remain NOT TESTED. M-NATIVE-01 stays OPEN.
+
+### Automation handoff status — 2026-10-26
+- Google Drive document **AquaWord — HANDOFF** sync: **FAILED / NOT AVAILABLE**. This runtime exposes no Google Docs/Drive write connector, so the requested document ID `1AVpneu7vimB0YjJDdUs_oHKLrGUIQW4PSg5A5cW6j4I` was not modified. No sync success is claimed.
+- Current connector evidence does not expose the workflow/check-run list for the new commits (commit workflow query returned no PR-triggered runs and combined legacy statuses were empty). Therefore the new slow-capture regression remains **CI PENDING / NOT VERIFIED HERE** until Fast Source and Integration are confirmed on the exact current PR head. This is not a claim that GitHub Actions itself failed.
