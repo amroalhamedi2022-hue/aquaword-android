@@ -845,17 +845,21 @@ public class AquaWordHistoryTest {
                     AquaWordHistory.Snapshot.class.getDeclaredField("sha256");
             java.lang.reflect.Field sourceField =
                     AquaWordHistory.Snapshot.class.getDeclaredField("sourceHash");
+            java.lang.reflect.Field parentPathField =
+                    AquaWordHistory.Snapshot.class.getDeclaredField("canonicalParentPath");
             hashField.setAccessible(true);
             sourceField.setAccessible(true);
+            parentPathField.setAccessible(true);
             java.lang.reflect.Constructor<AquaWordHistory.Snapshot> constructor =
                     AquaWordHistory.Snapshot.class.getDeclaredConstructor(
                             File.class, String.class, long.class, long.class,
-                            String.class, String.class, String.class);
+                            String.class, String.class, String.class, String.class);
             constructor.setAccessible(true);
             AquaWordHistory.Snapshot slowHashSnapshot = constructor.newInstance(
                     slowHashFile, slowRestore.displayName, slowRestore.createdMillis,
                     slowRestore.sizeBytes, (String) hashField.get(slowRestore),
-                    (String) sourceField.get(slowRestore), slowRestore.kind);
+                    (String) sourceField.get(slowRestore), slowRestore.kind,
+                    (String) parentPathField.get(slowRestore));
             java.util.concurrent.atomic.AtomicReference<Throwable> hashFailure =
                     new java.util.concurrent.atomic.AtomicReference<>();
             java.util.concurrent.atomic.AtomicReference<Throwable> listFailure =
