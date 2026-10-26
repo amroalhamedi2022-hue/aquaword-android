@@ -898,9 +898,9 @@ public class AquaWordHistoryTest {
             check(listFailure.get() == null,
                     "history list during checksum failed: " + listFailure.get());
 
-            // Preflight does not freeze an inode. A Writer save may rewrite
-            // the second block after restore has already streamed the first.
-            // Reject the resulting SAF copy instead of reporting success.
+            // Restore now copies and verifies a private staging file before
+            // destination writeback. A concurrent Writer mutation of the
+            // original checkpoint must not alter the bytes being restored.
             byte[] multiBlock = new byte[128 * 1024];
             Arrays.fill(multiBlock, (byte) 0x41);
             AquaWordHistory.Snapshot changingDuringRestore = AquaWordHistory.capture(
@@ -922,21 +922,19 @@ public class AquaWordHistoryTest {
                     }
                 }
             };
-            boolean changedSourceRejected = false;
-            try { AquaWordHistory.restore(changingDuringRestore, mutateOnFirstWrite); }
-            catch (IOException expected) {
-                changedSourceRejected = expected.getMessage().contains("changed during restore");
-            }
-            check(changedSourceRejected,
-                    "restore acknowledged bytes changed after SHA-256 preflight");
+            AquaWordHistory.restore(changingDuringRestore, mutateOnFirstWrite);
+            check(Arrays.equals(multiBlock, mutatedDestination.toByteArray()),
+                    "restore did not isolate output from a concurrent mutation of the original checkpoint");
 
             AquaWordHistory.Snapshot truncatedDuringRestore = AquaWordHistory.capture(
                     root, new ByteArrayInputStream(multiBlock), "truncating.docx",
                     "content://truncation/restore", "saved");
+            ByteArrayOutputStream truncatedDestination = new ByteArrayOutputStream();
             OutputStream truncateOnFirstWrite = new OutputStream() {
                 private boolean truncated;
-                @Override public void write(int b) { }
+                @Override public void write(int b) { truncatedDestination.write(b); }
                 @Override public void write(byte[] b, int off, int len) throws IOException {
+                    truncatedDestination.write(b, off, len);
                     if (!truncated) {
                         truncated = true;
                         try (RandomAccessFile file = new RandomAccessFile(
@@ -946,13 +944,9 @@ public class AquaWordHistoryTest {
                     }
                 }
             };
-            boolean truncatedSourceRejected = false;
-            try { AquaWordHistory.restore(truncatedDuringRestore, truncateOnFirstWrite); }
-            catch (IOException expected) {
-                truncatedSourceRejected = expected.getMessage().contains("changed during restore");
-            }
-            check(truncatedSourceRejected,
-                    "restore acknowledged a source truncated during streaming");
+            AquaWordHistory.restore(truncatedDuringRestore, truncateOnFirstWrite);
+            check(Arrays.equals(multiBlock, truncatedDestination.toByteArray()),
+                    "restore output was truncated by a concurrent change to the original checkpoint");
 
             AquaWordHistory.Snapshot stableDuringRestore = AquaWordHistory.capture(
                     root, new ByteArrayInputStream(multiBlock), "stable.docx",
