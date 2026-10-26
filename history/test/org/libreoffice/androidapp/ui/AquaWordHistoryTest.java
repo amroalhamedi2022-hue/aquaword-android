@@ -170,6 +170,42 @@ public class AquaWordHistoryTest {
         System.out.println("PASS: recovery scan rejects external payload and metadata symlinks");
     }
 
+    /**
+     * Recovery records must not accept symlink aliases even when their targets
+     * stay inside the private directory. A metadata-free alias must not trigger
+     * orphan reconstruction for bytes owned by another snapshot.
+     */
+    private static void testRecoveryRejectsInDirectorySymlinkAliases(File root) throws Exception {
+        byte[] payload = "private recovery fixture — مرحبا".getBytes("UTF-8");
+        AquaWordHistory.Snapshot original = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(payload), "internal.docx",
+                "content://test/provider/internal", "saved");
+        File dir = new File(root, "aquaword-history");
+        File originalMeta = new File(dir,
+                original.file.getName().replace(".snapshot", ".properties"));
+        Path dataAlias = new File(dir, "alias.snapshot").toPath();
+        Path metadataAlias = new File(dir, "alias.properties").toPath();
+        Path orphanAlias = new File(dir, "orphan-alias.snapshot").toPath();
+        try {
+            Files.createSymbolicLink(dataAlias, original.file.toPath());
+            Files.createSymbolicLink(metadataAlias, originalMeta.toPath());
+            List<AquaWordHistory.Snapshot> withPair = AquaWordHistory.list(root);
+            check(withPair.size() == 1 && withPair.get(0).file.equals(original.file),
+                    "in-directory payload/metadata symlink alias became a recovery entry");
+
+            Files.createSymbolicLink(orphanAlias, original.file.toPath());
+            List<AquaWordHistory.Snapshot> withOrphan = AquaWordHistory.list(root);
+            check(withOrphan.size() == 1 && withOrphan.get(0).file.equals(original.file),
+                    "metadata-free in-directory symlink alias became a recovered document");
+            check(!new File(dir, "orphan-alias.properties").exists(),
+                    "orphan recovery published metadata for a symlink alias");
+            System.out.println("PASS: recovery scan rejects in-directory payload/metadata symlink aliases");
+        } catch (IOException | UnsupportedOperationException | SecurityException unsupported) {
+            System.out.println("SKIP: in-directory symlink alias fixture unavailable on this host: " +
+                    unsupported.getClass().getSimpleName());
+        }
+    }
+
     private static void testActiveCaptureSurvivesStaleCleanup(File root) throws Exception {
         final byte[] first = "capture-start — مرحبا".getBytes("UTF-8");
         final byte[] second = " — capture-finished".getBytes("UTF-8");
@@ -286,6 +322,7 @@ public class AquaWordHistoryTest {
             testProcessDeathRecovery(new File(root, "process-death-fixture"));
             testOrphanSnapshotRecovery(new File(root, "orphan-recovery-fixture"));
             testRecoveryRejectsSymlinksOutsideHistoryDirectory(new File(root, "symlink-escape-fixture"));
+            testRecoveryRejectsInDirectorySymlinkAliases(new File(root, "symlink-alias-fixture"));
             testActiveCaptureSurvivesStaleCleanup(new File(root, "active-capture-cleanup-fixture"));
             byte[] unicode = "Hello—مرحبا بالعالم\n📕 PDF & DOCX".getBytes("UTF-8");
             AquaWordHistory.Snapshot s = AquaWordHistory.capture(
