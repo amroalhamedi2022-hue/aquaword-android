@@ -3,6 +3,7 @@ package org.libreoffice.androidlib;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Arrays;
@@ -24,6 +25,7 @@ public final class AquaWordHistoryCommitTest {
         File root = Files.createTempDirectory("aquaword-meta-commit-").toFile();
         try {
             testProcessDeathBetweenDataAndMetadataCommit(new File(root, "process-death"));
+            testOpenedRestoreDescriptorRejectsSameSizeReplacement(new File(root, "opened-descriptor"));
             testMetadataRenameFailurePreservesBytes(new File(root, "rename-failure"));
             testRetentionPreservesLatestSnapshotPerDocument(new File(root, "retention"));
         } finally {
@@ -88,6 +90,43 @@ public final class AquaWordHistoryCommitTest {
                     }
                     return source.renameTo(target);
                 });
+    }
+
+    /**
+     * A same-size regular file can replace a cached path after lease preflight.
+     * Restore must hash the exact opened descriptor and reject it before the
+     * first destination byte, rather than discovering corruption after SAF writes.
+     */
+    private static void testOpenedRestoreDescriptorRejectsSameSizeReplacement(File root)
+            throws Exception {
+        check(root.mkdirs() || root.isDirectory(), "could not create opened-descriptor fixture directory");
+        byte[] payload = "saved recovery bytes — مرحبا".getBytes("UTF-8");
+        AquaWordHistory.Snapshot snapshot = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(payload), "replace.docx",
+                "content://test/provider/opened-descriptor", "saved");
+        byte[] replacement = payload.clone();
+        replacement[0] ^= 0x01;
+        ByteArrayOutputStream destination = new ByteArrayOutputStream();
+
+        try (AquaWordHistory.WritebackLease lease = AquaWordHistory.holdForWriteback(snapshot)) {
+            // Model replacement after the lease's successful SHA check but
+            // before restore opens the path. Length and canonical path still match.
+            Files.delete(snapshot.file.toPath());
+            Files.write(snapshot.file.toPath(), replacement);
+            try (FileInputStream opened = new FileInputStream(snapshot.file)) {
+                boolean rejected = false;
+                try {
+                    AquaWordHistory.verifyOpenedRestoreSource(snapshot, opened);
+                    destination.write(opened.read(new byte[0]));
+                } catch (IOException expected) {
+                    rejected = expected.getMessage().contains("changed before restore");
+                }
+                check(rejected, "same-size replacement passed opened-descriptor verification");
+            }
+        }
+        check(destination.size() == 0,
+                "restore emitted bytes before verifying the opened recovery descriptor");
+        System.out.println("PASS: same-size path replacement is rejected before restore writes");
     }
 
     private static void testMetadataRenameFailurePreservesBytes(File root) throws Exception {
