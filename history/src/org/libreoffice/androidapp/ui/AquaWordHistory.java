@@ -348,6 +348,7 @@ public final class AquaWordHistory {
             // Do not hash a large orphan a second time while history operations
             // are serialized. restore()/verifyForRestore() rechecks the actual
             // bytes before any destructive SAF destination is opened.
+            return recovered;
         } catch (IOException | SecurityException failure) {
             return null;
         } finally {
