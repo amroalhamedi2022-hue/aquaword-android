@@ -120,8 +120,11 @@ public final class AquaWordHistory {
         // to remain the exact expected child. File.isDirectory() follows symlinks,
         // so it cannot by itself establish this storage boundary.
         File base = appFilesDir.getCanonicalFile();
-        if (!base.isDirectory())
-            throw new IOException("App-private snapshot root is not a directory");
+        // Preserve the helper's existing contract: callers/tests may supply a
+        // not-yet-created files root, which can safely be created before the
+        // history child is validated.
+        if (!base.isDirectory() && !base.mkdirs() && !base.isDirectory())
+            throw new IOException("Unable to create app-private snapshot root");
         File target = new File(base, FOLDER);
         if (!target.exists() && !target.mkdirs() && !target.isDirectory())
             throw new IOException("Unable to create app-private snapshot directory");
