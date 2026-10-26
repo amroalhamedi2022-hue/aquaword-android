@@ -3,6 +3,7 @@ package org.libreoffice.androidapp.ui;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.zip.*;
 import org.libreoffice.androidlib.AquaWordHistory;
 public class AquaWordHistoryTest {
     private static void crashDuringCapture(File root) throws Exception {
@@ -69,7 +70,16 @@ public class AquaWordHistoryTest {
     private static void testOrphanSnapshotRecovery(File root) throws Exception {
         File dir = new File(root, "aquaword-history");
         check(dir.mkdirs() || dir.isDirectory(), "could not create orphan recovery fixture");
-        byte[] payload = "Recovered after metadata rename — عربي DOCX".getBytes("UTF-8");
+        ByteArrayOutputStream packageBytes = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(packageBytes)) {
+            zip.putNextEntry(new ZipEntry("[Content_Types].xml"));
+            zip.write("<Types xmlns=\\"http://schemas.openxmlformats.org/package/2006/content-types\\"/>".getBytes("UTF-8"));
+            zip.closeEntry();
+            zip.putNextEntry(new ZipEntry("word/document.xml"));
+            zip.write("<w:document xmlns:w=\\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\\"><w:body><w:p><w:r><w:t>مرحبا</w:t></w:r></w:p></w:body></w:document>".getBytes("UTF-8"));
+            zip.closeEntry();
+        }
+        byte[] payload = packageBytes.toByteArray();
         File orphan = new File(dir, "crash-window.snapshot");
         try (FileOutputStream output = new FileOutputStream(orphan)) {
             output.write(payload);
@@ -85,8 +95,9 @@ public class AquaWordHistoryTest {
         AquaWordHistory.Snapshot recovered = first.get(0);
         check("recovered".equals(recovered.kind), "orphan recovery kind not recorded");
         check(recovered.file.equals(orphan), "recovery must retain the original committed bytes");
-        check(recovered.displayName.startsWith("Recovered document "),
-                "missing source metadata must use a safe recovery label");
+        check(recovered.displayName.startsWith("Recovered document ") &&
+                        recovered.displayName.endsWith(".docx"),
+                "missing source metadata must use a safe DOCX recovery label");
         check(new File(dir, "crash-window.properties").isFile(),
                 "recovery metadata was not committed atomically");
 
