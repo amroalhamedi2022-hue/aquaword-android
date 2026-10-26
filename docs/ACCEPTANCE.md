@@ -175,3 +175,12 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - The history root now rejects a symlink/canonical-path alias before scanning or creating recovery files. JVM test verifies the outside marker remains unchanged. **CI for this exact test SHA: PENDING** until the matching run completes.
 - This is a source-level storage-boundary defense, not a complete defense against every same-UID filesystem race. Android runtime and device acceptance remain NOT TESTED.
 - Google Drive Handoff synchronization: FAILED / NOT AVAILABLE; no claim of a Drive write is made.
+
+## 2026-10-26 current PR #7 verification checkpoint
+
+- Branch/head: `fix/saf-save-failure-recovery-20261023` / `aea1a5792e90634080b85d7a1cd0a450beccb7d8`.
+- Recovery-core JVM tests: **PASS**, [run #40384562650](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562650).
+- Fast source + SAF contract: **PASS**, [run #40384562536](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562536).
+- Full Integration: **CANCELLED**, [run #40384562866](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562866), during the LibreOffice desktop DOCX roundtrip step. This is neither a test failure nor a pass; the complete integration workflow must finish on the current source SHA before this gate can be accepted.
+- Android native APK/device, actual SAF provider failure/truncation, Arabic/English Writer roundtrip, PDF/print and Xiaomi Pad 5 UI remain **NOT TESTED**.
+- Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** in this runtime; no Drive document write is claimed.

@@ -358,3 +358,12 @@ The fast-source and integration contracts passed for the tested code SHA. Review
 - The older Integration run [#40358863389](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40358863389) remains **CANCELLED**; the newer successful run above is the current evidence and does not retroactively change the old run's status.
 - **NOT TESTED:** native APK install/launch on device, Arabic/English Writer edit-save-cold-reopen, real SAF read-only/failing-provider recovery, process death on Android, print/PDF and Xiaomi Pad 5 visual/performance acceptance.
 - No build was warranted for this status update. Google Drive `AquaWord — HANDOFF` remains **FAILED / NOT AVAILABLE** because no Docs/Drive write connector is exposed. M-NATIVE-01 remains OPEN; PR #7 remains Draft/open; `main` unchanged.
+
+## 2026-10-26 — exact-head CI status recheck
+
+Current PR #7 head is `aea1a5792e90634080b85d7a1cd0a450beccb7d8`.
+- **PASS:** Recovery-core JVM-only run [#40384562650](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562650).
+- **PASS:** Fast Source and SAF Contract [#40384562536](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562536).
+- **CANCELLED / NOT ACCEPTED:** Full Integration [#40384562866](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562866) stopped during the LibreOffice desktop DOCX roundtrip. Cancellation reason is not inferred; do not count it as success. Re-run the full integration gate on the current code SHA when a run can complete without being superseded.
+- **NOT TESTED:** Native Android install/launch, real SAF provider failure/truncation and recovery, Arabic/English native Writer roundtrip, PDF/print and Xiaomi Pad 5 visual/performance acceptance.
+- No APK/EXE packaging was dispatched by this source-status recheck. Google Drive Handoff sync remains unavailable because this runtime exposes no Docs/Drive write connector.
