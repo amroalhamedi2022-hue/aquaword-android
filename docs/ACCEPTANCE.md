@@ -81,3 +81,11 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - A JVM regression test blocks a stream between chunks, ages the active partial, triggers cleanup, resumes the stream, and checks exact-byte restore.
 - **CI status for code/test SHA `481a0f7fb9545b3f30b43b15d2e6b8bd55950052`:** Fast Source + real upstream overlay **PASS** in [run #40255989993](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40255989993). Integration [run #40255990010](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40255990010) was still IN PROGRESS at the desktop LibreOffice DOCX import/re-save step when recorded; the Java race test is not yet confirmed executed.
 - **Runtime status:** real Android SAF/cloud-provider behavior, process death on device, native Writer round-trip, PDF/print and Xiaomi Pad 5 remain NOT TESTED.
+
+
+## Recovery checkpoint metadata-commit failure — 2026-10-26
+
+- Production now preserves an already-fsynced and renamed .snapshot if committing its metadata fails; the next history scan can recover its metadata rather than losing the document bytes in finally cleanup.
+- The new deterministic JVM regression injects only the metadata-rename failure, checks temporary-file cleanup, reconstructs the recovered entry and restores byte-identical Arabic/English DOCX data.
+- Exact code/test SHA b5a195f090479a0bce2d27d5521bc7b6158ec257: Fast Source [#40263124801 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40263124801); Integration [#40263124630 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40263124630). Source/JVM evidence only.
+- Native Android install/launch, real SAF provider behavior, process death on device, Writer roundtrip, PDF/print and Xiaomi Pad 5 remain NOT TESTED. M-NATIVE-01 remains open.
