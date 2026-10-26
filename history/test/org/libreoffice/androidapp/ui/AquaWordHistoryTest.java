@@ -121,7 +121,7 @@ public class AquaWordHistoryTest {
     }
 
     private static void writeSnapshotMetadata(File path, byte[] payload, String name)
-            throws IOException {
+            throws Exception {
         Properties metadata = new Properties();
         metadata.setProperty("name", name);
         metadata.setProperty("timestamp", String.valueOf(System.currentTimeMillis()));
