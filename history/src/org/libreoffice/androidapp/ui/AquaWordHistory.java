@@ -315,8 +315,8 @@ public final class AquaWordHistory {
         // bytes and NULs are not exposed as editable text snapshots.
         for (int i = 0; i < length; i++) {
             int value = prefix[i] & 0xff;
-            if (value == 0 || (value < 0x20 && value != '\\t' &&
-                    value != '\\n' && value != '\\r' && value != '\\f'))
+            if (value == 0 || (value < 0x20 && value != 9 &&
+                    value != 10 && value != 13 && value != 12))
                 return null;
         }
         return ".txt";
