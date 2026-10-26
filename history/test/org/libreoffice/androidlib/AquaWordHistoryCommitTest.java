@@ -29,6 +29,7 @@ public final class AquaWordHistoryCommitTest {
             testHistoryDirectorySymlinkRejected(new File(root, "history-symlink"));
             testMetadataRenameFailurePreservesBytes(new File(root, "rename-failure"));
             testRetentionPreservesLatestSnapshotPerDocument(new File(root, "retention"));
+            testWritebackLeasePinsSnapshotDuringRetention(new File(root, "writeback-lease"));
         } finally {
             deleteRecursively(root);
         }
@@ -258,6 +259,39 @@ public final class AquaWordHistoryCommitTest {
             System.out.println("PASS: retention preserves each document's latest recovery point and evicts older revisions first");
         } finally {
             deleteRecursively(root);
+        }
+    }
+
+    /**
+     * A slow SAF writeback must pin its recovery bytes while later checkpoints
+     * force retention above the 60-snapshot limit. Otherwise a concurrent save
+     * could delete the exact file currently being restored.
+     */
+    private static void testWritebackLeasePinsSnapshotDuringRetention(File root) throws Exception {
+        check(root.mkdirs() || root.isDirectory(), "could not create writeback-lease fixture directory");
+        byte[] expected = "leased recovery bytes — مرحبا".getBytes("UTF-8");
+        AquaWordHistory.Snapshot pinned = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(expected), "leased.docx",
+                "content://test/provider/leased-document", "saved");
+        AquaWordHistory.WritebackLease lease = AquaWordHistory.holdForWriteback(pinned);
+        try {
+            for (int i = 0; i < 60; i++) {
+                AquaWordHistory.capture(root, bytes("other-revision-" + i),
+                        "other-" + i + ".txt", "content://test/provider/other-" + i, "saved");
+                // Keep ordering deterministic so the leased checkpoint is the oldest.
+                Thread.sleep(3L);
+            }
+            check(pinned.file.isFile(),
+                    "retention deleted a snapshot while a provider writeback lease was active");
+            check(AquaWordHistory.list(root).size() == 60,
+                    "retention did not enforce the snapshot count cap while preserving the lease");
+            ByteArrayOutputStream restored = new ByteArrayOutputStream();
+            AquaWordHistory.restore(pinned, restored);
+            check(Arrays.equals(expected, restored.toByteArray()),
+                    "writeback lease did not preserve exact Arabic recovery bytes under retention pressure");
+            System.out.println("PASS: active writeback lease pins exact recovery bytes under retention pressure");
+        } finally {
+            lease.close();
         }
     }
 
