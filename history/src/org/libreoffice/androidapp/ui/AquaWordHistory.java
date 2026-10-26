@@ -171,8 +171,21 @@ public final class AquaWordHistory {
     public static Snapshot capture(File appFilesDir, InputStream input,
                                                 String name, String sourceIdentity,
                                                 String kind) throws IOException {
+        return capture(appFilesDir, input, name, sourceIdentity, kind,
+                (source, target) -> source.renameTo(target));
+    }
+
+    /** Package-private rename seam for deterministic crash-window regression tests. */
+    interface RenameStrategy {
+        boolean rename(File source, File target);
+    }
+
+    static Snapshot capture(File appFilesDir, InputStream input,
+                            String name, String sourceIdentity, String kind,
+                            RenameStrategy renameStrategy) throws IOException {
         if (!"pre-edit".equals(kind) && !"saved".equals(kind))
             throw new IOException("Unknown snapshot type");
+        if (renameStrategy == null) throw new IOException("Snapshot rename strategy is required");
         if (input == null) throw new IOException("No readable input stream");
         if (sourceIdentity == null || sourceIdentity.isEmpty())
             throw new IOException("Document source identity is required");
@@ -192,6 +205,7 @@ public final class AquaWordHistory {
         }
         MessageDigest sha = digest();
         long length = 0L;
+        boolean dataCommitted = false;
         try {
             try (FileOutputStream output = new FileOutputStream(temp)) {
                 byte[] buffer = new byte[64 * 1024];
@@ -247,8 +261,11 @@ public final class AquaWordHistory {
                     props.store(metaOut, "AquaWord private document snapshot");
                     metaOut.getFD().sync();
                 }
-                if (!temp.renameTo(data)) throw new IOException("Could not commit snapshot bytes");
-                if (!pendingMeta.renameTo(meta)) throw new IOException("Could not commit snapshot metadata");
+                if (!renameStrategy.rename(temp, data)) throw new IOException("Could not commit snapshot bytes");
+                // The bytes are already fsynced and atomically renamed. If metadata
+                // commit now fails, preserve this orphan so the next scan can recover it.
+                dataCommitted = true;
+                if (!renameStrategy.rename(pendingMeta, meta)) throw new IOException("Could not commit snapshot metadata");
                 Snapshot saved = load(dir, data);
                 if (saved == null) throw new IOException("Snapshot validation failed");
                 trim(dir);
@@ -258,7 +275,9 @@ public final class AquaWordHistory {
             synchronized (AquaWordHistory.class) {
                 temp.delete();
                 pendingMeta.delete();
-                if (!meta.exists()) data.delete();
+                // Never discard a fully committed snapshot just because its metadata
+                // rename failed; readAll() can rebuild metadata from recognized bytes.
+                if (!meta.exists() && !dataCommitted) data.delete();
                 ACTIVE_CAPTURE_WRITES.remove(tempKey);
             }
         }

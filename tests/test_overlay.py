@@ -642,6 +642,17 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertLess(checkpoint.index('AquaWordHistory.capture('),
                         checkpoint.index('copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)'))
 
+    def test_metadata_commit_failure_preserves_recoverable_snapshot(self):
+        """A failed metadata rename must not delete already-fsynced DOCX bytes."""
+        self.run_phase('source')
+        self.run_phase('source')  # idempotent overlay
+        history=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
+        self.assertIn('interface RenameStrategy', history)
+        self.assertIn('boolean dataCommitted = false;', history)
+        self.assertLess(history.index('if (!renameStrategy.rename(temp, data))'),
+                        history.index('dataCommitted = true;'))
+        self.assertIn('if (!meta.exists() && !dataCommitted) data.delete();', history)
+
     def test_native_file_uri_writer_save_does_not_require_saf_copyback(self):
         """Pinned native Writer writes file:// directly; source contract only.
 

@@ -108,9 +108,11 @@ jobs:
           javac -encoding UTF-8 -d build/history-classes \
             history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java \
             history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java \
+            history/test/org/libreoffice/androidlib/AquaWordHistoryCommitTest.java \
             history/src/org/libreoffice/androidapp/ui/AquaWordPdfPreflight.java \
             history/test/org/libreoffice/androidapp/ui/AquaWordPdfPreflightTest.java
           java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordHistoryTest
+          java -cp build/history-classes org.libreoffice.androidlib.AquaWordHistoryCommitTest
           java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordPdfPreflightTest
           # Real desktop LibreOffice PDFs, including Arabic/English templates:
           # source compatibility only; NO Android APK is packaged.
