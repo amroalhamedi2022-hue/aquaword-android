@@ -858,20 +858,23 @@ def patch_history_activity(path: Path) -> bool:
                         // soon as the provider opens. Reject a corrupt/missing
                         // snapshot BEFORE touching the selected destination.
                         AquaWordHistory.verifyForRestore(item);
-                        OutputStream opened;
-                        try {
-                            opened = getContentResolver().openOutputStream(target, "wt");
-                        } catch (java.io.FileNotFoundException | UnsupportedOperationException rejected) {
-                            Log.w(LOGTAG, "Restore provider rejected wt; trying rwt", rejected);
-                            opened = null;
-                        }
-                        if (opened == null)
-                            opened = getContentResolver().openOutputStream(target, "rwt");
-                        if (opened == null)
-                            throw new IOException("No truncating writable recovery destination");
-                        try (OutputStream output = opened) {
-                            AquaWordHistory.restore(item, output);
-                        }
+                        // Stage and checksum the complete recovery copy before
+                        // invoking openOutputStream: SAF providers may truncate
+                        // immediately when "wt"/"rwt" is requested.
+                        AquaWordHistory.restoreToDestination(item, () -> {
+                            OutputStream opened;
+                            try {
+                                opened = getContentResolver().openOutputStream(target, "wt");
+                            } catch (java.io.FileNotFoundException | UnsupportedOperationException rejected) {
+                                Log.w(LOGTAG, "Restore provider rejected wt; trying rwt", rejected);
+                                opened = null;
+                            }
+                            if (opened == null)
+                                opened = getContentResolver().openOutputStream(target, "rwt");
+                            if (opened == null)
+                                throw new IOException("No truncating writable recovery destination");
+                            return opened;
+                        });
                         // AQUAWORD_RESTORE_READBACK_BARRIER: a provider can
                         // accept and close every write yet silently persist
                         // truncated or stale bytes. Never launch Writer or

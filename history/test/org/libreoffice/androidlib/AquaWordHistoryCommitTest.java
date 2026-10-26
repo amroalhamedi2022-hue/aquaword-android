@@ -30,6 +30,7 @@ public final class AquaWordHistoryCommitTest {
             testMetadataRenameFailurePreservesBytes(new File(root, "rename-failure"));
             testRetentionPreservesLatestSnapshotPerDocument(new File(root, "retention"));
             testWritebackLeasePinsSnapshotDuringRetention(new File(root, "writeback-lease"));
+            testRestoreStagesBeforeOpeningProvider(new File(root, "restore-staging"));
         } finally {
             deleteRecursively(root);
         }
@@ -293,6 +294,42 @@ public final class AquaWordHistoryCommitTest {
         } finally {
             lease.close();
         }
+    }
+
+    /**
+     * A provider may truncate as soon as openOutputStream() is called. Recovery
+     * must stage and verify all bytes before invoking that destination opener.
+     * Mutating the original checkpoint after staging must not change restored bytes.
+     */
+    private static void testRestoreStagesBeforeOpeningProvider(File root) throws Exception {
+        check(root.mkdirs() || root.isDirectory(), "could not create restore-staging fixture");
+        byte[] expected = "verified staged recovery — مرحبا / DOCX".getBytes("UTF-8");
+        AquaWordHistory.Snapshot snapshot = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(expected), "staged.docx",
+                "content://test/provider/staged-restore", "saved");
+        byte[] replacement = expected.clone();
+        replacement[0] ^= 0x01;
+        final boolean[] opened = {false};
+        ByteArrayOutputStream destination = new ByteArrayOutputStream();
+
+        AquaWordHistory.restoreToDestination(snapshot, () -> {
+            opened[0] = true;
+            return destination;
+        }, staged -> {
+            // This runs only after a complete staged copy has passed SHA-256.
+            // Simulate another writer replacing the original checkpoint just
+            // before the SAF destination would be opened.
+            Files.write(snapshot.file.toPath(), replacement);
+        });
+
+        check(opened[0], "destination opener was not called after verified staging");
+        check(Arrays.equals(expected, destination.toByteArray()),
+                "restore used mutated original bytes instead of the verified staged copy");
+        File[] leftovers = new File(root, "aquaword-history").listFiles((parent, name) ->
+                name.startsWith("restore-") && name.endsWith(".partial"));
+        check(leftovers != null && leftovers.length == 0,
+                "restore staging file was not cleaned after successful writeback");
+        System.out.println("PASS: recovery staging verifies bytes before opening destination and isolates later source replacement");
     }
 
     private static ByteArrayInputStream bytes(String value) throws IOException {

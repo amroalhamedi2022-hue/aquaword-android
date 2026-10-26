@@ -494,11 +494,12 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertNotIn('openOutputStream(target, "w")',restore)
         self.assertNotIn('openOutputStream(target);',restore)
         self.assertIn('catch (java.io.FileNotFoundException | UnsupportedOperationException rejected)',restore)
-        self.assertIn('if (opened == null)\n                            opened = getContentResolver().openOutputStream(target, "rwt");',restore)
+        self.assertIn('opened = getContentResolver().openOutputStream(target, "rwt");',restore)
         self.assertIn('throw new IOException("No truncating writable recovery destination")',restore)
-        self.assertLess(restore.index('try (OutputStream output = opened)'),
-                        restore.index('success = true;'))
-        self.assertLess(restore.index('AquaWordHistory.restore(item, output);'),
+        self.assertIn('AquaWordHistory.restoreToDestination(item, () -> {',restore)
+        self.assertLess(restore.index('AquaWordHistory.restoreToDestination(item, () -> {'),
+                        restore.index('openOutputStream(target, "wt")'))
+        self.assertLess(restore.index('openOutputStream(target, "rwt")'),
                         restore.index('success = true;'))
         self.assertIn('catch (Exception failure)',restore)
         self.assertIn('success = false;',restore)
@@ -518,8 +519,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertEqual(restore.count('AQUAWORD_RESTORE_PREFLIGHT'),1)
         self.assertIn('AquaWordHistory.verifyForRestore(item);',restore)
         self.assertLess(restore.index('AquaWordHistory.verifyForRestore(item);'),
+                        restore.index('AquaWordHistory.restoreToDestination(item, () -> {'))
+        self.assertLess(restore.index('AquaWordHistory.restoreToDestination(item, () -> {'),
                         restore.index('openOutputStream(target, "wt")'))
-        self.assertLess(restore.index('AquaWordHistory.verifyForRestore(item);'),
+        self.assertLess(restore.index('AquaWordHistory.restoreToDestination(item, () -> {'),
                         restore.index('openOutputStream(target, "rwt")'))
         self.assertIn('catch (Exception failure)',restore)
         self.assertIn('success = false;',restore)
@@ -527,11 +530,12 @@ class AquaWordIntegrationTests(unittest.TestCase):
         helper=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
         self.assertIn('public static synchronized void verifyForRestore(Snapshot snapshot)',helper)
         self.assertIn('snapshot == null || snapshot.sizeBytes <= 0L || !verifyBytes(snapshot)',helper)
+        self.assertIn('public static void restoreToDestination(Snapshot snapshot, DestinationOpener opener)',helper)
+        self.assertIn('private static File stageRestoreCopy(Snapshot snapshot)',helper)
+        self.assertIn('OutputStream opened = opener.open();',helper)
+        self.assertLess(helper.index('stageRestoreCopy(snapshot);'),
+                        helper.index('OutputStream opened = opener.open();'))
         self.assertIn('public static void restore(Snapshot snapshot, OutputStream target)',helper)
-        self.assertIn('try (WritebackLease lease = holdForWriteback(snapshot);',helper)
-        self.assertIn('InputStream in = new FileInputStream(snapshot.file)',helper)
-        self.assertLess(helper.index('holdForWriteback(snapshot);'),
-                        helper.index('target.write(buffer, 0, n);'))
 
     def test_restored_saf_docx_readback_matches_snapshot_before_open(self):
         """A successful close is insufficient: verify provider-visible bytes.
@@ -550,7 +554,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertEqual(restore.count('AquaWordHistory.verifyProviderWriteback(item, readback);'), 1)
         self.assertLess(restore.index('AquaWordHistory.verifyForRestore(item);'),
                         restore.index('openOutputStream(target, "wt")'))
-        self.assertLess(restore.index('AquaWordHistory.restore(item, output);'),
+        self.assertLess(restore.index('AquaWordHistory.restoreToDestination(item, () -> {'),
                         restore.index('openInputStream(target)'))
         self.assertLess(restore.index('openInputStream(target)'),
                         restore.index('AquaWordHistory.verifyProviderWriteback(item, readback);'))
@@ -1034,7 +1038,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
         self.assertEqual(activity.count('AQUAWORD_PREEDIT_COPY'),1)
         self.assertIn('AquaWordHistory.capture(',activity)
-        self.assertIn('AquaWordHistory.restore(',activity)
+        self.assertIn('AquaWordHistory.restoreToDestination(',activity)
         self.assertIn('R.id.action_aquaword_history',activity)
         self.assertTrue((self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').is_file())
         menu=(self.path/'android/app/src/main/res/menu/view_menu.xml').read_text()

@@ -44,6 +44,16 @@ public final class AquaWordHistory {
 
     private AquaWordHistory() { }
 
+    public interface DestinationOpener {
+        /** Open the selected destination only after the recovery bytes are staged and verified. */
+        OutputStream open() throws IOException;
+    }
+
+    /** Package-private deterministic seam for recovery race regression tests. */
+    interface RestoreStageHook {
+        void afterVerifiedStage(File staged) throws IOException;
+    }
+
     public static final class Snapshot {
         public final File file;
         public final String displayName;
@@ -51,9 +61,11 @@ public final class AquaWordHistory {
         public final long sizeBytes;
         private final String sha256;
         private final String sourceHash;
+        private final String canonicalParentPath;
         public final String kind;
         private Snapshot(File file, String displayName, long createdMillis,
-                         long sizeBytes, String sha256, String sourceHash, String kind) {
+                         long sizeBytes, String sha256, String sourceHash, String kind,
+                         String canonicalParentPath) {
             this.file = file;
             this.displayName = displayName;
             this.createdMillis = createdMillis;
@@ -61,6 +73,7 @@ public final class AquaWordHistory {
             this.sha256 = sha256;
             this.sourceHash = sourceHash;
             this.kind = kind;
+            this.canonicalParentPath = canonicalParentPath;
         }
     }
 
@@ -364,7 +377,8 @@ public final class AquaWordHistory {
                 if (hash.length() != 64 || sourceHash.length() != 64 ||
                         length <= 0L || length != data.length() || when <= 0L)
                     return null;
-                return new Snapshot(data, name, when, length, hash, sourceHash, kind);
+                return new Snapshot(data, name, when, length, hash, sourceHash, kind,
+                        canonicalDir.getPath());
             }
         } catch (IOException | IllegalArgumentException | SecurityException e) {
             return null;
@@ -627,6 +641,31 @@ public final class AquaWordHistory {
         }
     }
 
+    /** Bind a cached snapshot to the exact canonical history directory it came from. */
+    private static boolean isCanonicalSnapshotChild(Snapshot snapshot) {
+        return snapshot != null && snapshot.file != null &&
+                snapshot.canonicalParentPath != null &&
+                snapshot.file.getName().endsWith(DATA_SUFFIX) &&
+                isCanonicalChildAtParent(snapshot.file, snapshot.canonicalParentPath);
+    }
+
+    private static boolean isCanonicalChildAtParent(File file, String expectedParentPath) {
+        if (file == null || file.getParentFile() == null || expectedParentPath == null)
+            return false;
+        try {
+            File expectedParent = new File(expectedParentPath).getCanonicalFile();
+            File actualParent = file.getParentFile().getCanonicalFile();
+            File canonicalFile = file.getCanonicalFile();
+            File expectedFile = new File(expectedParent, file.getName()).getAbsoluteFile();
+            return expectedParent.getPath().equals(expectedParentPath) &&
+                    expectedParent.equals(actualParent) &&
+                    expectedParent.equals(canonicalFile.getParentFile()) &&
+                    expectedFile.equals(canonicalFile);
+        } catch (IOException | SecurityException unreadable) {
+            return false;
+        }
+    }
+
     /** Do not deduplicate against a corrupted or path-aliased safety copy. */
     private static boolean verifyBytes(Snapshot snapshot) {
         if (snapshot == null || !isCanonicalSnapshotChild(snapshot.file) ||
@@ -722,61 +761,216 @@ public final class AquaWordHistory {
             throws IOException {
         if (snapshot == null || input == null || snapshot.sizeBytes <= 0L)
             throw new IOException("Missing recovery source");
-        if (!isCanonicalSnapshotChild(snapshot.file) || !snapshot.file.isFile() ||
-                snapshot.file.length() != snapshot.sizeBytes)
-            throw new IOException("Recovery source path changed before restore");
+        verifyOpenedFile(snapshot.file, snapshot.canonicalParentPath,
+                snapshot.sizeBytes, snapshot.sha256, input,
+                "Recovery source changed before restore");
+    }
 
+    private static void verifyOpenedFile(File file, String parentPath, long expectedSize,
+                                         String expectedHash, FileInputStream input,
+                                         String failureMessage) throws IOException {
+        if (file == null || input == null || expectedSize <= 0L ||
+                !isCanonicalChildAtParent(file, parentPath) || !file.isFile() ||
+                file.length() != expectedSize)
+            throw new IOException(failureMessage);
+        long initialModified = file.lastModified();
         MessageDigest checksum = digest();
         byte[] buffer = new byte[64 * 1024];
         long received = 0L;
+        int noProgress = 0;
         int count;
         while ((count = input.read(buffer)) != -1) {
-            if (count == 0) continue;
+            if (count == 0) {
+                if (++noProgress >= 8) throw new IOException(failureMessage);
+                continue;
+            }
+            noProgress = 0;
             received += count;
-            if (received > snapshot.sizeBytes)
-                throw new IOException("Recovery source grew before restore");
+            if (received > expectedSize) throw new IOException(failureMessage);
             checksum.update(buffer, 0, count);
         }
-        if (received != snapshot.sizeBytes ||
-                !hex(checksum.digest()).equals(snapshot.sha256) ||
-                !isCanonicalSnapshotChild(snapshot.file) ||
-                !snapshot.file.isFile() || snapshot.file.length() != snapshot.sizeBytes)
-            throw new IOException("Recovery source changed before restore");
-        // Rewind the same descriptor we just verified; do not reopen the path.
+        if (received != expectedSize ||
+                !hex(checksum.digest()).equals(expectedHash) ||
+                !isCanonicalChildAtParent(file, parentPath) || !file.isFile() ||
+                file.length() != expectedSize || file.lastModified() != initialModified)
+            throw new IOException(failureMessage);
         input.getChannel().position(0L);
     }
 
+    /**
+     * Stage and verify recovery bytes before opening a potentially truncating
+     * SAF destination. Use this overload for Android document providers.
+     */
+    public static void restoreToDestination(Snapshot snapshot, DestinationOpener opener)
+            throws IOException {
+        restoreToDestination(snapshot, opener, null);
+    }
+
+    static void restoreToDestination(Snapshot snapshot, DestinationOpener opener,
+                                     RestoreStageHook hook) throws IOException {
+        if (snapshot == null || opener == null)
+            throw new IOException("Missing recovery destination");
+        try (WritebackLease lease = holdForWriteback(snapshot)) {
+            File staged = stageRestoreCopy(snapshot);
+            try {
+                if (hook != null) hook.afterVerifiedStage(staged);
+                try (FileInputStream input = new FileInputStream(staged)) {
+                    verifyOpenedFile(staged, snapshot.canonicalParentPath,
+                            snapshot.sizeBytes, snapshot.sha256, input,
+                            "Recovery staging file changed before restore");
+                    // Critical ordering: the provider is not opened until the
+                    // complete local staging copy has passed SHA-256 verification.
+                    OutputStream opened = opener.open();
+                    if (opened == null)
+                        throw new IOException("No truncating writable recovery destination");
+                    try (OutputStream target = opened) {
+                        streamVerifiedBytes(snapshot, input, target);
+                    }
+                }
+            } finally {
+                deleteStagedRestoreCopy(staged);
+            }
+        }
+    }
+
+    /**
+     * Legacy stream API. It verifies a private staging copy before writing,
+     * but callers must use restoreToDestination() when opening the stream itself
+     * can truncate an existing provider document.
+     */
     public static void restore(Snapshot snapshot, OutputStream target) throws IOException {
         if (snapshot == null || target == null) throw new IOException("Missing recovery destination");
-        // The lease re-verifies bytes before any potentially destructive SAF
-        // destination write, including when restore() is called directly.
-        try (WritebackLease lease = holdForWriteback(snapshot);
-             FileInputStream in = new FileInputStream(snapshot.file)) {
-            // Bind the checksum to the exact descriptor that will feed the
-            // destination. A same-length regular-file replacement between the
-            // lease preflight and open must fail before the first target write.
-            verifyOpenedRestoreSource(snapshot, in);
-            byte[] buffer = new byte[64 * 1024];
-            MessageDigest streamedHash = digest();
-            long streamedBytes = 0L;
-            int n;
-            while ((n = in.read(buffer)) != -1) {
-                if (n == 0) continue;
-                streamedBytes += n;
-                if (streamedBytes > snapshot.sizeBytes)
-                    throw new IOException("Recovery source grew during restore");
-                streamedHash.update(buffer, 0, n);
-                target.write(buffer, 0, n);
+        try (WritebackLease lease = holdForWriteback(snapshot)) {
+            File staged = stageRestoreCopy(snapshot);
+            try (FileInputStream input = new FileInputStream(staged)) {
+                verifyOpenedFile(staged, snapshot.canonicalParentPath,
+                        snapshot.sizeBytes, snapshot.sha256, input,
+                        "Recovery staging file changed before restore");
+                streamVerifiedBytes(snapshot, input, target);
+            } finally {
+                deleteStagedRestoreCopy(staged);
             }
-            // A separate preflight SHA cannot freeze an inode: another Writer
-            // save may rewrite it while a slow provider consumes the copy.
-            // Never acknowledge success if the bytes actually streamed differ.
-            if (streamedBytes != snapshot.sizeBytes ||
-                    !hex(streamedHash.digest()).equals(snapshot.sha256) ||
-                    !isCanonicalSnapshotChild(snapshot.file))
-                throw new IOException("Recovery source changed during restore");
-            target.flush();
         }
+    }
+
+    private static File stageRestoreCopy(Snapshot snapshot) throws IOException {
+        if (snapshot == null || snapshot.sizeBytes <= 0L ||
+                !isCanonicalSnapshotChild(snapshot) || !snapshot.file.isFile() ||
+                snapshot.file.length() != snapshot.sizeBytes)
+            throw new IOException("Recovery snapshot changed before staging");
+        File dir = snapshot.file.getParentFile();
+        File staged = new File(dir, "restore-" + UUID.randomUUID().toString() + ".partial");
+        String key = staged.getAbsolutePath();
+        synchronized (AquaWordHistory.class) {
+            ACTIVE_CAPTURE_WRITES.add(key);
+        }
+        boolean created = false;
+        boolean ready = false;
+        try {
+            if (!staged.createNewFile())
+                throw new IOException("Could not create private recovery staging file");
+            created = true;
+            MessageDigest stagedHash = digest();
+            long stagedBytes = 0L;
+            int noProgress = 0;
+            try (FileInputStream input = new FileInputStream(snapshot.file)) {
+                verifyOpenedRestoreSource(snapshot, input);
+                try (FileOutputStream output = new FileOutputStream(staged)) {
+                    byte[] buffer = new byte[64 * 1024];
+                    int count;
+                    while ((count = input.read(buffer)) != -1) {
+                        if (count == 0) {
+                            if (++noProgress >= 8)
+                                throw new IOException("Recovery source made no progress while staging");
+                            continue;
+                        }
+                        noProgress = 0;
+                        stagedBytes += count;
+                        if (stagedBytes > snapshot.sizeBytes)
+                            throw new IOException("Recovery source grew while staging");
+                        stagedHash.update(buffer, 0, count);
+                        output.write(buffer, 0, count);
+                    }
+                    output.getFD().sync();
+                }
+            }
+            if (stagedBytes != snapshot.sizeBytes ||
+                    !hex(stagedHash.digest()).equals(snapshot.sha256) ||
+                    !isCanonicalSnapshotChild(snapshot) ||
+                    !isCanonicalChildAtParent(staged, snapshot.canonicalParentPath) ||
+                    !staged.isFile() || staged.length() != snapshot.sizeBytes ||
+                    !verifyStagedBytes(staged, snapshot.canonicalParentPath,
+                            snapshot.sizeBytes, snapshot.sha256))
+                throw new IOException("Recovery source changed while staging");
+            ready = true;
+            return staged;
+        } finally {
+            if (!ready) {
+                synchronized (AquaWordHistory.class) {
+                    if (created) staged.delete();
+                    ACTIVE_CAPTURE_WRITES.remove(key);
+                }
+            }
+        }
+    }
+
+    private static boolean verifyStagedBytes(File file, String parentPath,
+                                             long expectedSize, String expectedHash) {
+        if (!isCanonicalChildAtParent(file, parentPath) || !file.isFile() ||
+                file.length() != expectedSize) return false;
+        long modified = file.lastModified();
+        MessageDigest checksum = digest();
+        long received = 0L;
+        try (DigestInputStream input = new DigestInputStream(
+                new FileInputStream(file), checksum)) {
+            byte[] buffer = new byte[64 * 1024];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                if (count == 0) continue;
+                received += count;
+                if (received > expectedSize) return false;
+            }
+            return received == expectedSize && file.isFile() &&
+                    file.length() == expectedSize && file.lastModified() == modified &&
+                    isCanonicalChildAtParent(file, parentPath) &&
+                    hex(checksum.digest()).equals(expectedHash);
+        } catch (IOException | SecurityException failure) {
+            return false;
+        }
+    }
+
+    private static void deleteStagedRestoreCopy(File staged) {
+        if (staged == null) return;
+        synchronized (AquaWordHistory.class) {
+            staged.delete();
+            ACTIVE_CAPTURE_WRITES.remove(staged.getAbsolutePath());
+        }
+    }
+
+    private static void streamVerifiedBytes(Snapshot snapshot, FileInputStream input,
+                                            OutputStream target) throws IOException {
+        byte[] buffer = new byte[64 * 1024];
+        MessageDigest streamedHash = digest();
+        long streamedBytes = 0L;
+        int noProgress = 0;
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+            if (count == 0) {
+                if (++noProgress >= 8)
+                    throw new IOException("Recovery staging stream made no progress");
+                continue;
+            }
+            noProgress = 0;
+            streamedBytes += count;
+            if (streamedBytes > snapshot.sizeBytes)
+                throw new IOException("Recovery staging file grew during restore");
+            streamedHash.update(buffer, 0, count);
+            target.write(buffer, 0, count);
+        }
+        if (streamedBytes != snapshot.sizeBytes ||
+                !hex(streamedHash.digest()).equals(snapshot.sha256))
+            throw new IOException("Recovery staging file changed during restore");
+        target.flush();
     }
 
     private static MessageDigest digest() {
