@@ -154,3 +154,16 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **NOT TESTED:** actual Android process death, real SAF/cloud-provider write/readback, native Writer Arabic/English DOCX edit-save-cold-reopen, PDF/print, installation/launch and Xiaomi Pad 5.
 - **Google Drive Handoff:** FAILED / NOT AVAILABLE because this automation runtime exposes no Google Docs/Drive write connector. The specified `AquaWord — HANDOFF` document was not modified; no sync success is claimed.
 - **Milestone:** M-NATIVE-01 remains **OPEN**; PR #7 remains Draft and `main` is unchanged.
+
+
+## Opened recovery-descriptor verification — 2026-10-26
+
+- **Milestone:** M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip remains **OPEN**.
+- **Production:** [e507066f9c17c30e3da2887caf889dae241c97d0](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/e507066f9c17c30e3da2887caf889dae241c97d0) verifies the checksum of the exact already-open recovery FileInputStream before any destination bytes are written, then rewinds that same descriptor for restore. This catches a same-size regular-file replacement between the lease preflight and stream opening; it does not claim OS-level no-follow opening or protection against every same-UID in-place mutation race.
+- **Regression:** [651f200b649f2342798af8ea6fbc0d21fd19a8c8](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/651f200b649f2342798af8ea6fbc0d21fd19a8c8) adds a deterministic same-size replacement test and asserts that no destination bytes are emitted before verification succeeds.
+- **Focused JVM CI:** workflow [bc3f93cb4ac309a1c3b01c65968e2ab076fb40ee](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/bc3f93cb4ac309a1c3b01c65968e2ab076fb40ee) adds a bounded, free Ubuntu JVM-only job that runs the snapshot/history and PDF-preflight core without waiting for the desktop LibreOffice roundtrip. [Run #40377152228](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40377152228) **PASS**; logs include the regression result “same-size path replacement is rejected before restore writes”. Fast Source/SAF Contract [#40377152285](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40377152285) **PASS** on this checkpoint.
+- **Full Integration:** [run #40377152231](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40377152231) was still in the desktop LibreOffice DOCX import/re-save step at the time of this checkpoint. **No full Integration PASS is claimed yet.**
+- **Build decision:** no APK build. The question is whether the opened JVM recovery descriptor is verified before the first output write; the focused Java regression directly answers it. APK packaging would not establish real SAF-provider or device behavior.
+- **NOT TESTED:** Android install/launch, real SAF read-only/failing-provider recovery, process death on Android, Arabic/English Writer cold roundtrip on device, print/PDF and Xiaomi Pad 5 UI/performance.
+- **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE** because no Google Docs/Drive write connector is exposed in this runtime. The specified Drive document was not updated; no sync success is claimed.
+- **Next:** keep M-NATIVE-01 open; review completion of full Integration, then continue native Writer/SAF acceptance. PR #7 stays Draft; main unchanged.
