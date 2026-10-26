@@ -113,6 +113,55 @@ public class AquaWordHistoryTest {
     }
 
 
+    /**
+     * A valid snapshot basename may contain the data suffix before its final
+     * extension. Recovery and retention must strip only the terminal suffix.
+     */
+    private static void testSnapshotSuffixInsideBasename(File root) throws Exception {
+        File dir = new File(root, "aquaword-history");
+        check(dir.mkdirs() || dir.isDirectory(), "could not create suffix fixture directory");
+        ByteArrayOutputStream packageBytes = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(packageBytes)) {
+            zip.putNextEntry(new ZipEntry("[Content_Types].xml"));
+            zip.write("<Types xmlns='http://schemas.openxmlformats.org/package/2006/content-types'/>",
+                    0, "<Types xmlns='http://schemas.openxmlformats.org/package/2006/content-types'/>".length());
+            zip.closeEntry();
+            zip.putNextEntry(new ZipEntry("word/document.xml"));
+            byte[] xml = "<w:document xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main'><w:body><w:p><w:r><w:t>مرحبا</w:t></w:r></w:p></w:body></w:document>".getBytes("UTF-8");
+            zip.write(xml);
+            zip.closeEntry();
+        }
+        byte[] payload = packageBytes.toByteArray();
+        File orphan = new File(dir, "legacy.snapshot-copy.snapshot");
+        try (FileOutputStream output = new FileOutputStream(orphan)) {
+            output.write(payload);
+            output.getFD().sync();
+        }
+        long old = System.currentTimeMillis() - 2L * 24L * 60L * 60L * 1000L;
+        check(orphan.setLastModified(old), "could not age suffix fixture");
+
+        List<AquaWordHistory.Snapshot> recovered = AquaWordHistory.list(root);
+        check(recovered.size() == 1 && recovered.get(0).file.equals(orphan),
+                "snapshot basename containing an embedded suffix was not recovered");
+        File sidecar = new File(dir, "legacy.snapshot-copy.properties");
+        check(sidecar.isFile(), "recovery created the wrong metadata sidecar path");
+        ByteArrayOutputStream restored = new ByteArrayOutputStream();
+        AquaWordHistory.restore(recovered.get(0), restored);
+        check(Arrays.equals(payload, restored.toByteArray()),
+                "embedded-suffix orphan recovery changed DOCX bytes");
+
+        for (int i = 0; i < 60; i++) {
+            byte[] bytes = ("retention-" + i).getBytes("UTF-8");
+            AquaWordHistory.capture(root, new ByteArrayInputStream(bytes),
+                    "retention-" + i + ".txt", "content://retention/" + i, "saved");
+        }
+        check(!orphan.exists(), "retention did not evict the oldest embedded-suffix snapshot");
+        check(!sidecar.exists(), "retention deleted the snapshot but left its metadata sidecar");
+        check(AquaWordHistory.list(root).size() <= 60,
+                "retention exceeded the snapshot count after suffix-sidecar eviction");
+        System.out.println("PASS: embedded .snapshot basename recovers and retention removes its exact sidecar");
+    }
+
     private static String sha256Hex(byte[] bytes) throws Exception {
         byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes);
         StringBuilder result = new StringBuilder(digest.length * 2);
@@ -321,6 +370,7 @@ public class AquaWordHistoryTest {
         try {
             testProcessDeathRecovery(new File(root, "process-death-fixture"));
             testOrphanSnapshotRecovery(new File(root, "orphan-recovery-fixture"));
+            testSnapshotSuffixInsideBasename(new File(root, "embedded-suffix-fixture"));
             testRecoveryRejectsSymlinksOutsideHistoryDirectory(new File(root, "symlink-escape-fixture"));
             testRecoveryRejectsInDirectorySymlinkAliases(new File(root, "symlink-alias-fixture"));
             testActiveCaptureSurvivesStaleCleanup(new File(root, "active-capture-cleanup-fixture"));
