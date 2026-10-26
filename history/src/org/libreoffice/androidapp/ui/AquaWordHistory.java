@@ -260,7 +260,8 @@ public final class AquaWordHistory {
                     hex(digest().digest("legacy-unspecified-source".getBytes(StandardCharsets.UTF_8))));
             String name = sanitizeName(props.getProperty("name"));
             String kind = props.getProperty("kind", "pre-edit");
-            if (!"pre-edit".equals(kind) && !"saved".equals(kind))
+            if (!"pre-edit".equals(kind) && !"saved".equals(kind) &&
+                    !"recovered".equals(kind))
                 return null;
             long length = Long.parseLong(props.getProperty("size", "-1"));
             long when = Long.parseLong(props.getProperty("timestamp", "0"));
@@ -273,12 +274,96 @@ public final class AquaWordHistory {
         }
     }
 
+    /**
+     * Recover a fully committed data file whose metadata rename was interrupted
+     * by process death. capture() fsyncs the complete bytes and renames the data
+     * before renaming metadata, so a metadata-free .snapshot is a recoverable
+     * crash window, not an ordinary partial write. Never guess at an existing
+     * but invalid metadata record; only synthesize metadata when it is absent.
+     */
+    private static Snapshot recoverOrphanSnapshot(File dir, File data) {
+        if (!data.getParentFile().equals(dir) || !data.isFile() ||
+                !data.getName().endsWith(DATA_SUFFIX))
+            return null;
+        final String id = data.getName().substring(
+                0, data.getName().length() - DATA_SUFFIX.length());
+        final File meta = new File(dir, id + META_SUFFIX);
+        if (meta.exists()) return null;
+        File pending = null;
+        try {
+            // Do not follow a symlink out of the app-private history directory.
+            if (!data.getCanonicalFile().getParentFile().equals(dir.getCanonicalFile()))
+                return null;
+            final long size = data.length();
+            if (size <= 0L || size > MAX_SINGLE_BYTES) return null;
+            final long modified = data.lastModified();
+            final long timestamp = modified > 0L ? modified : System.currentTimeMillis();
+            final MessageDigest checksum = digest();
+            long bytes = 0L;
+            int noProgressReads = 0;
+            try (InputStream input = new FileInputStream(data)) {
+                byte[] buffer = new byte[64 * 1024];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    if (count == 0) {
+                        if (++noProgressReads >= 8) return null;
+                        continue;
+                    }
+                    noProgressReads = 0;
+                    bytes += count;
+                    if (bytes > size || bytes > MAX_SINGLE_BYTES) return null;
+                    checksum.update(buffer, 0, count);
+                }
+            }
+            if (bytes != size || data.length() != size ||
+                    (modified > 0L && data.lastModified() != modified))
+                return null;
+
+            final String name = "Recovered document " + timestamp + ".docx";
+            final String sourceHash = hex(digest().digest(
+                    ("orphan-recovery:" + data.getName()).getBytes(StandardCharsets.UTF_8)));
+            final String dataHash = hex(checksum.digest());
+            Properties props = new Properties();
+            props.setProperty("name", name);
+            props.setProperty("timestamp", String.valueOf(timestamp));
+            props.setProperty("size", String.valueOf(size));
+            props.setProperty("sha256", dataHash);
+            // This is a synthetic local identity, never a provider URI.
+            props.setProperty("source_sha256", sourceHash);
+            props.setProperty("kind", "recovered");
+
+            pending = new File(dir, id + ".meta-partial");
+            try (FileOutputStream output = new FileOutputStream(pending)) {
+                props.store(output, "Recovered complete snapshot after metadata loss");
+                output.getFD().sync();
+            }
+            if (!pending.renameTo(meta)) return null;
+
+            Snapshot recovered = load(dir, data);
+            if (recovered == null || !verifyBytes(recovered)) {
+                // Preserve the original bytes; let a later history scan retry.
+                meta.delete();
+                return null;
+            }
+            return recovered;
+        } catch (IOException | SecurityException failure) {
+            return null;
+        } finally {
+            if (pending != null && pending.exists()) pending.delete();
+        }
+    }
+
     private static List<Snapshot> readAll(File dir) {
         File[] all = dir.listFiles((d, name) -> name.endsWith(DATA_SUFFIX));
         List<Snapshot> results = new ArrayList<>();
         if (all == null) return results;
         for (File data : all) {
             Snapshot item = load(dir, data);
+            if (item == null) {
+                // A missing metadata file can be the narrow crash window after
+                // the durable data rename. Rebuild metadata, not document bytes.
+                item = recoverOrphanSnapshot(dir, data);
+            }
             if (item != null) results.add(item);
         }
         results.sort((a, b) -> Long.compare(b.createdMillis, a.createdMillis));
