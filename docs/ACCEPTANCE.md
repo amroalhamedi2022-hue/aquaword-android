@@ -95,3 +95,14 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **PASS (host/JVM):** a child JVM is terminated abruptly with exit code 24 after the complete, fsynced DOCX snapshot is renamed into place and before its metadata is published. The parent confirms that the committed bytes survive, history scanning reconstructs metadata, and restored bytes match exactly. The deterministic metadata-rename failure test remains in place.
 - Test commit: `d433b9d7a6295f8b597cc53f7daff35d8420f747`. Exact-SHA Fast Source [#40273275463 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40273275463) and Integration [#40273275467 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40273275467).
 - This is host-side process-death simulation only. **NOT TESTED:** Android process death, actual SAF/provider durability, Writer Arabic/English DOCX edit-save-cold-reopen, PDF/print and Xiaomi Pad 5 runtime.
+
+
+## Recovery retention across multiple document sources — 2026-10-26
+
+- **PASS (host/JVM):** retention now prefers the newest recovery checkpoint per source identity and removes older revisions of the same source before evicting another document's only/latest checkpoint. If the configured 60-snapshot / 1 GiB caps still cannot be met, the oldest unpinned source checkpoint is evicted to preserve the hard bounds; active writebacks and the global newest point remain protected.
+- **Regression:** `AquaWordHistoryCommitTest.testRetentionPreservesLatestSnapshotPerDocument` creates 61 snapshots across 60 source identities and proves that the older B revision is removed while A's only checkpoint and B's newest revision restore byte-identically; final count is 60.
+- **Final code+test SHA:** `5228c41a908063998ec79214c7b8625163f75ced`. Test change: `436c54a811d83dd39db8be6aff821b6a34486815`.
+- **Exact-head CI:** [Fast Source #40285645818 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40285645818); [Integration #40285645716 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40285645716).
+- **NOT TESTED:** real Android SAF/cloud provider failure, Android process death, native Writer DOCX edit-save-cold-reopen, PDF/print, install/launch and Xiaomi Pad 5 UI/runtime. This is host/JVM storage-retention evidence only.
+- **Build decision:** no APK build; the targeted Java integration test directly answers the retention invariant and packaging would not validate provider behavior.
+- **Google Drive handoff:** FAILED / NOT AVAILABLE because no Google Docs/Drive write connector is exposed in this runtime. The specified AquaWord — HANDOFF document was not updated.
