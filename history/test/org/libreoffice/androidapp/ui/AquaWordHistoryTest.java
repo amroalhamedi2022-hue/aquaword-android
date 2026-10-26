@@ -66,6 +66,41 @@ public class AquaWordHistoryTest {
         check(!partials[0].exists(), "stale process-death partial was not reclaimed");
     }
 
+    private static void testOrphanSnapshotRecovery(File root) throws Exception {
+        File dir = new File(root, "aquaword-history");
+        check(dir.mkdirs() || dir.isDirectory(), "could not create orphan recovery fixture");
+        byte[] payload = "Recovered after metadata rename — عربي DOCX".getBytes("UTF-8");
+        File orphan = new File(dir, "crash-window.snapshot");
+        try (FileOutputStream output = new FileOutputStream(orphan)) {
+            output.write(payload);
+            output.getFD().sync();
+        }
+        check(orphan.setLastModified(System.currentTimeMillis() - 2000L),
+                "could not set orphan fixture timestamp");
+        File empty = new File(dir, "empty.snapshot");
+        try (FileOutputStream ignored = new FileOutputStream(empty)) { }
+
+        List<AquaWordHistory.Snapshot> first = AquaWordHistory.list(root);
+        check(first.size() == 1, "only a complete metadata-free snapshot should be recovered");
+        AquaWordHistory.Snapshot recovered = first.get(0);
+        check("recovered".equals(recovered.kind), "orphan recovery kind not recorded");
+        check(recovered.file.equals(orphan), "recovery must retain the original committed bytes");
+        check(recovered.displayName.startsWith("Recovered document "),
+                "missing source metadata must use a safe recovery label");
+        check(new File(dir, "crash-window.properties").isFile(),
+                "recovery metadata was not committed atomically");
+
+        ByteArrayOutputStream restored = new ByteArrayOutputStream();
+        AquaWordHistory.restore(recovered, restored);
+        check(Arrays.equals(payload, restored.toByteArray()),
+                "orphan recovery changed the committed document bytes");
+        List<AquaWordHistory.Snapshot> second = AquaWordHistory.list(root);
+        check(second.size() == 1 && second.get(0).file.equals(orphan),
+                "repeated history scans must not duplicate recovered metadata");
+        check(empty.isFile() && !new File(dir, "empty.properties").exists(),
+                "empty orphan must be preserved but never offered as a restorable document");
+    }
+
     private static void check(boolean okay, String msg) {
         if (!okay) throw new AssertionError(msg);
     }
@@ -77,6 +112,7 @@ public class AquaWordHistoryTest {
         File root = Files.createTempDirectory("aquaword-history-test").toFile();
         try {
             testProcessDeathRecovery(new File(root, "process-death-fixture"));
+            testOrphanSnapshotRecovery(new File(root, "orphan-recovery-fixture"));
             byte[] unicode = "Hello—مرحبا بالعالم\n📕 PDF & DOCX".getBytes("UTF-8");
             AquaWordHistory.Snapshot s = AquaWordHistory.capture(
                 root, new ByteArrayInputStream(unicode), "قصتي.docx");
