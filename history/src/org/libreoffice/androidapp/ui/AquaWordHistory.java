@@ -690,19 +690,52 @@ public final class AquaWordHistory {
      * prevents trim() from evicting the source until the copy has finished.
      * The caller still owns and closes the destination stream.
      */
+    /**
+     * Verify the exact already-open file descriptor before the caller writes
+     * any bytes to a potentially destructive SAF destination. Path/hash
+     * preflight alone cannot bind a later FileInputStream to the same bytes.
+     *
+     * Package-private so the same-package commit regression can deterministically
+     * exercise replacement between lease verification and stream opening.
+     */
+    static void verifyOpenedRestoreSource(Snapshot snapshot, FileInputStream input)
+            throws IOException {
+        if (snapshot == null || input == null || snapshot.sizeBytes <= 0L)
+            throw new IOException("Missing recovery source");
+        if (!isCanonicalSnapshotChild(snapshot.file) || !snapshot.file.isFile() ||
+                snapshot.file.length() != snapshot.sizeBytes)
+            throw new IOException("Recovery source path changed before restore");
+
+        MessageDigest checksum = digest();
+        byte[] buffer = new byte[64 * 1024];
+        long received = 0L;
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+            if (count == 0) continue;
+            received += count;
+            if (received > snapshot.sizeBytes)
+                throw new IOException("Recovery source grew before restore");
+            checksum.update(buffer, 0, count);
+        }
+        if (received != snapshot.sizeBytes ||
+                !hex(checksum.digest()).equals(snapshot.sha256) ||
+                !isCanonicalSnapshotChild(snapshot.file) ||
+                !snapshot.file.isFile() || snapshot.file.length() != snapshot.sizeBytes)
+            throw new IOException("Recovery source changed before restore");
+        // Rewind the same descriptor we just verified; do not reopen the path.
+        input.getChannel().position(0L);
+    }
+
     public static void restore(Snapshot snapshot, OutputStream target) throws IOException {
         if (snapshot == null || target == null) throw new IOException("Missing recovery destination");
         // The lease re-verifies bytes before any potentially destructive SAF
         // destination write, including when restore() is called directly.
         try (WritebackLease lease = holdForWriteback(snapshot);
-             InputStream in = new FileInputStream(snapshot.file)) {
-            // Recheck after opening the source and before the first destination
-            // write. This catches a path substitution between checksum preflight
-            // and stream creation when the replacement remains in place.
-            if (!isCanonicalSnapshotChild(snapshot.file) ||
-                    !snapshot.file.isFile() ||
-                    snapshot.file.length() != snapshot.sizeBytes)
-                throw new IOException("Recovery source path changed before restore");
+             FileInputStream in = new FileInputStream(snapshot.file)) {
+            // Bind the checksum to the exact descriptor that will feed the
+            // destination. A same-length regular-file replacement between the
+            // lease preflight and open must fail before the first target write.
+            verifyOpenedRestoreSource(snapshot, in);
             byte[] buffer = new byte[64 * 1024];
             MessageDigest streamedHash = digest();
             long streamedBytes = 0L;
