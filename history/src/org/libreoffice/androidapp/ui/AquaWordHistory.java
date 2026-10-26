@@ -586,17 +586,55 @@ public final class AquaWordHistory {
         }
     }
 
-    /** Do not deduplicate against a corrupted on-disk safety copy. */
-    private static boolean verifyBytes(Snapshot snapshot) {
-        if (!snapshot.file.isFile() || snapshot.file.length() != snapshot.sizeBytes)
+    /**
+     * Reject a cached recovery entry if its pathname now resolves through a
+     * symlink or alias. load() checks this when listing history, but callers may
+     * hold a Snapshot while the filesystem changes; revalidate at use time too.
+     * This narrows path-replacement races but is not an OS-level no-follow open.
+     */
+    private static boolean isCanonicalSnapshotChild(File file) {
+        if (file == null || !file.getName().endsWith(DATA_SUFFIX)) return false;
+        File parent = file.getParentFile();
+        if (parent == null) return false;
+        try {
+            File canonicalDir = parent.getCanonicalFile();
+            File canonicalFile = file.getCanonicalFile();
+            File expectedFile = new File(canonicalDir, file.getName()).getAbsoluteFile();
+            return canonicalDir.equals(canonicalFile.getParentFile()) &&
+                    expectedFile.equals(canonicalFile);
+        } catch (IOException | SecurityException unreadable) {
             return false;
+        }
+    }
+
+    /** Do not deduplicate against a corrupted or path-aliased safety copy. */
+    private static boolean verifyBytes(Snapshot snapshot) {
+        if (snapshot == null || !isCanonicalSnapshotChild(snapshot.file) ||
+                !snapshot.file.isFile())
+            return false;
+        long initialModified = snapshot.file.lastModified();
+        if (snapshot.file.length() != snapshot.sizeBytes) return false;
         MessageDigest checksum = digest();
+        long received = 0L;
         try (DigestInputStream in = new DigestInputStream(
                 new FileInputStream(snapshot.file), checksum)) {
             byte[] buffer = new byte[64 * 1024];
-            while (in.read(buffer) != -1) { /* verify stored original */ }
-            return hex(checksum.digest()).equals(snapshot.sha256);
-        } catch (IOException unreadable) {
+            int count;
+            while ((count = in.read(buffer)) != -1) {
+                if (count == 0) continue;
+                received += count;
+                if (received > snapshot.sizeBytes) return false;
+            }
+            // Check both the bytes read and the path/metadata after hashing.
+            // A cached Snapshot must not bless a later symlink substitution,
+            // even when the external target happens to contain identical bytes.
+            return received == snapshot.sizeBytes &&
+                    snapshot.file.isFile() &&
+                    snapshot.file.length() == snapshot.sizeBytes &&
+                    snapshot.file.lastModified() == initialModified &&
+                    isCanonicalSnapshotChild(snapshot.file) &&
+                    hex(checksum.digest()).equals(snapshot.sha256);
+        } catch (IOException | SecurityException unreadable) {
             return false;
         }
     }
@@ -658,6 +696,13 @@ public final class AquaWordHistory {
         // destination write, including when restore() is called directly.
         try (WritebackLease lease = holdForWriteback(snapshot);
              InputStream in = new FileInputStream(snapshot.file)) {
+            // Recheck after opening the source and before the first destination
+            // write. This catches a path substitution between checksum preflight
+            // and stream creation when the replacement remains in place.
+            if (!isCanonicalSnapshotChild(snapshot.file) ||
+                    !snapshot.file.isFile() ||
+                    snapshot.file.length() != snapshot.sizeBytes)
+                throw new IOException("Recovery source path changed before restore");
             byte[] buffer = new byte[64 * 1024];
             MessageDigest streamedHash = digest();
             long streamedBytes = 0L;
@@ -674,7 +719,8 @@ public final class AquaWordHistory {
             // save may rewrite it while a slow provider consumes the copy.
             // Never acknowledge success if the bytes actually streamed differ.
             if (streamedBytes != snapshot.sizeBytes ||
-                    !hex(streamedHash.digest()).equals(snapshot.sha256))
+                    !hex(streamedHash.digest()).equals(snapshot.sha256) ||
+                    !isCanonicalSnapshotChild(snapshot.file))
                 throw new IOException("Recovery source changed during restore");
             target.flush();
         }
