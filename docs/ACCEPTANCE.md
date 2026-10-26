@@ -79,5 +79,5 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 
 - The history store tracks active capture temporary paths while an input stream is being copied. A concurrent history scan cannot delete an in-flight `.partial` merely because its timestamp exceeds the stale-cleanup threshold.
 - A JVM regression test blocks a stream between chunks, ages the active partial, triggers cleanup, resumes the stream, and checks exact-byte restore.
-- **CI status for this change:** pending exact-commit Fast Source + Integration verification until the corresponding workflow results are inspected.
+- **CI status for code/test SHA `481a0f7fb9545b3f30b43b15d2e6b8bd55950052`:** Fast Source + real upstream overlay **PASS** in [run #40255989993](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40255989993). Integration [run #40255990010](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40255990010) was still IN PROGRESS at the desktop LibreOffice DOCX import/re-save step when recorded; the Java race test is not yet confirmed executed.
 - **Runtime status:** real Android SAF/cloud-provider behavior, process death on device, native Writer round-trip, PDF/print and Xiaomi Pad 5 remain NOT TESTED.
