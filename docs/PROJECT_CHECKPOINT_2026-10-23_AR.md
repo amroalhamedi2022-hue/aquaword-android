@@ -282,3 +282,18 @@
 - **Remaining acceptance gates:** native ARM64 Collabora/Gradle package and ABI verification; install/launch; native Writer Arabic/English DOCX edit-save-cold-reopen; real SAF read-only/failure/truncation and recovery; print/PDF; Xiaomi Pad 5 UI/runtime; independent final recheck.
 - **Google Drive sync:** **FAILED / NOT AVAILABLE** — no Docs/Drive write connector is available in this runtime. The specified AquaWord — HANDOFF file was not modified. This failure does not block development.
 - **Next:** verify exact-SHA Integration completion, then continue M-NATIVE-01 toward native/runtime evidence; keep PR #7 Draft and do not modify `main`.
+
+
+## M-NATIVE-01 — 2026-10-26: رفض روابط الاسترداد الرمزية داخل المجلد
+
+- **الميلستون:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` ما زال **OPEN**؛ هذه دفعة تقوية لمسار الاسترداد ولا تغلق بوابات التشغيل الأصلية.
+- **التغيير الإنتاجي:** أصبح `AquaWordHistory.load()` يشترط أن يكون المسار canonical لكل من `.snapshot` و`.properties` هو المسار المباشر المتوقع بالاسم نفسه، وليس مجرد مسار داخل مجلد الاسترداد. وطُبق الشرط نفسه قبل قراءة Snapshot يتيمة أو إنشاء Metadata لها. يمنع ذلك قبول symlink داخلي كأنه نسخة استرداد ثانية، أو إنشاء Metadata لاسم مستعار لملف قائم.
+- **اختبار الانحدار:** أضيف `testRecoveryRejectsInDirectorySymlinkAliases`: ينشئ رابطًا رمزيًا لبيانات Snapshot ورابطًا لملف Metadata داخل المجلد، ثم رابطًا يتيمًا بلا Metadata إلى Snapshot موجود. يجب أن تظهر النسخة الأصلية فقط، وألا تُنشأ Metadata للرابط اليتيم. اختبار الروابط الخارجية السابق باقٍ أيضًا.
+- **مراجع Git:** Commit الكود `c15f38d07ce6dc0483fa2be7d885fad438360395`؛ Commit الاختبار ونقطة الكود+الاختبار النهائية `44b132b9849ae51ffffef0b27a763f4c37fade76` على فرع PR #7 `fix/saf-save-failure-recovery-20261023`.
+- **CI على نقطة الكود والاختبار:** Fast Source [#40314108206 **PASS**](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40314108206)؛ Integration [#40314108444 **PASS**](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40314108444). شغّل التكامل 125 اختبار Python، ثم كمبايل وتشغيل `AquaWordHistoryTest`؛ ويؤكد السجل `PASS: recovery scan rejects in-directory payload/metadata symlink aliases`.
+- **قرار البناء:** لم يُنشأ APK؛ اختبار JVM يختبر هوية المسارات والروابط مباشرة، وإعادة بناء المحرك لا تضيف دليلًا لهذه الحالة.
+- **PASS:** فحص المصدر والتكامل على Commit الاختبار؛ رفض alias للبيانات والـMetadata، ورفض إعادة بناء Metadata لرابط يتيم.
+- **NOT TESTED:** تشغيل Android، SAF/cloud provider الحقيقي، موت عملية Android، فتح/تحرير/حفظ/إعادة فتح DOCX عربي وإنجليزي داخل Writer، الطباعة/PDF، واختبار Xiaomi Pad 5.
+- **مزامنة Google Drive:** **FAILED / NOT AVAILABLE**؛ لا توجد أداة كتابة Google Docs/Drive في بيئة التشغيل، لذلك لم يُعدّل مستند AquaWord — HANDOFF ذي المعرّف `1AVpneu7vimB0YjJDdUs_oHKLrGUIQW4PSg5A5cW6j4I`. لا يُدّعى نجاح المزامنة.
+- **المتبقي ومعايير القبول:** بناء ARM64 والتحقق من ABI؛ تثبيت وتشغيل فعلي؛ DOCX عربي/إنجليزي مع الجداول والصور والحفظ وإعادة الفتح؛ اختبار SAF read-only/failure/truncation والاسترداد بعد موت العملية؛ PDF/الطباعة؛ UI على Pad 5؛ ثم recheck مستقل. لا انتقال إلى milestone جديد.
+- **نقطة الاستئناف:** متابعة `M-NATIVE-01` على فرع PR #7، مع إبقاء PR Draft وعدم تعديل `main`.
