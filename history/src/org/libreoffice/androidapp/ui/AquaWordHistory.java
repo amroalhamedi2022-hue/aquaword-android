@@ -20,7 +20,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -37,6 +39,8 @@ public final class AquaWordHistory {
     // Leave interrupted writes available for manual recovery for one week.
     private static final long INCOMPLETE_GRACE_MILLIS = 7L * 24L * 60L * 60L * 1000L;
     private static final Map<String, Integer> ACTIVE_WRITEBACKS = new HashMap<>();
+    // Protect live captures from stale-partial cleanup triggered by another history scan.
+    private static final Set<String> ACTIVE_CAPTURE_WRITES = new HashSet<>();
 
     private AquaWordHistory() { }
 
@@ -140,7 +144,15 @@ public final class AquaWordHistory {
                 String id = name.substring(0, name.length() - META_SUFFIX.length());
                 incomplete = !new File(dir, id + DATA_SUFFIX).isFile();
             }
-            if (incomplete) entry.delete(); // best effort; never block recovery
+            if (incomplete) {
+                // Capture streams can be slow (especially local SAF/cloud-backed reads).
+                // Serialize the active check with registration and deletion so a live
+                // .partial cannot be unlinked merely because its timestamp is old.
+                synchronized (AquaWordHistory.class) {
+                    if (ACTIVE_CAPTURE_WRITES.contains(entry.getAbsolutePath())) continue;
+                    entry.delete(); // best effort; never block recovery
+                }
+            }
         }
     }
 
@@ -172,6 +184,12 @@ public final class AquaWordHistory {
         File data = new File(dir, id + DATA_SUFFIX);
         File meta = new File(dir, id + META_SUFFIX);
         File pendingMeta = new File(dir, id + ".meta-partial");
+        final String tempKey = temp.getAbsolutePath();
+        // Register before creating the file; cleanup uses the same monitor, so
+        // it cannot race between file creation and active-write registration.
+        synchronized (AquaWordHistory.class) {
+            ACTIVE_CAPTURE_WRITES.add(tempKey);
+        }
         MessageDigest sha = digest();
         long length = 0L;
         try {
@@ -237,9 +255,12 @@ public final class AquaWordHistory {
                 return saved;
             }
         } finally {
-            temp.delete();
-            pendingMeta.delete();
-            if (!meta.exists()) data.delete();
+            synchronized (AquaWordHistory.class) {
+                temp.delete();
+                pendingMeta.delete();
+                if (!meta.exists()) data.delete();
+                ACTIVE_CAPTURE_WRITES.remove(tempKey);
+            }
         }
     }
 
