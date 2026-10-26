@@ -302,8 +302,16 @@ public final class AquaWordHistory {
             File canonicalDir = dir.getCanonicalFile();
             File canonicalData = data.getCanonicalFile();
             File canonicalMeta = propsPath.getCanonicalFile();
+            // Require the canonical target to be the exact expected child path,
+            // not merely another file inside this directory. Otherwise an
+            // in-directory symlink could alias a valid snapshot/sidecar, creating
+            // duplicate or misleading recovery entries and confusing retention.
+            File expectedData = new File(canonicalDir, data.getName()).getAbsoluteFile();
+            File expectedMeta = new File(canonicalDir, propsPath.getName()).getAbsoluteFile();
             if (!canonicalDir.equals(canonicalData.getParentFile()) ||
                     !canonicalDir.equals(canonicalMeta.getParentFile()) ||
+                    !canonicalData.equals(expectedData) ||
+                    !canonicalMeta.equals(expectedMeta) ||
                     !propsPath.isFile())
                 return null;
             try (FileInputStream meta = new FileInputStream(propsPath)) {
@@ -392,8 +400,14 @@ public final class AquaWordHistory {
         if (meta.exists()) return null;
         File pending = null;
         try {
-            // Do not follow a symlink out of the app-private history directory.
-            if (!data.getCanonicalFile().getParentFile().equals(dir.getCanonicalFile()))
+            // Orphan recovery must reject symlink aliases too, including links
+            // whose targets remain inside the private directory. Otherwise a
+            // metadata-free alias can synthesize a second recovery record.
+            File canonicalDir = dir.getCanonicalFile();
+            File canonicalData = data.getCanonicalFile();
+            File expectedData = new File(canonicalDir, data.getName()).getAbsoluteFile();
+            if (!canonicalDir.equals(canonicalData.getParentFile()) ||
+                    !canonicalData.equals(expectedData))
                 return null;
             final long size = data.length();
             if (size <= 0L || size > MAX_SINGLE_BYTES) return null;
