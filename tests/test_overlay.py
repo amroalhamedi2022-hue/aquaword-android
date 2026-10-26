@@ -344,7 +344,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('if (++noProgressReads >= 8)',capture)
         self.assertIn('throw new IOException("Document input stream made no progress")',capture)
         self.assertIn('noProgressReads = 0;\n                    length += count;',capture)
-        self.assertIn('finally {\n            temp.delete();',capture)
+        self.assertIn('finally {\n            synchronized (AquaWordHistory.class) {\n                temp.delete();',capture)
+        self.assertIn('ACTIVE_CAPTURE_WRITES.add(tempKey);',capture)
+        self.assertIn('ACTIVE_CAPTURE_WRITES.remove(tempKey);',capture)
+        self.assertIn('ACTIVE_CAPTURE_WRITES.contains(entry.getAbsolutePath())',helper)
         self.assertIn('synchronized (AquaWordHistory.class) {',capture)
         self.assertLess(capture.index('output.getFD().sync();'),
                         capture.index('synchronized (AquaWordHistory.class) {'))
