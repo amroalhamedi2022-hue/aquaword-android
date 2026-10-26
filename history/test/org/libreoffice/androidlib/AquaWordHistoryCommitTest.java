@@ -117,7 +117,11 @@ public final class AquaWordHistoryCommitTest {
                 boolean rejected = false;
                 try {
                     AquaWordHistory.verifyOpenedRestoreSource(snapshot, opened);
-                    destination.write(opened.read(new byte[0]));
+                    byte[] buffer = new byte[8192];
+                    int count;
+                    while ((count = opened.read(buffer)) != -1) {
+                        if (count > 0) destination.write(buffer, 0, count);
+                    }
                 } catch (IOException expected) {
                     rejected = expected.getMessage().contains("changed before restore");
                 }
