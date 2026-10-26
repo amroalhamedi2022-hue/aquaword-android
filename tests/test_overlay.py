@@ -705,7 +705,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
                         checkpoint.index('sendBroadcast(saveMessage[0], saveMessage[1]);'))
         history=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
         verify=history.split('public static void verifyProviderWriteback(',1)[1].split(
-            '// Keep retention/trim',1)[0]
+            '\n    }',1)[0]
         self.assertIn('received > snapshot.sizeBytes',verify)
         self.assertIn('received != snapshot.sizeBytes',verify)
         self.assertIn('hex(checksum.digest()).equals(snapshot.sha256)',verify)
