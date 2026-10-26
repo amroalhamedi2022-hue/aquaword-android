@@ -290,28 +290,41 @@ public final class AquaWordHistory {
     }
 
     private static Snapshot load(File dir, File data) {
-        if (!data.getParentFile().equals(dir) || !data.getName().endsWith(DATA_SUFFIX))
+        if (!data.getParentFile().equals(dir) || !data.getName().endsWith(DATA_SUFFIX) ||
+                !data.isFile())
             return null;
         File propsPath = new File(dir, data.getName().replace(DATA_SUFFIX, META_SUFFIX));
-        if (!propsPath.isFile()) return null;
-        try (FileInputStream meta = new FileInputStream(propsPath)) {
-            Properties props = new Properties();
-            props.load(meta);
-            String hash = props.getProperty("sha256", "");
-            String sourceHash = props.getProperty("source_sha256",
-                    hex(digest().digest("legacy-unspecified-source".getBytes(StandardCharsets.UTF_8))));
-            String name = sanitizeName(props.getProperty("name"));
-            String kind = props.getProperty("kind", "pre-edit");
-            if (!"pre-edit".equals(kind) && !"saved".equals(kind) &&
-                    !"recovered".equals(kind))
+        try {
+            // A recovery entry is trusted only when both payload and metadata
+            // resolve inside the app-private history directory. isFile() alone
+            // follows symlinks, which could otherwise expose unrelated files
+            // as restore candidates after filesystem damage or tampering.
+            File canonicalDir = dir.getCanonicalFile();
+            File canonicalData = data.getCanonicalFile();
+            File canonicalMeta = propsPath.getCanonicalFile();
+            if (!canonicalDir.equals(canonicalData.getParentFile()) ||
+                    !canonicalDir.equals(canonicalMeta.getParentFile()) ||
+                    !propsPath.isFile())
                 return null;
-            long length = Long.parseLong(props.getProperty("size", "-1"));
-            long when = Long.parseLong(props.getProperty("timestamp", "0"));
-            if (hash.length() != 64 || sourceHash.length() != 64 ||
-                    length <= 0L || length != data.length() || when <= 0L)
-                return null;
-            return new Snapshot(data, name, when, length, hash, sourceHash, kind);
-        } catch (IOException | IllegalArgumentException e) {
+            try (FileInputStream meta = new FileInputStream(propsPath)) {
+                Properties props = new Properties();
+                props.load(meta);
+                String hash = props.getProperty("sha256", "");
+                String sourceHash = props.getProperty("source_sha256",
+                        hex(digest().digest("legacy-unspecified-source".getBytes(StandardCharsets.UTF_8))));
+                String name = sanitizeName(props.getProperty("name"));
+                String kind = props.getProperty("kind", "pre-edit");
+                if (!"pre-edit".equals(kind) && !"saved".equals(kind) &&
+                        !"recovered".equals(kind))
+                    return null;
+                long length = Long.parseLong(props.getProperty("size", "-1"));
+                long when = Long.parseLong(props.getProperty("timestamp", "0"));
+                if (hash.length() != 64 || sourceHash.length() != 64 ||
+                        length <= 0L || length != data.length() || when <= 0L)
+                    return null;
+                return new Snapshot(data, name, when, length, hash, sourceHash, kind);
+            }
+        } catch (IOException | IllegalArgumentException | SecurityException e) {
             return null;
         }
     }

@@ -113,6 +113,63 @@ public class AquaWordHistoryTest {
     }
 
 
+    private static String sha256Hex(byte[] bytes) throws Exception {
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes);
+        StringBuilder result = new StringBuilder(digest.length * 2);
+        for (byte value : digest) result.append(String.format(Locale.ROOT, "%02x", value & 0xff));
+        return result.toString();
+    }
+
+    private static void writeSnapshotMetadata(File path, byte[] payload, String name)
+            throws IOException {
+        Properties metadata = new Properties();
+        metadata.setProperty("name", name);
+        metadata.setProperty("timestamp", String.valueOf(System.currentTimeMillis()));
+        metadata.setProperty("size", String.valueOf(payload.length));
+        metadata.setProperty("sha256", sha256Hex(payload));
+        metadata.setProperty("source_sha256", String.join("", Collections.nCopies(64, "0")));
+        metadata.setProperty("kind", "saved");
+        try (FileOutputStream output = new FileOutputStream(path)) {
+            metadata.store(output, "AquaWord symlink regression fixture");
+        }
+    }
+
+    /**
+     * A recovery scan must not follow a snapshot or metadata symlink outside
+     * the app-private history directory, even if the target and checksum
+     * metadata otherwise look like a valid saved revision.
+     */
+    private static void testRecoveryRejectsSymlinksOutsideHistoryDirectory(File root)
+            throws Exception {
+        File dir = new File(root, "aquaword-history");
+        check(dir.mkdirs() || dir.isDirectory(), "could not create symlink fixture directory");
+        byte[] payload = "private recovery fixture — لا تعرض ملفًا خارجيًا".getBytes("UTF-8");
+        File outsideData = new File(root, "outside-payload.bin");
+        File outsideMetadata = new File(root, "outside-metadata.properties");
+        Files.write(outsideData.toPath(), payload);
+        writeSnapshotMetadata(outsideMetadata, payload, "outside.docx");
+
+        Path dataLink = new File(dir, "external-data.snapshot").toPath();
+        Path metadataLink = new File(dir, "external-metadata.properties").toPath();
+        try {
+            Files.createSymbolicLink(dataLink, outsideData.toPath());
+            File localPayload = new File(dir, "external-metadata.snapshot");
+            Files.write(localPayload.toPath(), payload);
+            Files.createSymbolicLink(metadataLink, outsideMetadata.toPath());
+            writeSnapshotMetadata(new File(dir, "external-data.properties"),
+                    payload, "external-data.docx");
+        } catch (IOException | UnsupportedOperationException | SecurityException unsupported) {
+            System.out.println("SKIP: symlink escape fixture unavailable on this host: " +
+                    unsupported.getClass().getSimpleName());
+            return;
+        }
+
+        List<AquaWordHistory.Snapshot> snapshots = AquaWordHistory.list(root);
+        check(snapshots.isEmpty(),
+                "recovery scan followed a symlink outside the private history directory");
+        System.out.println("PASS: recovery scan rejects external payload and metadata symlinks");
+    }
+
     private static void testActiveCaptureSurvivesStaleCleanup(File root) throws Exception {
         final byte[] first = "capture-start — مرحبا".getBytes("UTF-8");
         final byte[] second = " — capture-finished".getBytes("UTF-8");
@@ -228,6 +285,7 @@ public class AquaWordHistoryTest {
         try {
             testProcessDeathRecovery(new File(root, "process-death-fixture"));
             testOrphanSnapshotRecovery(new File(root, "orphan-recovery-fixture"));
+            testRecoveryRejectsSymlinksOutsideHistoryDirectory(new File(root, "symlink-escape-fixture"));
             testActiveCaptureSurvivesStaleCleanup(new File(root, "active-capture-cleanup-fixture"));
             byte[] unicode = "Hello—مرحبا بالعالم\n📕 PDF & DOCX".getBytes("UTF-8");
             AquaWordHistory.Snapshot s = AquaWordHistory.capture(
