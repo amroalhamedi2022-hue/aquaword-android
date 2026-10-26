@@ -270,3 +270,15 @@
 - **NOT TESTED:** مزوّد SAF حقيقي/سحابي، موت عملية Android، تثبيت وتشغيل Collabora Writer، تحرير DOCX عربي/إنجليزي ثم حفظه وإعادة فتحه، PDF/الطباعة، واختبار Xiaomi Pad 5.
 - **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE؛ لا توجد أداة كتابة Google Docs/Drive في بيئة التشغيل، لذا لم يُعدّل المستند المحدد. لا يُدّعى نجاح المزامنة.
 - **نقطة الاستئناف:** الاستمرار داخل M-NATIVE-01. بعد هذا الإصلاح، ركّز على اختبار تكامل واقعي لخطأ SAF/القراءة الراجعة واستعادة أحدث DOCX، ثم بوابات تشغيل Android/الجهاز؛ لا تعتبر المشروع مكتملًا اعتمادًا على اختبارات JVM وحدها.
+
+
+## M-NATIVE-01 — 2026-10-26: recovery path containment
+
+- **Milestone:** M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip remains OPEN. This slice hardens recovery discovery; it does not satisfy the native build or device roundtrip gates.
+- **Production/test:** `AquaWordHistory.load()` now checks canonical containment for both snapshot payload and sidecar metadata. A symlink whose target escapes the app-private history folder is not surfaced as a recovery candidate. Added `testRecoveryRejectsSymlinksOutsideHistoryDirectory` for both external payload and metadata links.
+- **Code/test SHA:** `986d99e02f2a743916cebfadd8de3898ffdceb7b` on draft PR #7. `main` remains unchanged.
+- **Evidence:** Fast Source [#40298998418](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40298998418) **PASS** on the exact code/test SHA. Integration [#40298998454](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40298998454) was still **IN PROGRESS** when this note was written; verify its final status before treating the Java integration regression as accepted. Windows may report a clearly labeled symlink-test SKIP if runner permissions prohibit link creation.
+- **Build decision:** no APK build. JVM path-containment testing is the direct test for this change; packaging would not establish the symlink invariant.
+- **Remaining acceptance gates:** native ARM64 Collabora/Gradle package and ABI verification; install/launch; native Writer Arabic/English DOCX edit-save-cold-reopen; real SAF read-only/failure/truncation and recovery; print/PDF; Xiaomi Pad 5 UI/runtime; independent final recheck.
+- **Google Drive sync:** **FAILED / NOT AVAILABLE** — no Docs/Drive write connector is available in this runtime. The specified AquaWord — HANDOFF file was not modified. This failure does not block development.
+- **Next:** verify exact-SHA Integration completion, then continue M-NATIVE-01 toward native/runtime evidence; keep PR #7 Draft and do not modify `main`.

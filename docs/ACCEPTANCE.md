@@ -106,3 +106,14 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **NOT TESTED:** real Android SAF/cloud provider failure, Android process death, native Writer DOCX edit-save-cold-reopen, PDF/print, install/launch and Xiaomi Pad 5 UI/runtime. This is host/JVM storage-retention evidence only.
 - **Build decision:** no APK build; the targeted Java integration test directly answers the retention invariant and packaging would not validate provider behavior.
 - **Google Drive handoff:** FAILED / NOT AVAILABLE because no Google Docs/Drive write connector is exposed in this runtime. The specified AquaWord — HANDOFF document was not updated.
+
+
+## Recovery history path containment — 2026-10-26
+
+- **Production:** `AquaWordHistory.load()` now canonicalizes the history directory, candidate `.snapshot`, and matching `.properties`; it rejects a record if either file resolves outside the app-private history directory, and treats filesystem security exceptions as an unreadable recovery entry. This closes a symlink-based path escape in recovery discovery; it is not a guarantee against privileged filesystem tampering or every concurrent path-replacement race.
+- **Regression:** `testRecoveryRejectsSymlinksOutsideHistoryDirectory` prepares a checksum-valid external payload symlink and a separate external metadata symlink. The history scan must expose neither. The test reports **SKIP** only when the host cannot create symlinks (for example, restricted Windows permissions); Linux CI should exercise the actual rejection path.
+- **Code + test SHA:** `986d99e02f2a743916cebfadd8de3898ffdceb7b` on PR #7 branch `fix/saf-save-failure-recovery-20261023`.
+- **CI at note time:** Fast Source run [#40298998418](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40298998418) **PASS** on the exact SHA. Integration run [#40298998454](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40298998454) was **IN PROGRESS**; do not treat it as PASS until its completed conclusion is checked.
+- **Build decision:** no APK build for this path-validation change: the focused JVM regression directly answers whether recovery discovery accepts external symlinks. It cannot prove native Writer/SAF behavior.
+- **NOT TESTED:** real Android app-private storage, native Writer recovery, SAF provider failure/readback, Arabic/English DOCX cold-reopen, print/PDF, or Xiaomi Pad 5.
+- **Google Drive handoff sync:** **FAILED / NOT AVAILABLE** in this automation runtime because no Google Docs/Drive write connector is exposed; the specified AquaWord — HANDOFF document was not updated.
