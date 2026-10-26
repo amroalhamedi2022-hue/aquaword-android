@@ -167,3 +167,11 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **NOT TESTED:** Android install/launch, real SAF read-only/failing-provider recovery, process death on Android, Arabic/English Writer cold roundtrip on device, print/PDF and Xiaomi Pad 5 UI/performance.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE** because no Google Docs/Drive write connector is exposed in this runtime. The specified Drive document was not updated; no sync success is claimed.
 - **Next:** keep M-NATIVE-01 open; review completion of full Integration, then continue native Writer/SAF acceptance. PR #7 stays Draft; main unchanged.
+
+
+## Recovery storage-boundary regression — 2026-10-26
+
+- Production SHA: `a5f45dbbc90d4b97e7db897bbaf1b98b506894ea`; regression SHA: `25f976e31bfca03305b3ff969ec0a767b6c3e83f`.
+- The history root now rejects a symlink/canonical-path alias before scanning or creating recovery files. JVM test verifies the outside marker remains unchanged. **CI for this exact test SHA: PENDING** until the matching run completes.
+- This is a source-level storage-boundary defense, not a complete defense against every same-UID filesystem race. Android runtime and device acceptance remain NOT TESTED.
+- Google Drive Handoff synchronization: FAILED / NOT AVAILABLE; no claim of a Drive write is made.
