@@ -112,6 +112,108 @@ public class AquaWordHistoryTest {
                 "empty orphan must be preserved but never offered as a restorable document");
     }
 
+
+    private static void testActiveCaptureSurvivesStaleCleanup(File root) throws Exception {
+        final byte[] first = "capture-start — مرحبا".getBytes("UTF-8");
+        final byte[] second = " — capture-finished".getBytes("UTF-8");
+        final java.util.concurrent.CountDownLatch firstChunkRead =
+                new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.CountDownLatch allowFinish =
+                new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.atomic.AtomicReference<AquaWordHistory.Snapshot> result =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        final java.util.concurrent.atomic.AtomicReference<Throwable> failure =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        InputStream slowProvider = new InputStream() {
+            private int phase;
+            private int offset;
+            @Override public int read() throws IOException {
+                byte[] one = new byte[1];
+                int count = read(one, 0, 1);
+                return count < 0 ? -1 : one[0] & 0xff;
+            }
+            @Override public int read(byte[] buffer, int start, int length) throws IOException {
+                if (length == 0) return 0;
+                if (phase == 0) {
+                    int count = Math.min(length, first.length - offset);
+                    System.arraycopy(first, offset, buffer, start, count);
+                    offset += count;
+                    if (offset == first.length) {
+                        phase = 1;
+                        offset = 0;
+                        firstChunkRead.countDown();
+                    }
+                    return count;
+                }
+                if (phase == 1) {
+                    try {
+                        if (!allowFinish.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                            throw new IOException("timed out waiting to finish slow provider fixture");
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("slow provider fixture interrupted", interrupted);
+                    }
+                    phase = 2;
+                }
+                if (phase == 2) {
+                    int count = Math.min(length, second.length - offset);
+                    System.arraycopy(second, offset, buffer, start, count);
+                    offset += count;
+                    if (offset == second.length) phase = 3;
+                    return count;
+                }
+                return -1;
+            }
+        };
+        Thread worker = new Thread(() -> {
+            try {
+                result.set(AquaWordHistory.capture(root, slowProvider, "slow-capture.docx",
+                        "content://slow-capture/provider"));
+            } catch (Throwable error) {
+                failure.set(error);
+            }
+        }, "slow-history-capture");
+        worker.start();
+        try {
+            check(firstChunkRead.await(3, java.util.concurrent.TimeUnit.SECONDS),
+                    "slow capture never began streaming");
+            File dir = new File(root, "aquaword-history");
+            File[] partials = dir.listFiles((parent, name) -> name.endsWith(".partial"));
+            check(partials != null && partials.length == 1,
+                    "slow capture did not expose its active partial file");
+            long deadline = System.currentTimeMillis() + 3000L;
+            while (partials[0].length() < first.length && System.currentTimeMillis() < deadline)
+                Thread.sleep(10L);
+            check(partials[0].length() >= first.length,
+                    "first capture chunk was not flushed to the partial file");
+            long stale = System.currentTimeMillis() - 15L * 24L * 60L * 60L * 1000L;
+            check(partials[0].setLastModified(stale),
+                    "could not age the active capture fixture");
+            AquaWordHistory.list(root); // invokes stale-incomplete cleanup
+            check(partials[0].isFile(),
+                    "stale cleanup unlinked a capture that was still actively streaming");
+        } finally {
+            allowFinish.countDown();
+            worker.join(6000L);
+            if (worker.isAlive()) {
+                worker.interrupt();
+                worker.join(1000L);
+            }
+        }
+        check(!worker.isAlive(), "slow capture worker did not terminate");
+        check(failure.get() == null, "active capture failed during concurrent cleanup: " + failure.get());
+        AquaWordHistory.Snapshot captured = result.get();
+        check(captured != null && captured.file.isFile(),
+                "active capture did not commit after stale cleanup ran");
+        byte[] expected = new byte[first.length + second.length];
+        System.arraycopy(first, 0, expected, 0, first.length);
+        System.arraycopy(second, 0, expected, first.length, second.length);
+        ByteArrayOutputStream restored = new ByteArrayOutputStream();
+        AquaWordHistory.restore(captured, restored);
+        check(Arrays.equals(expected, restored.toByteArray()),
+                "active capture bytes changed while stale cleanup ran");
+    }
+
     private static void check(boolean okay, String msg) {
         if (!okay) throw new AssertionError(msg);
     }
@@ -124,6 +226,7 @@ public class AquaWordHistoryTest {
         try {
             testProcessDeathRecovery(new File(root, "process-death-fixture"));
             testOrphanSnapshotRecovery(new File(root, "orphan-recovery-fixture"));
+            testActiveCaptureSurvivesStaleCleanup(new File(root, "active-capture-cleanup-fixture"));
             byte[] unicode = "Hello—مرحبا بالعالم\n📕 PDF & DOCX".getBytes("UTF-8");
             AquaWordHistory.Snapshot s = AquaWordHistory.capture(
                 root, new ByteArrayInputStream(unicode), "قصتي.docx");
