@@ -181,6 +181,6 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - Branch/head: `fix/saf-save-failure-recovery-20261023` / `aea1a5792e90634080b85d7a1cd0a450beccb7d8`.
 - Recovery-core JVM tests: **PASS**, [run #40384562650](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562650).
 - Fast source + SAF contract: **PASS**, [run #40384562536](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562536).
-- Full Integration: **CANCELLED**, [run #40384562866](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562866), during the LibreOffice desktop DOCX roundtrip step. This is neither a test failure nor a pass; the complete integration workflow must finish on the current source SHA before this gate can be accepted.
+- Full Integration: **PASS** on documentation checkpoint `28e0a4c0c3640f8dcff10f4f1ffcd31b5fe45ef1`, with production/test source unchanged at `aea1a5792e90634080b85d7a1cd0a450beccb7d8`: [run #40387367659](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40387367659). The complete LibreOffice desktop DOCX roundtrip and integration workflow finished successfully. Earlier run #40384562866 was cancelled and is superseded by this PASS.
 - Android native APK/device, actual SAF provider failure/truncation, Arabic/English Writer roundtrip, PDF/print and Xiaomi Pad 5 UI remain **NOT TESTED**.
 - Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** in this runtime; no Drive document write is claimed.

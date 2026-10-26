@@ -376,7 +376,7 @@
 - رأس PR #7 الحالي: `aea1a5792e90634080b85d7a1cd0a450beccb7d8`.
 - **PASS:** اختبار الاسترداد JVM-only رقم [40384562650](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562650).
 - **PASS:** فحص المصدر وعقد SAF رقم [40384562536](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562536).
-- **CANCELLED — لا يُحتسب نجاحًا:** تكامل LibreOffice المكتبي/DOCX رقم [40384562866](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40384562866) أُلغي أثناء مرحلة roundtrip. سبب الإلغاء غير محسوم؛ يجب إعادة تشغيل التكامل كاملًا على SHA الكود الحالي.
+- **PASS:** اكتمل تكامل LibreOffice المكتبي/DOCX في التشغيل [40387367659](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40387367659) على نقطة التوثيق `28e0a4c0c3640f8dcff10f4f1ffcd31b5fe45ef1`، مع بقاء مصدر/اختبارات التطبيق على SHA `aea1a5792e90634080b85d7a1cd0a450beccb7d8`. التشغيل الملغى الأقدم 40384562866 تجاوزه هذا النجاح. هذا لا يثبت قبول Android أو SAF الحقيقي.
 - **NOT TESTED:** تثبيت وتشغيل APK على Android، فشل/اقتطاع SAF الحقيقي والتعافي، دورة تحرير DOCX عربي/إنجليزي وإعادة فتحه في Writer الأصلي، PDF والطباعة، وقبول Xiaomi Pad 5.
 - مزامنة Google Drive لمستند AquaWord — HANDOFF: **FAILED / NOT AVAILABLE**؛ لم تتم كتابة المستند من هذه البيئة.
 - نقطة الاستئناف: أبقِ M-NATIVE-01 مفتوحًا، أكمل تكامل LibreOffice على SHA الحالي، ثم نفّذ اختبار Android/SAF حقيقيًا. لا تُعلن الاكتمال اعتمادًا على JVM أو فحص المصدر وحدهما.
