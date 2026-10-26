@@ -247,3 +247,13 @@
 - **Build decision:** no new APK for this Java history transaction fix; the JVM regression directly answers the failure question. Existing diagnostic artifact [run #40236629771](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40236629771) belongs to older source SHA 86682a5e02ae70905a4fa64e330be35b0f7056fe, so it does not contain this fix and is not a final delivery.
 - **NOT TESTED:** real Android process death exactly during metadata commit; actual SAF/cloud provider failures; native Writer Arabic/English edit-save-cold-reopen; PDF/print; Xiaomi Pad 5 UI/runtime. M-NATIVE-01 remains OPEN.
 - **Google Drive Handoff sync:** FAILED / NOT AVAILABLE in this runtime; no Google Docs/Drive write connector is exposed, so the specified AquaWord Handoff document was not modified. No sync success is claimed.
+
+## M-NATIVE-01 — 2026-10-26: اختبار انهيار فعلي بين اعتماد Snapshot وMetadata
+
+- **الفجوة التي اختُبرت:** لم يكن اختبار رفض إعادة تسمية Metadata وحده يحاكي موت العملية بعد اعتماد ملف `.snapshot` الكامل وقبل نشر `.properties`. أُضيف child-JVM test يوقف العملية بـ `Runtime.halt(24)` عند هذا الحد بالضبط، بعد كتابة البيانات و`fsync` واعتماد اسم Snapshot.
+- **التحقق بعد الانهيار:** العملية الأم تتحقق من وجود بايتات DOCX كاملة مع غياب Metadata المنشورة، ثم تستدعي مسار فحص السجل الحقيقي، وتتحقق من إعادة بناء Metadata، وعدم بقاء ملف Metadata المؤقت، واستعادة البايتات نفسها دون تغيير. بقي اختبار فشل rename الاعتيادي أيضًا.
+- **Commit الاختبار:** `d433b9d7a6295f8b597cc53f7daff35d8420f747`.
+- **CI على SHA نفسه:** Fast Source [#40273275463 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40273275463)؛ Integration [#40273275467 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40273275467). سجل Integration يؤكد تنفيذ اختبار الانهيار الجديد واختبار فشل Metadata ونجاحهما.
+- **قرار البناء:** لم يُنشأ APK؛ هذا تغيير اختبار JVM، والاختبار المباشر يجيب عن سؤال نافذة الانهيار دون إعادة تجميع محرك LibreOffice. بناء APK لن يثبت سلوك SAF أو الجهاز.
+- **NOT TESTED:** موت عملية Android الحقيقية، SAF/cloud provider الفعلي، تثبيت وتشغيل Writer، تعديل DOCX عربي/إنجليزي وإعادة فتحه، PDF/الطباعة، وXiaomi Pad 5. يبقى M-NATIVE-01 مفتوحًا.
+- **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE؛ لا توجد أداة كتابة Google Docs/Drive في بيئة التشغيل، لذا لم يُعدّل المستند المحدد. لا يُدّعى نجاح المزامنة.

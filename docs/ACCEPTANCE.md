@@ -89,3 +89,9 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - The new deterministic JVM regression injects only the metadata-rename failure, checks temporary-file cleanup, reconstructs the recovered entry and restores byte-identical Arabic/English DOCX data.
 - Exact code/test SHA b5a195f090479a0bce2d27d5521bc7b6158ec257: Fast Source [#40263124801 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40263124801); Integration [#40263124630 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40263124630). Source/JVM evidence only.
 - Native Android install/launch, real SAF provider behavior, process death on device, Writer roundtrip, PDF/print and Xiaomi Pad 5 remain NOT TESTED. M-NATIVE-01 remains open.
+
+## Recovery metadata publication — 2026-10-26
+
+- **PASS (host/JVM):** a child JVM is terminated abruptly with exit code 24 after the complete, fsynced DOCX snapshot is renamed into place and before its metadata is published. The parent confirms that the committed bytes survive, history scanning reconstructs metadata, and restored bytes match exactly. The deterministic metadata-rename failure test remains in place.
+- Test commit: `d433b9d7a6295f8b597cc53f7daff35d8420f747`. Exact-SHA Fast Source [#40273275463 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40273275463) and Integration [#40273275467 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40273275467).
+- This is host-side process-death simulation only. **NOT TESTED:** Android process death, actual SAF/provider durability, Writer Arabic/English DOCX edit-save-cold-reopen, PDF/print and Xiaomi Pad 5 runtime.

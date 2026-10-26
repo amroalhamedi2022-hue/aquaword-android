@@ -329,3 +329,11 @@ The fast-source and integration contracts passed for the tested code SHA. Review
 - **Build decision for this change:** no repeated native build; Java/JVM integration directly tests the metadata failure path, while a new native build would not answer Android provider durability or Xiaomi Pad 5 runtime behavior.
 - **NOT TESTED:** install/launch, real Android SAF/provider failure, process death on device, Arabic/English Writer edit-save-cold-reopen, PDF/print, and target-device UI. M-NATIVE-01 remains OPEN.
 - **Google Drive AquaWord Handoff:** FAILED / NOT AVAILABLE; this runtime has no Google Docs/Drive write connector. The specified document was not modified.
+
+## M-NATIVE-01 — 2026-10-26: process death between snapshot and metadata commit (exact-SHA recheck)
+
+- **Test change:** commit `d433b9d7a6295f8b597cc53f7daff35d8420f747` extends `AquaWordHistoryCommitTest` with a child-JVM hard stop at the exact boundary after the fsynced `.snapshot` rename and before `.properties` publication. Parent process verifies no published metadata existed before scanning, recovery metadata is rebuilt, temporary metadata is removed, and the restored Arabic/English DOCX bytes are identical. The explicit metadata-rename-failure injection remains as a separate test.
+- **Exact-SHA evidence:** Fast Source [#40273275463 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40273275463); Integration [#40273275467 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40273275467). Integration logs show both `PASS: abrupt process death between snapshot and metadata commits recovers exact DOCX bytes` and `PASS: failed metadata rename preserves and recovers fsynced DOCX bytes`.
+- **Build decision:** no APK build. This regression is directly tested in the JVM history core; a native build would not prove Android SAF or device-level durability.
+- **NOT TESTED:** real Android process death, SAF cloud/read-only/provider failure, native Writer roundtrip, PDF/print, install/launch and Xiaomi Pad 5 UI. M-NATIVE-01 remains OPEN.
+- **Google Drive AquaWord — HANDOFF sync:** FAILED / NOT AVAILABLE; no Google Docs/Drive write connector is exposed, and the specified document was not modified.
