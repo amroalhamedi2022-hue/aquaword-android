@@ -346,3 +346,16 @@
 - تشغيل Integration الأقدم [#40358863389](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40358863389) يظل **CANCELLED**؛ التشغيل الأحدث أعلاه هو دليل الحالة الحالية ولا يغيّر الحالة التاريخية للتشغيل السابق.
 - **NOT TESTED:** تثبيت وتشغيل APK على جهاز، تحرير DOCX عربي/إنجليزي وحفظه وإعادة فتحه، SAF read-only/فشل المزود والتعافي الحقيقي، موت العملية على Android، PDF/الطباعة، وواجهة/أداء Xiaomi Pad 5.
 - لا بناء لهذه المراجعة التوثيقية. مزامنة Google Drive `AquaWord — HANDOFF` ما زالت **FAILED / NOT AVAILABLE** لغياب موصل كتابة Docs/Drive. يبقى M-NATIVE-01 مفتوحًا وPR #7 بوضع Draft؛ لم يتغير `main`.
+
+
+## 2026-10-26 — التحقق من واصف ملف الاسترداد المفتوح
+
+- **الميلستون:** M-NATIVE-01 — بناء ARM64 الأصلي ودورة تحرير Writer وإعادة الفتح ما زال **OPEN**.
+- **الإصلاح الإنتاجي:** [e507066f9c17c30e3da2887caf889dae241c97d0](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/e507066f9c17c30e3da2887caf889dae241c97d0) يتحقق من SHA-256 للـ FileInputStream المفتوح نفسه قبل كتابة أي بايت إلى وجهة الاستعادة، ثم يعيد موضع الواصف نفسه إلى البداية. هذا يرفض استبدال المسار بملف عادي مختلف وبالحجم نفسه بين فحص الـ lease وفتح الملف. لا يدّعي منعًا نظاميًا كاملًا للروابط الرمزية أو حماية من كل تعديل متزامن داخل العملية نفسها.
+- **اختبار الانحدار:** [651f200b649f2342798af8ea6fbc0d21fd19a8c8](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/651f200b649f2342798af8ea6fbc0d21fd19a8c8) يستبدل ملف الاسترداد بملف مختلف بالحجم نفسه بعد نجاح فحص الـ lease، ويتأكد أن التحقق من الواصف المفتوح يرفضه قبل إرسال أي بايت إلى الوجهة.
+- **اختبار JVM مستقل ومحدود:** أُضيف workflow مجاني لاختبارات Java الأساسية في [bc3f93cb4ac309a1c3b01c65968e2ab076fb40ee](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/bc3f93cb4ac309a1c3b01c65968e2ab076fb40ee)، كي لا يعتمد إثبات استرداد المستندات على انتظار مرحلة LibreOffice المكتبية الطويلة. تشغيل [#40377152228](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40377152228): **PASS**، وتظهر سجلاته نجاح اختبار رفض استبدال الملف قبل كتابة الاستعادة. فحص Fast Source/SAF [#40377152285](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40377152285): **PASS**.
+- **التكامل الكامل:** التشغيل [#40377152231](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40377152231) كان لا يزال عند خطوة استيراد DOCX وإعادة حفظه عبر LibreOffice المكتبي وقت تحديث هذه النقطة؛ لذلك **لا أحتسب Integration PASS** حتى الآن.
+- **قرار البناء:** لم يُبنَ APK؛ سؤال الاختبار هنا يتعلق بواصف Java المفتوح قبل أول كتابة، والاختبار المركز يجيب عنه مباشرة. بناء APK لا يثبت سلوك مزود SAF الحقيقي أو الجهاز.
+- **NOT TESTED:** تثبيت وتشغيل Android، فشل مزود SAF الحقيقي والتعافي، موت العملية على الجهاز، تحرير DOCX عربي/إنجليزي وإعادة فتحه على Writer الأصلي، PDF/الطباعة وواجهة وأداء Xiaomi Pad 5.
+- **مزامنة Google Drive:** **FAILED / NOT AVAILABLE** لعدم توفر موصل كتابة Google Docs/Drive؛ لم يُعدّل مستند AquaWord — HANDOFF المحدد، ولا ندّعي نجاح المزامنة.
+- **الاستئناف:** إبقاء M-NATIVE-01 مفتوحًا وPR #7 بوضع Draft؛ مراجعة نتيجة Integration الحالية ثم متابعة اختبارات Writer/SAF الأصلية. لم يتغير main.
