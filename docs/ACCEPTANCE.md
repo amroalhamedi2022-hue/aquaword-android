@@ -117,3 +117,16 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Build decision:** no APK build for this path-validation change: the focused JVM regression directly answers whether recovery discovery accepts external symlinks. It cannot prove native Writer/SAF behavior.
 - **NOT TESTED:** real Android app-private storage, native Writer recovery, SAF provider failure/readback, Arabic/English DOCX cold-reopen, print/PDF, or Xiaomi Pad 5.
 - **Google Drive handoff sync:** **FAILED / NOT AVAILABLE** in this automation runtime because no Google Docs/Drive write connector is exposed; the specified AquaWord — HANDOFF document was not updated.
+
+
+## Recovery history rejects in-directory symlink aliases — 2026-10-26
+
+- **Milestone:** M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip remains **OPEN**.
+- **Production:** `AquaWordHistory.load()` now requires canonical snapshot and metadata targets to match their exact expected child paths, not merely to reside somewhere inside the history directory. `recoverOrphanSnapshot()` applies the same check before reading bytes or synthesizing missing metadata. This prevents an in-directory symlink alias from being treated as a second recovery point or from triggering orphan metadata reconstruction.
+- **Regression:** `testRecoveryRejectsInDirectorySymlinkAliases` creates a payload/metadata alias pair and a metadata-free alias to an existing snapshot; only the original snapshot may be listed, and no metadata may be created for the orphan alias. The existing external-symlink regression remains in place.
+- **Code commit:** `c15f38d07ce6dc0483fa2be7d885fad438360395`. **Test commit / exact code+test head:** `44b132b9849ae51ffffef0b27a763f4c37fade76` on PR #7 branch `fix/saf-save-failure-recovery-20261023`.
+- **Exact-head CI:** Fast Source [#40314108206 **PASS**](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40314108206); Integration [#40314108444 **PASS**](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40314108444). Integration ran 125 Python tests and compiled/executed `AquaWordHistoryTest`; its log explicitly reports `PASS: recovery scan rejects in-directory payload/metadata symlink aliases`.
+- **Build decision:** no APK build. The JVM regression directly tests filesystem alias handling; packaging would not provide stronger evidence for this invariant.
+- **NOT TESTED:** Android device storage behavior, real SAF/cloud-provider failure/readback, Android process death, native Writer Arabic/English DOCX edit-save-cold-reopen, print/PDF, and Xiaomi Pad 5 runtime.
+- **Google Drive Handoff:** **FAILED / NOT AVAILABLE**. No Google Docs/Drive write connector is exposed in this runtime; the specified AquaWord — HANDOFF document (ID `1AVpneu7vimB0YjJDdUs_oHKLrGUIQW4PSg5A5cW6j4I`) was not modified. No sync success is claimed.
+- **Next:** continue M-NATIVE-01 with real Android/SAF evidence; keep PR #7 Draft and do not modify `main`.
