@@ -393,3 +393,13 @@
 - **Still NOT TESTED:** native ARM64 build at current head; APK install/launch; Android SAF provider refusal/truncation and recovery; native Writer DOCX Arabic/English edit-save-cold-reopen; print/PDF; Xiaomi Pad 5 visual/performance.
 - **Next:** finish the current full Integration run, then continue toward a purpose-bound native build only if the current source has a concrete compile/package question and a permitted one-shot route. Do not bypass the existing one-shot native diagnostic guard.
 - Google Drive AquaWord — HANDOFF sync: **FAILED / NOT AVAILABLE** in this runtime; no Docs/Drive write connector is exposed, so the specified Drive document was not modified.
+
+
+### 2026-10-26 — current checkpoint CI closed
+
+- Current code/test commit: `d24d8e44ec71df497b8f8d8a33ed4348876607fe`; current documentation checkpoint: `24c2cb509019e22dbcf95f50f0bce7b698d5d49b`.
+- Fast Source + SAF Contract [#40394729968](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394729968): **PASS** on the current documentation SHA.
+- Recovery Core JVM-only [#40394729849](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394729849): **PASS**; active writeback-lease retention regression passed.
+- Full Integration [#40394729928](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394729928): **PASS** on the current documentation SHA. LibreOffice desktop DOCX roundtrip, source/integration tests, recovery core, and pinned Collabora layout smoke completed. This is still not Android device acceptance.
+- Superseded Integration run [#40394504512](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40394504512) ended **CANCELLED** when the follow-up documentation checkpoint triggered a newer run; it is not counted as a pass.
+- M-NATIVE-01 remains **OPEN**. Native build for the current source, Android install/launch, actual SAF provider-failure recovery, native Writer Arabic/English edit-save-cold-reopen, PDF/print and Xiaomi Pad 5 acceptance remain **NOT TESTED**.
