@@ -254,6 +254,48 @@ public class AquaWordHistoryTest {
         }
     }
 
+    /**
+     * A Snapshot may outlive the history scan that produced it. Replacing its
+     * committed path with a symlink afterwards must not pass checksum preflight,
+     * even when the external target contains byte-identical data.
+     */
+    private static void testVerifyRejectsSymlinkSwapAfterListing(File root) throws Exception {
+        byte[] payload = "cached recovery — مرحبا".getBytes("UTF-8");
+        AquaWordHistory.Snapshot cached = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(payload), "cached.docx",
+                "content://test/provider/cached", "saved");
+        File external = new File(root, "external-identical-target.bin");
+        Files.write(external.toPath(), payload);
+        Files.delete(cached.file.toPath());
+        try {
+            Files.createSymbolicLink(cached.file.toPath(), external.toPath());
+        } catch (IOException | UnsupportedOperationException | SecurityException unsupported) {
+            System.out.println("SKIP: cached-snapshot symlink swap unavailable on this host: " +
+                    unsupported.getClass().getSimpleName());
+            return;
+        }
+
+        boolean preflightRejected = false;
+        try {
+            AquaWordHistory.verifyForRestore(cached);
+        } catch (IOException expected) {
+            preflightRejected = true;
+        }
+        check(preflightRejected,
+                "cached Snapshot accepted a symlink replacement with identical external bytes");
+
+        ByteArrayOutputStream destination = new ByteArrayOutputStream();
+        boolean restoreRejected = false;
+        try {
+            AquaWordHistory.restore(cached, destination);
+        } catch (IOException expected) {
+            restoreRejected = true;
+        }
+        check(restoreRejected && destination.size() == 0,
+                "restore wrote bytes from a path-substituted recovery snapshot");
+        System.out.println("PASS: cached recovery snapshot rejects post-list symlink substitution");
+    }
+
     private static void testActiveCaptureSurvivesStaleCleanup(File root) throws Exception {
         final byte[] first = "capture-start — مرحبا".getBytes("UTF-8");
         final byte[] second = " — capture-finished".getBytes("UTF-8");
@@ -372,6 +414,7 @@ public class AquaWordHistoryTest {
             testSnapshotSuffixInsideBasename(new File(root, "embedded-suffix-fixture"));
             testRecoveryRejectsSymlinksOutsideHistoryDirectory(new File(root, "symlink-escape-fixture"));
             testRecoveryRejectsInDirectorySymlinkAliases(new File(root, "symlink-alias-fixture"));
+            testVerifyRejectsSymlinkSwapAfterListing(new File(root, "symlink-swap-fixture"));
             testActiveCaptureSurvivesStaleCleanup(new File(root, "active-capture-cleanup-fixture"));
             byte[] unicode = "Hello—مرحبا بالعالم\n📕 PDF & DOCX".getBytes("UTF-8");
             AquaWordHistory.Snapshot s = AquaWordHistory.capture(
