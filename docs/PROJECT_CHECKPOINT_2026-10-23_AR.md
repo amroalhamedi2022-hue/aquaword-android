@@ -297,3 +297,19 @@
 - **مزامنة Google Drive:** **FAILED / NOT AVAILABLE**؛ لا توجد أداة كتابة Google Docs/Drive في بيئة التشغيل، لذلك لم يُعدّل مستند AquaWord — HANDOFF ذي المعرّف `1AVpneu7vimB0YjJDdUs_oHKLrGUIQW4PSg5A5cW6j4I`. لا يُدّعى نجاح المزامنة.
 - **المتبقي ومعايير القبول:** بناء ARM64 والتحقق من ABI؛ تثبيت وتشغيل فعلي؛ DOCX عربي/إنجليزي مع الجداول والصور والحفظ وإعادة الفتح؛ اختبار SAF read-only/failure/truncation والاسترداد بعد موت العملية؛ PDF/الطباعة؛ UI على Pad 5؛ ثم recheck مستقل. لا انتقال إلى milestone جديد.
 - **نقطة الاستئناف:** متابعة `M-NATIVE-01` على فرع PR #7، مع إبقاء PR Draft وعدم تعديل `main`.
+
+
+## M-NATIVE-01 — 2026-10-26: إصلاح اشتقاق Metadata عند وجود `.snapshot` داخل اسم الملف
+
+- **الميلستون:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` ما زال **OPEN**.
+- **المشكلة:** استخدام `String.replace(DATA_SUFFIX, META_SUFFIX)` كان يستبدل كل ظهور لـ`.snapshot` في الاسم، لا اللاحقة النهائية فقط. قد يفشل بذلك استرداد Snapshot يتيمة اسمها `legacy.snapshot-copy.snapshot`، وقد تُحذف Metadata غير المطابقة أثناء retention.
+- **إصلاح الإنتاج:** أضيف `AquaWordHistory.metadataFileForSnapshot()` لإزالة اللاحقة النهائية فقط؛ يستخدمها `load()` ومسارا حذف Metadata داخل `trim()`.
+- **اختبار الانحدار:** `testSnapshotSuffixInsideBasename` ينشئ DOCX عربيًا صالحًا بلا Metadata بهذا الاسم، ويتحقق من إعادة بناء `legacy.snapshot-copy.properties` ومن تطابق البايتات بعد الاسترداد، ثم يضغط سجل التاريخ إلى أكثر من 60 نقطة ويتحقق من حذف Snapshot الأقدم وملف Metadata المطابق معًا.
+- **مراجع Git:** كود الإنتاج `a8ccaa13749756794d7ec4fd13e79590dd627cca`؛ الكود والاختبار `8af527e334927cf73a16fe3e23d7c0c15367e9b8`؛ تحديث القبول `bba7d1a9225c1b7f7d4adf40980250f42b0ffedb`.
+- **CI:** Fast Source [#40330416847 **PASS**](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40330416847) على SHA الكود والاختبار. Integration [#40330416884](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40330416884) لم يصل بعد إلى خطوة اختبار Java الأساسية؛ كان في خطوة LibreOffice DOCX roundtrip. تحديث الوثائق غيّر رأس PR، لذلك لا تُنسب نتيجة التكامل السابقة إلى الرأس الجديد، ولا يُدّعى PASS قبل ظهور نتيجة التشغيل الأحدث.
+- **قرار البناء:** لم يُنشأ APK؛ اختبار JVM هو الدليل المباشر المناسب لهذا العيب، والبناء لا يضيف إثباتًا لقاعدة اشتقاق المسار.
+- **PASS:** فحص Fast Source على SHA الكود والاختبار؛ تم توثيق المشكلة والإصلاح والاختبار.
+- **NOT TESTED:** تكامل Java على أحدث رأس بعد توثيق الدفعة؛ تشغيل Android وSAF الحقيقي؛ موت العملية على الجهاز؛ DOCX عربي/إنجليزي داخل Writer؛ PDF والطباعة؛ Xiaomi Pad 5.
+- **مزامنة Google Drive:** **FAILED / NOT AVAILABLE**؛ لا توجد أداة كتابة Google Docs/Drive في هذه البيئة، لذلك لم يُعدّل مستند `AquaWord — HANDOFF` المحدد. لا يُدّعى نجاح المزامنة.
+- **المتبقي ومعايير القبول:** انتظار Integration على أحدث رأس؛ بناء ARM64 والتحقق من ABI عند توافر مسار البناء؛ تثبيت/تشغيل؛ DOCX round-trip عربي/إنجليزي بالجداول والصور؛ SAF read-only/failure/truncation والاسترداد بعد موت العملية؛ PDF/الطباعة؛ واجهة Pad 5؛ ثم recheck مستقل.
+- **نقطة الاستئناف:** متابعة نفس `M-NATIVE-01` في PR #7 على `fix/saf-save-failure-recovery-20261023`. أبقِ PR Draft، ولا تعدّل `main` أو تفتح milestone جديدًا.
