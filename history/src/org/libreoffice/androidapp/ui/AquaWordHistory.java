@@ -24,6 +24,8 @@ import java.util.Map;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 public final class AquaWordHistory {
     private static final String FOLDER = "aquaword-history";
@@ -275,6 +277,52 @@ public final class AquaWordHistory {
     }
 
     /**
+     * Return a safe extension only for recognizable Writer document formats.
+     * An orphaned arbitrary binary must not be mislabeled as DOCX merely because
+     * its metadata vanished during a crash.
+     */
+    private static String guessRecoveredExtension(File data) throws IOException {
+        byte[] prefix = new byte[4096];
+        int length;
+        try (InputStream input = new FileInputStream(data)) {
+            length = input.read(prefix);
+        }
+        if (length <= 0) return null;
+        if (length >= 4 && prefix[0] == 'P' && prefix[1] == 'K' &&
+                prefix[2] == 3 && prefix[3] == 4) {
+            try (ZipFile archive = new ZipFile(data)) {
+                if (archive.getEntry("word/document.xml") != null &&
+                        archive.getEntry("[Content_Types].xml") != null)
+                    return ".docx";
+                ZipEntry mimeEntry = archive.getEntry("mimetype");
+                if (archive.getEntry("content.xml") != null && mimeEntry != null) {
+                    try (InputStream mimeInput = archive.getInputStream(mimeEntry)) {
+                        byte[] mime = new byte[128];
+                        int count = mimeInput.read(mime);
+                        String type = count > 0 ?
+                                new String(mime, 0, count, StandardCharsets.US_ASCII) : "";
+                        if (type.startsWith("application/vnd.oasis.opendocument.text"))
+                            return ".odt";
+                    }
+                }
+                return null;
+            }
+        }
+        if (length >= 5 && prefix[0] == '{' && prefix[1] == '\\' &&
+                prefix[2] == 'r' && prefix[3] == 't' && prefix[4] == 'f')
+            return ".rtf";
+        // Plain-text recovery is deliberately conservative: binary control
+        // bytes and NULs are not exposed as editable text snapshots.
+        for (int i = 0; i < length; i++) {
+            int value = prefix[i] & 0xff;
+            if (value == 0 || (value < 0x20 && value != '\\t' &&
+                    value != '\\n' && value != '\\r' && value != '\\f'))
+                return null;
+        }
+        return ".txt";
+    }
+
+    /**
      * Recover a fully committed data file whose metadata rename was interrupted
      * by process death. capture() fsyncs the complete bytes and renames the data
      * before renaming metadata, so a metadata-free .snapshot is a recoverable
@@ -296,6 +344,8 @@ public final class AquaWordHistory {
                 return null;
             final long size = data.length();
             if (size <= 0L || size > MAX_SINGLE_BYTES) return null;
+            final String extension = guessRecoveredExtension(data);
+            if (extension == null) return null;
             final long modified = data.lastModified();
             final long timestamp = modified > 0L ? modified : System.currentTimeMillis();
             final MessageDigest checksum = digest();
@@ -319,7 +369,7 @@ public final class AquaWordHistory {
                     (modified > 0L && data.lastModified() != modified))
                 return null;
 
-            final String name = "Recovered document " + timestamp + ".docx";
+            final String name = "Recovered document " + timestamp + extension;
             final String sourceHash = hex(digest().digest(
                     ("orphan-recovery:" + data.getName()).getBytes(StandardCharsets.UTF_8)));
             final String dataHash = hex(checksum.digest());
