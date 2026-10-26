@@ -348,3 +348,13 @@ The fast-source and integration contracts passed for the tested code SHA. Review
 - Android install/launch, Arabic/English DOCX editing and cold reopen, SAF read-only/failing provider, process death on device, PDF/print and Xiaomi Pad 5 remain **NOT TESTED**. M-NATIVE-01 remains **OPEN** and PR #7 remains Draft/open.
 - Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** because this automation runtime exposes no Google Docs/Drive write connector. No successful sync is claimed.
 - Next: inspect whether a current-SHA integration rerun can complete without repeating an unbounded LibreOffice stage; otherwise isolate the Java history-core test in a focused, bounded workflow while preserving the existing integration suite.
+
+
+## 2026-10-26 — latest current-head CI confirmation
+
+- Current documentation checkpoint before this append: `80538e02883169d84865b3c78bf5df81e76813a8`; source/test code remains `13158c93fb1be65eeaf6154e98f278252826b62e`.
+- Fast Source/SAF Contract [#40368384781](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40368384781): **PASS** on the current documentation checkpoint.
+- Integration [#40368384806](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40368384806): **PASS** on the current documentation checkpoint. The LibreOffice Desktop DOCX import/re-save stage, integration tests, offline Java snapshot-history core compilation/tests, emulator-script validation and pinned Collabora source-layout smoke all completed successfully. This is source/desktop integration evidence, not Android device acceptance.
+- The older Integration run [#40358863389](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40358863389) remains **CANCELLED**; the newer successful run above is the current evidence and does not retroactively change the old run's status.
+- **NOT TESTED:** native APK install/launch on device, Arabic/English Writer edit-save-cold-reopen, real SAF read-only/failing-provider recovery, process death on Android, print/PDF and Xiaomi Pad 5 visual/performance acceptance.
+- No build was warranted for this status update. Google Drive `AquaWord — HANDOFF` remains **FAILED / NOT AVAILABLE** because no Docs/Drive write connector is exposed. M-NATIVE-01 remains OPEN; PR #7 remains Draft/open; `main` unchanged.

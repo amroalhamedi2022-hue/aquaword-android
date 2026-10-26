@@ -336,3 +336,13 @@
 - لا بناء APK لهذا التغيير التوثيقي؛ يلزم دليل تكامل محدود زمنيًا، ثم اختبار Android/SAF فعلي. تثبيت/تشغيل Android، تحرير DOCX عربي/إنجليزي وإعادة فتحه، الحفظ لدى مزود فاشل، PDF/الطباعة وXiaomi Pad 5 = **NOT TESTED**.
 - مزامنة Google Drive `AquaWord — HANDOFF`: **FAILED / NOT AVAILABLE** لغياب موصل كتابة Google Docs/Drive؛ لم تتم المزامنة.
 - الاستئناف: أبقِ `M-NATIVE-01` وPR #7 مفتوحين بوضع Draft، واعزل اختبار Java history-core في مسار تكامل محدود إذا تعذر إكمال مرحلة LibreOffice الحالية. لم يتغير `main`.
+
+
+## 2026-10-26 — تأكيد نجاح أحدث CI على نقطة المتابعة الحالية
+
+- نقطة الوثائق السابقة: `80538e02883169d84865b3c78bf5df81e76813a8`؛ SHA الكود والاختبارات ما زال `13158c93fb1be65eeaf6154e98f278252826b62e`.
+- Fast Source/SAF Contract [#40368384781](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40368384781): **PASS**.
+- Integration [#40368384806](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40368384806): **PASS**. اكتملت مرحلة LibreOffice المكتبي لاستيراد DOCX وإعادة حفظه، واختبارات التكامل، وتجميع/اختبار Java لمكوّن استرداد المستندات، والتحقق من سكربتات المحاكي، وفحص بنية مصدر Collabora المثبت. هذا دليل مصدر وتكامل مكتبي، وليس قبولًا على جهاز Android.
+- تشغيل Integration الأقدم [#40358863389](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40358863389) يظل **CANCELLED**؛ التشغيل الأحدث أعلاه هو دليل الحالة الحالية ولا يغيّر الحالة التاريخية للتشغيل السابق.
+- **NOT TESTED:** تثبيت وتشغيل APK على جهاز، تحرير DOCX عربي/إنجليزي وحفظه وإعادة فتحه، SAF read-only/فشل المزود والتعافي الحقيقي، موت العملية على Android، PDF/الطباعة، وواجهة/أداء Xiaomi Pad 5.
+- لا بناء لهذه المراجعة التوثيقية. مزامنة Google Drive `AquaWord — HANDOFF` ما زالت **FAILED / NOT AVAILABLE** لغياب موصل كتابة Docs/Drive. يبقى M-NATIVE-01 مفتوحًا وPR #7 بوضع Draft؛ لم يتغير `main`.
