@@ -356,3 +356,14 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **NOT TESTED:** Android device/SAF provider behavior, process death on Xiaomi Pad 5, native Writer Arabic/English edit-save-cold-reopen, printing/PDF runtime, and device visual/performance acceptance. The earlier diagnostic APK is from an older source SHA and is not proof for this fix.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE** in this automation runtime; no Google Docs/Drive write connector is exposed, so the specified Drive document was not modified. No sync success is claimed.
 - **Next:** keep PR #7 Draft and `main` unchanged; continue `M-NATIVE-01` toward real Android SAF/Writer evidence. No further native build is triggered by this change.
+
+
+## 2026-10-27 — Existing ARM64 APK runtime smoke (no rebuild; pending)
+
+- **Purpose-bound runtime test:** workflow [#40504114768](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40504114768) downloads the already-built one-day artifact from native run [#40459738117](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40459738117), verifies the artifact source SHA and APK SHA-256, then attempts installation, launch, Arabic DOCX editing, save and cold-reopen on an API 30 ARM64 emulator.
+- **Why this adds evidence beyond source tests:** JVM/desktop tests cannot prove Android package installation, ARM64 native library loading, foreground Activity stability, or a real native Writer edit-save-cold-reopen sequence.
+- **Artifact provenance:** build source SHA `84b168b8dda1d1c6e89760631dddbb475d9ef59d`; APK SHA-256 `26851485b4dc7b3b1fa840f24276ed21fe9a0a4a388fbc69199a8d7b5d97ecfc`; artifact ID `12715085399`. This APK predates the latest recovery/local-staging fixes and is **baseline-only**, not proof for current source.
+- **Workflow status at this checkpoint:** emulator step **IN PROGRESS**; no runtime PASS is claimed until the smoke script produces its receipt and the workflow completes.
+- **Build decision:** no APK/engine rebuild. The existing artifact is reused to answer the emulator compatibility question; a rebuild would consume substantial runner time and would not be needed for this baseline runtime check.
+- **Remaining NOT TESTED:** physical Xiaomi Pad 5, real user-selected SAF provider refusal/truncation/recovery, current-source native package, print/PDF, and production signing.
+- **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE in this runtime because no Google Docs/Drive write connector is exposed; the specified document was not modified.
