@@ -507,3 +507,14 @@
 - **Still NOT TESTED:** current-source native APK download/retention, install/launch, real Android SAF provider failure/truncation and recovery, Android process death, Writer Arabic/English edit-save-cold-reopen, print/PDF runtime, and Xiaomi Pad 5 visual/performance acceptance.
 - **Milestone:** M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip remains OPEN. PR #7 remains Draft/open; main was not changed.
 - **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE; this runtime exposes no Google Docs/Drive write connector, so the specified Drive document was not modified.
+
+
+## 2026-10-27 — One-shot current-source ARM64 diagnostic queued
+
+- **Purpose-bound build:** GitHub Actions run [#40459738117](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40459738117), source SHA `84b168b8dda1d1c6e89760631dddbb475d9ef59d`, exact one-shot commit message `AquaWordNativeDiagnosticRetryOnce`.
+- **Test question:** does this exact AquaWord feature-branch source package a structurally verified `arm64-v8a` APK with the pinned Collabora/LibreOffice native ELF, expected application ID, valid signature report, matching bundled DOCX templates, SHA-256, and a downloadable short-lived Actions artifact?
+- **Why source tests are insufficient:** JVM history/SAF simulations, Python overlay contracts and desktop LibreOffice DOCX round-trips do not run the Android NDK native link, Gradle manifest/resource merge, APK packaging/signature verification, or artifact retention.
+- **Status at checkpoint:** native job `in_progress`; no artifact listed yet. Do not call this PASS until the run completes and the artifact is verified. This is the single newly authorized attempt; if it fails, do not automatically retry.
+- **Scope limits even on build success:** no real Android install/launch, no physical-device Writer Arabic/English edit-save-cold-reopen, no actual SAF provider failure/truncation/recovery, no print/PDF runtime proof, and no Xiaomi Pad 5 visual/performance acceptance. These remain **NOT TESTED**.
+- **Preflight evidence on preceding source/test SHA `48468eb1815f71bb9f462e84389fda2d1d8040be`:** Fast Source [#40451848520 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40451848520), Integration [#40451848529 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40451848529), Recovery Core [#40451848560 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40451848560). The native run repeats its own source preflight at the request SHA.
+- **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE in this runtime; no Google Docs/Drive write connector is exposed, so the named Drive document was not modified.
