@@ -134,7 +134,8 @@ def patch_activity(path: Path) -> bool:
                 new Thread(() -> {
                     boolean saved = false;
                     try (InputStream source = getAssets().open("aquaword/" + template + ".docx");
-                         OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
+                         OutputStream output = org.libreoffice.androidlib.AquaWordSafOutput.openTruncating(
+                                 mode -> getContentResolver().openOutputStream(destination, mode))) {
                         if (output == null) throw new IOException("No writable document destination");
                         byte[] buffer = new byte[64 * 1024];
                         int count;

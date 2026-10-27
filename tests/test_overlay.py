@@ -264,6 +264,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('persistDocumentPermission(target, data);', activity)
         self.assertIn('if (finished)', activity)
         self.assertIn('open(target); // The recovered document is genuinely editable.', activity)
+        self.assertIn('AquaWordSafOutput.openTruncating(', activity)
+        self.assertNotIn('openOutputStream(destination, "w")', activity)
         self.assertIn('if (written < 500L)', activity)
         self.assertIn('catch (Exception problem)', activity)
 
@@ -404,15 +406,13 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('source.reset();',section)
         self.assertIn('Native export is not a PDF',section)
         self.assertLess(section.index('source.reset();'),
-                        section.index('openOutputStream(exportTarget, "rwt")'))
+                        section.index('AquaWordSafOutput.openTruncating('))
         self.assertLess(section.index('Native export is not a PDF'),
-                        section.index('exportTarget, "wt"'))
-        self.assertIn('exportTarget, "wt"',section)
-        self.assertIn('openOutputStream(exportTarget, "rwt")',section)
-        self.assertIn('catch (FileNotFoundException | UnsupportedOperationException | IllegalArgumentException unsupportedMode)',section)
-        self.assertNotIn('openOutputStream(exportTarget);',section)
+                        section.index('AquaWordSafOutput.openTruncating('))
+        self.assertIn('mode -> getContentResolver().openOutputStream(exportTarget, mode)',section)
+        self.assertIn('AquaWordSafOutput.openTruncating(',section)
         self.assertNotIn('openOutputStream(exportTarget, "w")',section)
-        self.assertIn('Export provider returned no truncating output stream',section)
+        self.assertNotIn('openOutputStream(exportTarget);',section)
         self.run_phase('source')  # idempotent
         self.assertEqual(native,(self.path/
             'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text())
@@ -504,19 +504,15 @@ class AquaWordIntegrationTests(unittest.TestCase):
         restore=activity.split('case AQUAWORD_RESTORE_REQUEST_CODE:',1)[1].split(
             'case LO_ACTIVITY_REQUEST_CODE:',1)[0]
         self.assertEqual(restore.count('AQUAWORD_SAFE_HISTORY_RESTORE'),1)
-        self.assertEqual(restore.count('openOutputStream(target, "wt")'),1)
-        self.assertEqual(restore.count('openOutputStream(target, "rwt")'),1)
-        self.assertLess(restore.index('openOutputStream(target, "wt")'),
-                        restore.index('openOutputStream(target, "rwt")'))
+        self.assertEqual(restore.count('AquaWordSafOutput.openTruncating('),1)
+        self.assertIn('return AquaWordSafOutput.openTruncating(',restore)
+        self.assertIn('mode -> getContentResolver().openOutputStream(target, mode)',restore)
         self.assertNotIn('openOutputStream(target, "w")',restore)
         self.assertNotIn('openOutputStream(target);',restore)
-        self.assertIn('catch (java.io.FileNotFoundException | UnsupportedOperationException | IllegalArgumentException rejected)',restore)
-        self.assertIn('opened = getContentResolver().openOutputStream(target, "rwt");',restore)
-        self.assertIn('throw new IOException("No truncating writable recovery destination")',restore)
         self.assertIn('AquaWordHistory.restoreToDestination(item, () -> {',restore)
         self.assertLess(restore.index('AquaWordHistory.restoreToDestination(item, () -> {'),
-                        restore.index('openOutputStream(target, "wt")'))
-        self.assertLess(restore.index('openOutputStream(target, "rwt")'),
+                        restore.index('AquaWordSafOutput.openTruncating('))
+        self.assertLess(restore.index('AquaWordSafOutput.openTruncating('),
                         restore.index('success = true;'))
         self.assertIn('catch (Exception failure)',restore)
         self.assertIn('success = false;',restore)
@@ -538,9 +534,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertLess(restore.index('AquaWordHistory.verifyForRestore(item);'),
                         restore.index('AquaWordHistory.restoreToDestination(item, () -> {'))
         self.assertLess(restore.index('AquaWordHistory.restoreToDestination(item, () -> {'),
-                        restore.index('openOutputStream(target, "wt")'))
-        self.assertLess(restore.index('AquaWordHistory.restoreToDestination(item, () -> {'),
-                        restore.index('openOutputStream(target, "rwt")'))
+                        restore.index('AquaWordSafOutput.openTruncating('))
         self.assertIn('catch (Exception failure)',restore)
         self.assertIn('success = false;',restore)
         self.assertIn('if (finished)\n                                open(target);',restore)
@@ -570,7 +564,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertEqual(restore.count('openInputStream(target)'), 1)
         self.assertEqual(restore.count('AquaWordHistory.verifyProviderWriteback(item, readback);'), 1)
         self.assertLess(restore.index('AquaWordHistory.verifyForRestore(item);'),
-                        restore.index('openOutputStream(target, "wt")'))
+                        restore.index('AquaWordSafOutput.openTruncating('))
         self.assertLess(restore.index('AquaWordHistory.restoreToDestination(item, () -> {'),
                         restore.index('openInputStream(target)'))
         self.assertLess(restore.index('openInputStream(target)'),
@@ -590,11 +584,11 @@ class AquaWordIntegrationTests(unittest.TestCase):
         native=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
         save=native.split('private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination, java.io.File resolvedAtSave) {',1)[1].split(
             '/** Copy the temp file back to the document. */',1)[0]
-        self.assertEqual(save.count('openOutputStream(destination, "wt")'),1)
-        self.assertEqual(save.count('openOutputStream(destination, "rwt")'),1)
-        self.assertIn('if (opened == null)\n                opened = getContentResolver().openOutputStream(destination, "rwt");',save)
-        self.assertIn('if (opened == null)\n                throw new IOException("Document provider returned no writable stream");',save)
+        self.assertEqual(save.count('AquaWordSafOutput.openTruncating('),1)
+        self.assertIn('mode -> getContentResolver().openOutputStream(destination, mode)',save)
         self.assertNotIn('openOutputStream(destination, "w")',save)
+        self.assertLess(save.index('AquaWordSafOutput.openTruncating('),
+                        save.index('try (OutputStream output = opened)'))
         self.assertLess(save.index('try (OutputStream output = opened)'),
                         save.index('return true;'))
 
@@ -605,13 +599,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
         source=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java').read_text()
         save=source.split('private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination, java.io.File resolvedAtSave) {', 1)[1].split(
             '/** Copy the temp file back to the document. */', 1)[0]
-        self.assertEqual(save.count('openOutputStream(destination, "wt")'), 1)
-        self.assertEqual(save.count('openOutputStream(destination, "rwt")'), 1)
-        self.assertLess(save.index('openOutputStream(destination, "wt")'),
-                        save.index('openOutputStream(destination, "rwt")'))
+        self.assertEqual(save.count('AquaWordSafOutput.openTruncating('), 1)
+        self.assertIn('mode -> getContentResolver().openOutputStream(destination, mode)', save)
         self.assertNotIn('openOutputStream(destination);', save)
         self.assertNotIn('openOutputStream(destination, "w")', save)
-        self.assertIn('catch (FileNotFoundException | UnsupportedOperationException | IllegalArgumentException noTruncateMode)', save)
         self.assertIn('SAF writeback failed', save)
         self.assertIn('return false;', save)
         self.assertIn('new FileInputStream(sourceFile)', save)
@@ -940,9 +931,11 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('AquaWordCreateBlank', activity)
         self.assertIn('AQUAWORD_VERIFIED_BLANK_DOCX', activity)
         self.assertIn('"aquaword/blank.docx"', activity)
-        self.assertIn('getContentResolver().openOutputStream(uri, "wt")', activity)
-        self.assertIn('getContentResolver().openOutputStream(uri, "rwt")', activity)
-        self.assertNotIn('getContentResolver().openOutputStream(uri, "w")', activity)
+        create=activity.split('private void createNewFile(final Uri uri, final String extension) {',1)[1].split(
+            '/** Context menu item handling. */',1)[0]
+        self.assertIn('AquaWordSafOutput.openTruncating(', create)
+        self.assertIn('mode -> getContentResolver().openOutputStream(uri, mode)', create)
+        self.assertNotIn('getContentResolver().openOutputStream(uri, "w")', create)
         self.assertNotIn('thread.run();', activity)
         self.assertNotIn('thread.join();', activity)
         self.assertIn('if (completed)\n                    open(uri);', activity)
@@ -965,15 +958,14 @@ class AquaWordIntegrationTests(unittest.TestCase):
         activity=(self.path/'android/app/src/main/java/org/libreoffice/androidapp/ui/LibreOfficeUIActivity.java').read_text()
         create=activity.split('private void createNewFile(final Uri uri, final String extension) {',1)[1].split(
             '/** Context menu item handling. */',1)[0]
-        self.assertEqual(create.count('openOutputStream(uri, "wt")'),1)
-        self.assertEqual(create.count('openOutputStream(uri, "rwt")'),1)
-        self.assertLess(create.index('openOutputStream(uri, "wt")'),
-                        create.index('openOutputStream(uri, "rwt")'))
+        self.assertEqual(create.count('AquaWordSafOutput.openTruncating('),1)
+        self.assertIn('mode -> getContentResolver().openOutputStream(uri, mode)',create)
         self.assertNotIn('openOutputStream(uri, "w")',create)
         self.assertNotIn('openOutputStream(uri);',create)
-        self.assertIn('catch (java.io.FileNotFoundException | UnsupportedOperationException | IllegalArgumentException rejected)',create)
-        self.assertIn('if (opened == null)',create)
-        self.assertIn('throw new IOException("No truncating writable document URI")',create)
+        saf_helper=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordSafOutput.java').read_text()
+        self.assertIn('opener.open("wt")',saf_helper)
+        self.assertIn('opener.open("rwt")',saf_helper)
+        self.assertIn('No truncating writable stream',saf_helper)
         self.assertIn('if (written <= 0L)',create)
         self.assertIn('throw new IOException("Empty document template")',create)
         self.assertLess(create.index('try (OutputStream output = opened)'),

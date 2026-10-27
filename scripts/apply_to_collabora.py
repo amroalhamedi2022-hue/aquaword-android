@@ -336,19 +336,9 @@ def patch_native_saf_saveback(path: Path) -> bool:
             // Never silently fall back to ambiguous "w" on an existing file.
             // Try only explicitly truncating modes, otherwise fail the SAVE
             // and leave the post-edit recovery snapshot available.
-            OutputStream opened;
-            try {
-                opened = getContentResolver().openOutputStream(destination, "wt");
-            } catch (FileNotFoundException | UnsupportedOperationException | IllegalArgumentException noTruncateMode) {
-                Log.w(TAG, "Provider rejected wt; trying explicit rwt truncate mode", noTruncateMode);
-                opened = null;
-            }
-            // ContentResolver may return null when a provider has crashed.
-            // A null "wt" stream is not success: try "rwt" before failing.
-            if (opened == null)
-                opened = getContentResolver().openOutputStream(destination, "rwt");
-            if (opened == null)
-                throw new IOException("Document provider returned no writable stream");
+            // Shared and JVM-tested mode negotiation; never fall back to ambiguous "w".
+            OutputStream opened = AquaWordSafOutput.openTruncating(
+                    mode -> getContentResolver().openOutputStream(destination, mode));
             long bytes = 0L;
             try (OutputStream output = opened) {
                 byte[] buffer = new byte[64 * 1024];
@@ -455,17 +445,8 @@ def patch_native_export_writeback(path: Path) -> bool:
                                         signature[2] != 'D' || signature[3] != 'F' ||
                                         signature[4] != '-')
                                     throw new IOException("Native export is not a PDF");
-                                OutputStream destination;
-                                try {
-                                    destination = getContentResolver().openOutputStream(
-                                            exportTarget, "wt");
-                                } catch (FileNotFoundException | UnsupportedOperationException | IllegalArgumentException unsupportedMode) {
-                                    destination = getContentResolver().openOutputStream(exportTarget, "rwt");
-                                }
-                                if (destination == null)
-                                    destination = getContentResolver().openOutputStream(exportTarget, "rwt");
-                                if (destination == null)
-                                    throw new IOException("Export provider returned no truncating output stream");
+                                OutputStream destination = AquaWordSafOutput.openTruncating(
+                                        mode -> getContentResolver().openOutputStream(exportTarget, mode));
                                 try (OutputStream output = destination) {
                                     byte[] bytes = new byte[64 * 1024];
                                     int n;
@@ -885,18 +866,8 @@ def patch_history_activity(path: Path) -> bool:
                         // invoking openOutputStream: SAF providers may truncate
                         // immediately when "wt"/"rwt" is requested.
                         AquaWordHistory.restoreToDestination(item, () -> {
-                            OutputStream opened;
-                            try {
-                                opened = getContentResolver().openOutputStream(target, "wt");
-                            } catch (java.io.FileNotFoundException | UnsupportedOperationException | IllegalArgumentException rejected) {
-                                Log.w(LOGTAG, "Restore provider rejected wt; trying rwt", rejected);
-                                opened = null;
-                            }
-                            if (opened == null)
-                                opened = getContentResolver().openOutputStream(target, "rwt");
-                            if (opened == null)
-                                throw new IOException("No truncating writable recovery destination");
-                            return opened;
+                            return AquaWordSafOutput.openTruncating(
+                                    mode -> getContentResolver().openOutputStream(target, mode));
                         });
                         // AQUAWORD_RESTORE_READBACK_BARRIER: a provider can
                         // accept and close every write yet silently persist
@@ -969,20 +940,10 @@ def patch_async_new_document_creation(path: Path) -> bool:
             try (InputStream template = getAssets().open(
                     "docx".equalsIgnoreCase(extension) ? "aquaword/blank.docx" :
                     "templates/untitled." + extension)) {
-                // Android's plain "w" may leave old bytes behind. A provider
-                // can return a pre-existing URI even for CREATE_DOCUMENT.
-                // Use only explicit truncation; never silently fall back to "w".
-                OutputStream opened;
-                try {
-                    opened = getContentResolver().openOutputStream(uri, "wt");
-                } catch (java.io.FileNotFoundException | UnsupportedOperationException | IllegalArgumentException rejected) {
-                    Log.w(LOGTAG, "Provider rejected wt for new document; trying rwt", rejected);
-                    opened = null;
-                }
-                if (opened == null)
-                    opened = getContentResolver().openOutputStream(uri, "rwt");
-                if (opened == null)
-                    throw new IOException("No truncating writable document URI");
+                // A provider may return an existing URI; negotiate only explicit
+                // truncating modes through the shared, JVM-tested helper.
+                OutputStream opened = AquaWordSafOutput.openTruncating(
+                        mode -> getContentResolver().openOutputStream(uri, mode));
                 // AQUAWORD_NEW_DOC_READBACK: reject corrupted provider output.
                 final java.security.MessageDigest expectedDigest =
                         java.security.MessageDigest.getInstance("SHA-256");
@@ -1221,6 +1182,17 @@ def copy_history_source(repo: Path) -> bool:
     shutil.copyfile(src, target)
     return True
 
+
+def copy_saf_output_source(repo: Path) -> bool:
+    src = require(ROOT/'history/src/org/libreoffice/androidlib/AquaWordSafOutput.java')
+    target = repo/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordSafOutput.java'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file():
+        if target.read_bytes() == src.read_bytes(): return False
+        raise PatchError('Conflicting pre-existing AquaWordSafOutput.java in upstream')
+    shutil.copyfile(src, target)
+    return True
+
 def copy_icons(repo: Path) -> int:
     icons = list(sorted((ROOT / 'branding/icons').rglob('aquaword_launcher.png')))
     if len(icons) != 5:
@@ -1274,6 +1246,7 @@ def source(repo: Path) -> None:
     print('SAF native saveback error detection:', patch_native_saf_saveback(targets[11]))
     print('Verified asynchronous native PDF export:', patch_native_export_writeback(targets[11]))
     print('History storage class:', copy_history_source(repo))
+    print('SAF truncation mode helper:', copy_saf_output_source(repo))
     print('Native PDF preflight class:', copy_pdf_preflight_source(repo))
     print('Native PDF export locale resources:', copy_native_export_strings(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))

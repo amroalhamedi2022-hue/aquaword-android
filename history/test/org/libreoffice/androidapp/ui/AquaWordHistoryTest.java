@@ -5,6 +5,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.zip.*;
 import org.libreoffice.androidlib.AquaWordHistory;
+import org.libreoffice.androidlib.AquaWordSafOutput;
 public class AquaWordHistoryTest {
     private static void crashDuringCapture(File root) throws Exception {
         // First commit a complete recovery point, then kill the child during a second capture.
@@ -33,6 +34,77 @@ public class AquaWordHistoryTest {
         AquaWordHistory.capture(root, interrupted, "process-killed.docx",
                 "content://crash/provider");
         throw new AssertionError("crash fixture unexpectedly completed");
+    }
+
+    private static void testSafTruncatingOutputNegotiation() throws Exception {
+        for (int rejection = 0; rejection < 3; rejection++) {
+            final int kind = rejection;
+            List<String> modes = new ArrayList<>();
+            ByteArrayOutputStream accepted = new ByteArrayOutputStream();
+            OutputStream actual = AquaWordSafOutput.openTruncating(mode -> {
+                modes.add(mode);
+                if ("wt".equals(mode)) {
+                    if (kind == 0) throw new FileNotFoundException("wt unsupported");
+                    if (kind == 1) throw new UnsupportedOperationException("wt unsupported");
+                    throw new IllegalArgumentException("wt unsupported");
+                }
+                if ("rwt".equals(mode)) return accepted;
+                throw new AssertionError("unexpected mode: " + mode);
+            });
+            check(actual == accepted, "fallback did not return the rwt stream");
+            check(modes.equals(Arrays.asList("wt", "rwt")),
+                    "unsupported wt must try exactly one explicit rwt mode: " + modes);
+            actual.close();
+        }
+
+        List<String> nullModes = new ArrayList<>();
+        ByteArrayOutputStream afterNull = new ByteArrayOutputStream();
+        OutputStream afterNullStream = AquaWordSafOutput.openTruncating(mode -> {
+            nullModes.add(mode);
+            return "rwt".equals(mode) ? afterNull : null;
+        });
+        check(afterNullStream == afterNull, "null wt stream did not retry rwt");
+        check(nullModes.equals(Arrays.asList("wt", "rwt")), "null wt fallback used unexpected modes");
+        afterNullStream.close();
+
+        List<String> deniedModes = new ArrayList<>();
+        boolean denied = false;
+        try {
+            AquaWordSafOutput.openTruncating(mode -> {
+                deniedModes.add(mode);
+                throw new SecurityException("provider permission denied");
+            });
+        } catch (SecurityException expected) {
+            denied = true;
+        }
+        check(denied && deniedModes.equals(Arrays.asList("wt")),
+                "permission denial must propagate without a fallback attempt");
+
+        List<String> ioModes = new ArrayList<>();
+        boolean ioFailed = false;
+        try {
+            AquaWordSafOutput.openTruncating(mode -> {
+                ioModes.add(mode);
+                throw new IOException("provider offline");
+            });
+        } catch (IOException expected) {
+            ioFailed = true;
+        }
+        check(ioFailed && ioModes.equals(Arrays.asList("wt")),
+                "ordinary I/O failure must propagate instead of being masked as unsupported mode");
+
+        List<String> unavailableModes = new ArrayList<>();
+        boolean unavailable = false;
+        try {
+            AquaWordSafOutput.openTruncating(mode -> {
+                unavailableModes.add(mode);
+                return null;
+            });
+        } catch (IOException expected) {
+            unavailable = expected.getMessage().contains("No truncating writable stream");
+        }
+        check(unavailable && unavailableModes.equals(Arrays.asList("wt", "rwt")),
+                "provider returning null for both explicit modes must fail closed");
     }
 
     private static void testProcessDeathRecovery(File root) throws Exception {
@@ -590,6 +662,7 @@ public class AquaWordHistoryTest {
             crashDuringCapture(new File(args[1]));
             throw new AssertionError("crash fixture returned without halting");
         }
+        testSafTruncatingOutputNegotiation();
         File root = Files.createTempDirectory("aquaword-history-test").toFile();
         try {
             testProcessDeathRecovery(new File(root, "process-death-fixture"));
