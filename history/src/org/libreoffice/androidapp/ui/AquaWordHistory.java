@@ -471,6 +471,55 @@ public final class AquaWordHistory {
     }
 
     /**
+     * Validate a pre-existing metadata staging file before promoting it.
+     * A matching .meta-partial can be the durable sidecar left by process death
+     * after the snapshot bytes were renamed; an unrelated/partial file must be
+     * preserved and must never be promoted or overwritten.
+     */
+    private static boolean isRecoverablePendingMetadata(File dir, File pending,
+                                                        long expectedSize,
+                                                        String expectedHash) {
+        if (dir == null || pending == null ||
+                !pending.getName().endsWith(".meta-partial") || !pending.isFile())
+            return false;
+        long initialLength = pending.length();
+        long initialModified = pending.lastModified();
+        try {
+            File canonicalDir = dir.getCanonicalFile();
+            File canonicalPending = pending.getCanonicalFile();
+            File expectedPending = new File(canonicalDir, pending.getName()).getAbsoluteFile();
+            if (!canonicalDir.equals(canonicalPending.getParentFile()) ||
+                    !canonicalPending.equals(expectedPending))
+                return false;
+            Properties staged = new Properties();
+            try (FileInputStream input = new FileInputStream(pending)) {
+                staged.load(input);
+            }
+            String hash = staged.getProperty("sha256", "");
+            String sourceHash = staged.getProperty("source_sha256", "");
+            String name = staged.getProperty("name", "");
+            String kind = staged.getProperty("kind", "");
+            long size = Long.parseLong(staged.getProperty("size", "-1"));
+            long timestamp = Long.parseLong(staged.getProperty("timestamp", "0"));
+            if (!isSha256Hex(hash) || !hash.equals(expectedHash) ||
+                    !isSha256Hex(sourceHash) || size != expectedSize ||
+                    !isWithinSnapshotSizeLimit(size) || timestamp <= 0L ||
+                    name.isEmpty() || !sanitizeName(name).equals(name) ||
+                    !("pre-edit".equals(kind) || "saved".equals(kind) ||
+                            "recovered".equals(kind)))
+                return false;
+            File canonicalAfterRead = pending.getCanonicalFile();
+            return pending.isFile() && pending.length() == initialLength &&
+                    pending.lastModified() == initialModified &&
+                    initialLength > 0L &&
+                    canonicalDir.equals(canonicalAfterRead.getParentFile()) &&
+                    expectedPending.equals(canonicalAfterRead);
+        } catch (IOException | IllegalArgumentException | SecurityException failure) {
+            return false;
+        }
+    }
+
+    /**
      * Recover a fully committed data file whose metadata rename was interrupted
      * by process death. capture() fsyncs the complete bytes and renames the data
      * before renaming metadata, so a metadata-free .snapshot is a recoverable
@@ -540,13 +589,17 @@ public final class AquaWordHistory {
             pending = new File(dir, id + ".meta-partial");
             // Never open an existing staging path with FileOutputStream: that
             // would truncate another incomplete write or follow a planted link.
-            // Exclusive creation makes a collision a recoverable "not listed yet"
-            // state while preserving the orphan bytes and existing temp file.
-            if (!pending.createNewFile()) return null;
-            pendingCreated = true;
-            try (FileOutputStream output = new FileOutputStream(pending)) {
-                props.store(output, "Recovered complete snapshot after metadata loss");
-                output.getFD().sync();
+            // A process killed after the data rename may, however, leave a complete
+            // staged metadata record. Promote it only if its size/hash and fields
+            // match these exact committed bytes; otherwise preserve it and defer.
+            if (!pending.createNewFile()) {
+                if (!isRecoverablePendingMetadata(dir, pending, size, dataHash)) return null;
+            } else {
+                pendingCreated = true;
+                try (FileOutputStream output = new FileOutputStream(pending)) {
+                    props.store(output, "Recovered complete snapshot after metadata loss");
+                    output.getFD().sync();
+                }
             }
             if (!pending.renameTo(meta)) return null;
 

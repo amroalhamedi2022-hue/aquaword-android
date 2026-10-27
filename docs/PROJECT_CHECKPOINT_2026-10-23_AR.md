@@ -591,9 +591,9 @@
 ## 2026-10-27 — Orphan recovery metadata-staging collision guard
 
 - **Milestone:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` remains **OPEN**.
-- **Production fix:** `recoverOrphanSnapshot()` previously opened `.meta-partial` with truncating `FileOutputStream`. An occupied staging path could be overwritten and then published as committed metadata. Recovery now reserves the path with `createNewFile()`, defers when it is occupied, and only cleans a staging file it successfully created.
+- **Production fix:** `recoverOrphanSnapshot()` previously opened `.meta-partial` with truncating `FileOutputStream`. An occupied staging path could be overwritten and then published as committed metadata. Recovery now reserves an absent path with `createNewFile()`. If a path is already occupied, it promotes it only when the staged metadata is structurally valid and its SHA-256/size match the committed snapshot; unrelated or partial staging bytes are preserved. Cleanup is limited to a staging file this attempt created.
 - **Regression:** the JVM suite creates a valid orphan DOCX snapshot plus a byte-sentinel `.meta-partial` collision, runs the real history scan, and verifies that the sentinel and original snapshot remain byte-identical and no final metadata is published.
-- **Code/test validation:** CI must pass on the exact head before this change is considered accepted; see the linked PR checks after completion.
+- **CI history:** the first run exposed a required crash-window case: a process can die after the snapshot rename while its already-written `.meta-partial` is still valid. The follow-up validates and promotes only a matching staged record; the occupied-sentinel regression must still pass. Acceptance depends on the exact-head rerun.
 - **Build decision:** no APK build. This is a deterministic Java filesystem contract directly tested by JVM regression; native packaging would not establish Android-provider behavior.
 - **Still NOT TESTED:** real Android SAF provider collisions/failures, on-device process death, Writer Arabic/English cold-reopen, print/PDF, and Xiaomi Pad 5 visual/performance acceptance.
 - **Google Drive AquaWord — HANDOFF:** sync remains **FAILED / NOT AVAILABLE** until the specified Google Docs document can actually be written; no sync success is claimed.
