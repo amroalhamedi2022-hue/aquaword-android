@@ -404,8 +404,12 @@ public class AquaWordHistoryTest {
             check(firstChunkWritten.await(3, java.util.concurrent.TimeUnit.SECONDS),
                     "first capture did not begin writing");
             File partial = new File(new File(root, "aquaword-history"), id + ".partial");
-            check(partial.isFile() && partial.length() >= first.length,
-                    "first capture did not reserve and write its partial file");
+            check(partial.isFile(), "first capture did not reserve its partial file");
+            long writeDeadline = System.currentTimeMillis() + 3000L;
+            while (partial.length() < first.length && System.currentTimeMillis() < writeDeadline)
+                Thread.sleep(10L);
+            check(partial.length() >= first.length,
+                    "first capture did not flush its initial bytes before collision");
             long stale = System.currentTimeMillis() - 15L * 24L * 60L * 60L * 1000L;
             check(partial.setLastModified(stale), "could not age shared partial fixture");
 
