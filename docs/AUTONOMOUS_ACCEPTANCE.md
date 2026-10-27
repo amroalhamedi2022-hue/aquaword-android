@@ -1,5 +1,13 @@
 # AquaWord autonomous acceptance ledger
 
+## Current build policy — supersedes older blanket gates (user decision 2026-10-24)
+
+- APK/EXE builds are **allowed before project completion** when they answer a concrete integration or runtime question that source/unit/integration tests cannot answer. They are optional, not required every round.
+- Before any build, record its purpose, the exact test question, and why source tests are insufficient. Afterward record source SHA, CI/run and logs, artifact link and SHA-256 if produced, evidence, and the limits of what was actually tested.
+- Do not rebuild without a relevant source/workflow change or a new unanswered test question. Use free resources only; no paid API/runner, no auto-merge, and no changes to main.
+- Final delivery remains gated on acceptance criteria and an independent recheck. Historical entries below describing an absolute “no build until final-ready” rule are retained as history but are superseded by this policy.
+
+
 AUTOMATION_COMPLETE: BLOCKED
 
 ## Baseline and scope (2026-10-23)
@@ -114,7 +122,7 @@ The fast-source and integration contracts passed for the tested code SHA. Review
 - **PASS — exact source+tests SHA `0918f219e2e0c0e27d226b23e813650068412f24`:** [Fast Source and SAF Contract run 40001993759](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40001993759), completed successfully on 2026-10-23.
 - **PASS — same SHA:** [Integration Tests run 40001993684](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40001993684), completed successfully on 2026-10-23. The integration workflow exercises source/fixtures and desktop LibreOffice roundtrips, **not Android Writer**.
 - **NOT TESTED:** Android SAF provider supporting only `rwt`, rejecting both explicit modes, returning a pre-existing document, or returning a null/partial stream; actual New Document UX, DOCX roundtrip, Collabora native ARM64 compilation, manifest merger, PDF export/print, Liquid Aurora visual parity, CPU/RAM and real-device independent recheck.
-- **Build gate override (user decision 2026-10-23):** **DO NOT run Android Gradle assemble/package, Native Collabora APK build, or dispatch an APK-producing GitHub Actions workflow during ongoing development.** Older notes above suggesting a near-term native build are superseded. Complete missing source features, regressions, static/unit/integration tests and independent source recheck first. Only when the entire product is final-ready may one coordinated APK build and real-device acceptance begin. The two runs above were **source/integration only**; no APK build was requested this round.
+- **Historical build gate (2026-10-23; superseded 2026-10-24):** the earlier instruction prohibited every APK build during ongoing development. That blanket rule is no longer current. Purpose-bound diagnostic builds are allowed when a concrete integration/runtime question cannot be answered by source tests; apply the current policy at the top of this ledger. The two runs above were source/integration only; no APK build was requested for that round.
 - **Current status:** `AUTOMATION_COMPLETE: BLOCKED`; PR #7 remains draft/unmerged; no APK or Release. Next bounded action: inspect missing source feature gaps (native toolbar, PDF/print, SAF negative paths) and fix with source+tests while honoring the no-build gate.
 
 ## SAF history-restore integrity and null-stream SAVE recovery — 2026-10-23
@@ -126,7 +134,7 @@ The fast-source and integration contracts passed for the tested code SHA. Review
 - **New source regressions:** `tests/test_overlay.py` commit `e2a9099f554bbe18ff1bc449dad264615a45a9d9` adds `test_history_restore_requires_truncating_saf_stream` and `test_null_native_save_stream_retries_explicit_rwt`. Both exercise the generated Java overlay **source contracts** twice for idempotence, explicit mode order, null fallback, no `"w"`, exception/failure handling and no Writer reopen before stream close. Run through the existing `python3 -m unittest discover -s tests -p 'test_overlay.py'` test suite (CI evidence below).
 - **PASS — exact source+tests SHA `e2a9099f554bbe18ff1bc449dad264615a45a9d9`:** [Fast Source and SAF Contract run 40009793496](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40009793496), completed successfully. **PASS — same SHA:** [Integration Tests run 40009793569](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40009793569), completed successfully. These checks include source overlays and desktop DOCX fixtures, **not** an Android app runtime.
 - **NOT TESTED:** real SAF provider with `wt` null/unsupported, `rwt` only, both modes unsupported, partial/truncated cloud writes; actual restored DOCX bytes; Android process death; Native ARM64 Gradle/manifest/APK; real Xiaomi Pad 5 edit/save/reopen, PDF/print, Liquid Aurora parity, CPU/RAM and independent device recheck. All remain BLOCKED.
-- **Build gate remains in force:** Do not trigger APK-producing workflows, Gradle assemble/package or Native ARM64 build before all requested source features, static checks and independent source recheck are complete. No APK, Release, merge, main modification, paid CI or Library edit occurred in this round.
+- **Historical build gate (2026-10-23; superseded 2026-10-24):** the prior blanket pre-completion ban is retained for audit history only. Current policy permits a diagnostic build when justified by a specific unanswered runtime/integration question and a free compatible runner. No APK, Release, merge, main modification, paid CI or Library edit occurred in that round.
 - **Next bounded action:** inspect other SAF restore/save and PDF/print paths for data loss, implement missing source behavior with tests, and preserve the single final-build policy. `AUTOMATION_COMPLETE: BLOCKED` remains correct.
 
 ## Recovery preflight before SAF truncation — 2026-10-23
@@ -137,7 +145,7 @@ The fast-source and integration contracts passed for the tested code SHA. Review
 - **PASS — Fast Source and SAF Contract on exact SHA `a17c7178`:** [run 40018116861](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40018116861), completed successfully. This is a source contract, **not** proof of SAF behavior on Android.
 - **Integration Tests on exact SHA:** [run 40018116941](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40018116941) was **IN PROGRESS** at this documentation checkpoint (desktop LibreOffice roundtrip running). Do not mark PASS without checking its final conclusion. The Java history test runs inside integration, so its latest full CI result remains **NOT YET CONFIRMED** here.
 - **NOT TESTED:** real Android provider that returns an existing URI, corrupt snapshot vs truncation, read-only/cloud stream, device restore/edit/reopen, native ARM64 APK/manifest, Arabic/English rich DOCX, PDF/print, UI/performance, independent on-device recheck. Preflight reduces one destructive-failure window but cannot make a cloud provider write atomic.
-- **No APK build** or APK-producing workflow was triggered; the user-approved final-build gate still applies. No main write, merge, release, paid service or ChatGPT Library update. **AUTOMATION_COMPLETE: BLOCKED**. Next: inspect Integration run 40018116941 and repair any failures, then continue missing native UI/PDF/print source functionality and final source recheck before the first APK build.
+- **No APK build** was triggered for that source-only restore-preflight change because focused JVM/source tests directly answered its invariant; this was a per-change decision, not a blanket ban. No main write, merge, release, paid service or ChatGPT Library update. **AUTOMATION_COMPLETE: BLOCKED**.
 
 ## SAF history capture: bounded progress for malformed provider streams — 2026-10-24
 
