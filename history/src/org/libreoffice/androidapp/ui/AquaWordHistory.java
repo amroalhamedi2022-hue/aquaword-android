@@ -221,6 +221,16 @@ public final class AquaWordHistory {
     static Snapshot capture(File appFilesDir, InputStream input,
                             String name, String sourceIdentity, String kind,
                             RenameStrategy renameStrategy) throws IOException {
+        return capture(appFilesDir, input, name, sourceIdentity, kind, renameStrategy,
+                System.currentTimeMillis() + "-" + UUID.randomUUID().toString());
+    }
+
+    /** Deterministic identifier seam for collision-safety regression tests. */
+    static Snapshot capture(File appFilesDir, InputStream input,
+                            String name, String sourceIdentity, String kind,
+                            RenameStrategy renameStrategy, String id) throws IOException {
+        if (id == null || !id.matches("[A-Za-z0-9-]{1,80}"))
+            throw new IOException("Invalid snapshot identifier");
         if (!"pre-edit".equals(kind) && !"saved".equals(kind))
             throw new IOException("Unknown snapshot type");
         if (renameStrategy == null) throw new IOException("Snapshot rename strategy is required");
@@ -230,7 +240,6 @@ public final class AquaWordHistory {
         String sourceHash = hex(digest().digest(sourceIdentity.getBytes(StandardCharsets.UTF_8)));
         File dir = folder(appFilesDir);
         String safeName = sanitizeName(name);
-        String id = System.currentTimeMillis() + "-" + UUID.randomUUID().toString();
         File temp = new File(dir, id + ".partial");
         File data = new File(dir, id + DATA_SUFFIX);
         File meta = new File(dir, id + META_SUFFIX);
@@ -243,8 +252,17 @@ public final class AquaWordHistory {
         }
         MessageDigest sha = digest();
         long length = 0L;
-        boolean dataCommitted = false;
+        boolean tempCreated = false;
+        boolean pendingMetaCreated = false;
         try {
+            // A prior crash or path collision must never cause FileOutputStream
+            // to truncate another recovery entry. Refuse occupied committed
+            // and metadata paths, then reserve the staging path exclusively.
+            if (data.exists() || meta.exists() || pendingMeta.exists())
+                throw new IOException("Snapshot identifier collision");
+            if (!temp.createNewFile())
+                throw new IOException("Could not reserve unique snapshot staging path");
+            tempCreated = true;
             try (FileOutputStream output = new FileOutputStream(temp)) {
                 byte[] buffer = new byte[64 * 1024];
                 int count;
@@ -295,6 +313,9 @@ public final class AquaWordHistory {
                 // Store only the SHA of the document URI, never the original URI.
                 props.setProperty("source_sha256", sourceHash);
                 props.setProperty("kind", kind);
+                if (!pendingMeta.createNewFile())
+                    throw new IOException("Could not reserve unique snapshot metadata path");
+                pendingMetaCreated = true;
                 try (FileOutputStream metaOut = new FileOutputStream(pendingMeta)) {
                     props.store(metaOut, "AquaWord private document snapshot");
                     metaOut.getFD().sync();
@@ -302,7 +323,6 @@ public final class AquaWordHistory {
                 if (!renameStrategy.rename(temp, data)) throw new IOException("Could not commit snapshot bytes");
                 // The bytes are already fsynced and atomically renamed. If metadata
                 // commit now fails, preserve this orphan so the next scan can recover it.
-                dataCommitted = true;
                 if (!renameStrategy.rename(pendingMeta, meta)) throw new IOException("Could not commit snapshot metadata");
                 Snapshot saved = load(dir, data);
                 if (saved == null) throw new IOException("Snapshot validation failed");
@@ -311,11 +331,12 @@ public final class AquaWordHistory {
             }
         } finally {
             synchronized (AquaWordHistory.class) {
-                temp.delete();
-                pendingMeta.delete();
-                // Never discard a fully committed snapshot just because its metadata
-                // rename failed; readAll() can rebuild metadata from recognized bytes.
-                if (!meta.exists() && !dataCommitted) data.delete();
+                // Delete only temporary paths this capture successfully reserved.
+                // Never delete the final .snapshot here: a failed rename may mean
+                // that path belongs to an older recovery point, while a successful
+                // rename followed by metadata failure must preserve the orphan bytes.
+                if (tempCreated) temp.delete();
+                if (pendingMetaCreated) pendingMeta.delete();
                 ACTIVE_CAPTURE_WRITES.remove(tempKey);
             }
         }

@@ -27,6 +27,7 @@ public final class AquaWordHistoryCommitTest {
         File root = Files.createTempDirectory("aquaword-meta-commit-").toFile();
         try {
             testProcessDeathBetweenDataAndMetadataCommit(new File(root, "process-death"));
+            testCaptureIdentifierCollisionsPreserveExistingFiles(new File(root, "capture-collision"));
             testOversizedSnapshotMetadataRejected(new File(root, "size-limit"));
             testMalformedChecksumMetadataRejected(new File(root, "malformed-checksum"));
             testOpenedRestoreDescriptorRejectsSameSizeReplacement(new File(root, "opened-descriptor"));
@@ -39,6 +40,48 @@ public final class AquaWordHistoryCommitTest {
             testRestoreRemovesDanglingStagingSymlink(new File(root, "restore-dangling-link"));
         } finally {
             deleteRecursively(root);
+        }
+    }
+
+    /**
+     * A collision at any capture-owned path must fail closed. In particular,
+     * failed staging/rename cleanup must never truncate or delete a pre-existing
+     * recovery file that this capture did not create.
+     */
+    private static void testCaptureIdentifierCollisionsPreserveExistingFiles(File root)
+            throws Exception {
+        String id = "1700000000000-00000000-0000-0000-0000-000000000001";
+        String[] suffixes = {".partial", ".snapshot", ".properties", ".meta-partial"};
+        for (int index = 0; index < suffixes.length; index++) {
+            File caseRoot = new File(root, "case-" + index);
+            File dir = new File(caseRoot, "aquaword-history");
+            check(dir.mkdirs() || dir.isDirectory(),
+                    "could not create collision fixture directory for " + suffixes[index]);
+            File existing = new File(dir, id + suffixes[index]);
+            byte[] sentinel = ("pre-existing recovery bytes " + suffixes[index]).getBytes("UTF-8");
+            try (FileOutputStream output = new FileOutputStream(existing)) {
+                output.write(sentinel);
+                output.getFD().sync();
+            }
+
+            boolean rejected = false;
+            try {
+                AquaWordHistory.capture(caseRoot,
+                        new ByteArrayInputStream("new recovery bytes".getBytes("UTF-8")),
+                        "collision.docx", "content://collision/" + index, "pre-edit",
+                        (source, target) -> {
+                            throw new AssertionError("rename must not run after a path collision");
+                        }, id);
+            } catch (IOException expected) {
+                rejected = true;
+            }
+            check(rejected, "capture did not reject occupied " + suffixes[index] + " path");
+            check(Arrays.equals(sentinel, Files.readAllBytes(existing.toPath())),
+                    "capture changed pre-existing " + suffixes[index] + " bytes");
+            File[] entries = dir.listFiles();
+            check(entries != null && entries.length == 1 && entries[0].equals(existing),
+                    "capture left or removed files after " + suffixes[index] + " collision");
+            System.out.println("PASS: capture preserves pre-existing " + suffixes[index] + " collision");
         }
     }
 
