@@ -74,8 +74,12 @@ class AquaWordIntegrationTests(unittest.TestCase):
                     return;
                 try (FileOutputStream outputStream = new FileOutputStream(newContent)) {
                     byte[] buffer = new byte[1024];
-                    while (inputStream.read(buffer) > 0) { }
+                    int length;
+                    while ((length = inputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, length);
+                    }
                     outputStream.flush();
+                    outputStream.getFD().sync();
                 }
             }
             if (!newContent.renameTo(resolvedFile)) {
@@ -474,6 +478,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('new FileInputStream(sourceFile)',lib)
         self.assertIn('return true;',lib)
         self.assertIn('AquaWord SAVE not acknowledged',lib)
+        self.assertIn('newContent = File.createTempFile(".aquaword-", ".part", resolvedFile.getParentFile());',lib)
+        self.assertNotIn('new File(resolvedFile.getParentFile(), "." + resolvedFile.getName() + ".part")',lib)
+        self.assertIn('outputStream.write(buffer, 0, length);',lib)
+        self.assertIn('outputStream.getFD().sync();',lib)
 
     def test_history_restore_requires_truncating_saf_stream(self):
         """A restored DOCX must not retain a prior document's ZIP tail.
