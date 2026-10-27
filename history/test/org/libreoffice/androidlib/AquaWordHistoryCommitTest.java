@@ -117,8 +117,8 @@ public final class AquaWordHistoryCommitTest {
                 "fixture unexpectedly committed metadata before process death");
 
         List<AquaWordHistory.Snapshot> recovered = AquaWordHistory.list(root);
-        check(recovered.size() == 1 && "recovered".equals(recovered.get(0).kind),
-                "history scan did not reconstruct metadata after abrupt process death");
+        check(recovered.size() == 1 && "saved".equals(recovered.get(0).kind),
+                "history scan did not promote the matching staged metadata after abrupt process death");
         ByteArrayOutputStream restored = new ByteArrayOutputStream();
         AquaWordHistory.restore(recovered.get(0), restored);
         check(Arrays.equals(expected, restored.toByteArray()),
