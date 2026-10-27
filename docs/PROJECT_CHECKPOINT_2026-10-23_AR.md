@@ -545,3 +545,17 @@
 - **قرار البناء:** لم يُنشأ APK جديد؛ اختبار overlay يجيب مباشرة عن invariant المصدر. بناء جديد لن يثبت سلوك نظام الملفات على الجهاز. بناء ARM64 التشخيصي الحالي موثق أعلاه وهو دليل packaging فقط، وليس قبولًا نهائيًا.
 - **مزامنة Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive في هذه البيئة، ولم يُعدّل المستند المحدد.
 - **نقطة الاستئناف:** متابعة `M-NATIVE-01` وPR #7 بوضع Draft/Open، مع إعطاء الأولوية لاختبار SAF/Writer على Android فعلي؛ لا تعديل لـ`main` ولا دمج.
+
+
+## إعادة تحقق مستقلة من APK التشخيصي — 27 أكتوبر 2026
+
+- **Artifact:** [AquaWord native diagnostic artifact #12715085399](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40459738117/artifacts/12715085399)، أُنشئ 2026-10-27 06:27:30 UTC وتنتهي صلاحيته المجدولة 2026-10-28 06:27:26 UTC.
+- **التحقق المستقل:** نُزّل ZIP وفُحص محليًا؛ SHA-256 للأرشيف `bc9943af59f61ca09f756dfdc254730359c566b66ae6f028f2b7ebcae6f1e842) يطابق digest المسجل في GitHub، و`unzip -t` نجح بلا أخطاء.
+- **APK:** الحجم 265,562,824 بايت؛ SHA-256 `26851485b4dc7b3b1fa840f24276ed21fe9a0a4a388fbc69199a8d7b5d97ecfc)، مطابق لـ`SHA256SUMS` داخل الأرشيف. تقرير التوقيع يثبت APK Signature Scheme v2=true؛ الشهادة Debug وبصمتها SHA-256 `b1de54d42a34046f9f305cae3c34b25c1aeb95c9518b51021f8c998e7dadb15b`.
+- **المحرك:** `liblo-native-code.so` بحجم 198,019,656 بايت، ELF64 little-endian/AArch64؛ SHA-256 `ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2). workflow سجّل نجاح تحقق package ID `com.aquaword.app.debug) وفحص القوالب الخمسة.
+- **قيد المصدر:** بُني هذا الـAPK من SHA `84b168b8dda1d1c6e89760631dddbb475d9ef59d) وعلى Collabora pin `2333344185931274f9c49d6c12a408cefcef6844). وهو أقدم من إصلاح staging المحلي `4f24c606e5f736a683e120d8871c7b92d7bbb472) واختبار الانحدار اللاحق؛ لذلك لا يثبت تلك التعديلات ولا يُعد إصدارًا من رأس الفرع الحالي.
+- **قرار البناء:** لم يُعاد البناء؛ checkpoint يحدد المحاولة التشخيصية بأنها one-shot ويحظر إعادة المحاولة التلقائية. هذا تحقق تنزيل/سلامة مستقل وليس تشغيل CI جديدًا.
+- **PASS:** artifact موجود وقابل للتنزيل وقت الفحص؛ سلامة ZIP وSHA-256 للـAPK؛ تقرير توقيع v2؛ معمارية مكتبة AArch64.
+- **NOT TESTED:** تثبيت وتشغيل Android، SAF حقيقي وفشل/اقتطاع الكتابة والتعافي، موت العملية، Writer عربي/إنجليزي مع حفظ وإعادة فتح بارد، الطباعة/PDF، وواجهة/أداء Xiaomi Pad 5. الـAPK debug-signed وتشخيصي ومؤقت.
+- **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive متاح في بيئة التشغيل، ولم يُعدّل المستند المحدد.
+- **نقطة الاستئناف:** إبقاء `M-NATIVE-01` مفتوحًا؛ لا تستخدم هذا الـAPK كدليل لقبول رأس المصدر الحالي، ولا تبدأ بناءً تشخيصيًا آخر تلقائيًا. يلزم مسار اختبار Android صالح ومصرّح به قبل إغلاق بوابات الجهاز.
