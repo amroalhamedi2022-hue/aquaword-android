@@ -817,24 +817,33 @@ public final class AquaWordHistory {
             throw new IOException("Missing or oversized recovery destination");
         try (WritebackLease lease = holdForWriteback(snapshot)) {
             File staged = stageRestoreCopy(snapshot);
-            try {
-                if (hook != null) hook.afterVerifiedStage(staged);
-                try (FileInputStream input = new FileInputStream(staged)) {
-                    verifyOpenedFile(staged, snapshot.canonicalParentPath,
-                            snapshot.sizeBytes, snapshot.sha256, input,
-                            "Recovery staging file changed before restore");
-                    // Critical ordering: the provider is not opened until the
-                    // complete local staging copy has passed SHA-256 verification.
-                    OutputStream opened = opener.open();
-                    if (opened == null)
-                        throw new IOException("No truncating writable recovery destination");
-                    try (OutputStream target = opened) {
-                        streamVerifiedBytes(snapshot, input, target);
-                    }
+        Throwable primaryFailure = null;
+        try {
+            if (hook != null) hook.afterVerifiedStage(staged);
+            try (FileInputStream input = new FileInputStream(staged)) {
+                verifyOpenedFile(staged, snapshot.canonicalParentPath,
+                        snapshot.sizeBytes, snapshot.sha256, input,
+                        "Recovery staging file changed before restore");
+                // Critical ordering: the provider is not opened until the
+                // complete local staging copy has passed SHA-256 verification.
+                OutputStream opened = opener.open();
+                if (opened == null)
+                    throw new IOException("No truncating writable recovery destination");
+                try (OutputStream target = opened) {
+                    streamVerifiedBytes(snapshot, input, target);
                 }
-            } finally {
-                deleteStagedRestoreCopy(staged);
             }
+        } catch (IOException | RuntimeException | Error failure) {
+            primaryFailure = failure;
+            throw failure;
+        } finally {
+            try {
+                deleteStagedRestoreCopy(staged);
+            } catch (IOException cleanupFailure) {
+                if (primaryFailure != null) primaryFailure.addSuppressed(cleanupFailure);
+                else throw cleanupFailure;
+            }
+        }
         }
     }
 
@@ -848,13 +857,24 @@ public final class AquaWordHistory {
             throw new IOException("Missing or oversized recovery destination");
         try (WritebackLease lease = holdForWriteback(snapshot)) {
             File staged = stageRestoreCopy(snapshot);
-            try (FileInputStream input = new FileInputStream(staged)) {
-                verifyOpenedFile(staged, snapshot.canonicalParentPath,
-                        snapshot.sizeBytes, snapshot.sha256, input,
-                        "Recovery staging file changed before restore");
-                streamVerifiedBytes(snapshot, input, target);
+            Throwable primaryFailure = null;
+            try {
+                try (FileInputStream input = new FileInputStream(staged)) {
+                    verifyOpenedFile(staged, snapshot.canonicalParentPath,
+                            snapshot.sizeBytes, snapshot.sha256, input,
+                            "Recovery staging file changed before restore");
+                    streamVerifiedBytes(snapshot, input, target);
+                }
+            } catch (IOException | RuntimeException | Error failure) {
+                primaryFailure = failure;
+                throw failure;
             } finally {
-                deleteStagedRestoreCopy(staged);
+                try {
+                    deleteStagedRestoreCopy(staged);
+                } catch (IOException cleanupFailure) {
+                    if (primaryFailure != null) primaryFailure.addSuppressed(cleanupFailure);
+                    else throw cleanupFailure;
+                }
             }
         }
     }
@@ -946,12 +966,25 @@ public final class AquaWordHistory {
         }
     }
 
-    private static void deleteStagedRestoreCopy(File staged) {
+    private static void deleteStagedRestoreCopy(File staged) throws IOException {
         if (staged == null) return;
+        IOException cleanupFailure = null;
         synchronized (AquaWordHistory.class) {
-            staged.delete();
-            ACTIVE_CAPTURE_WRITES.remove(staged.getAbsolutePath());
+            try {
+                if (staged.exists() && !staged.delete() && staged.exists()) {
+                    cleanupFailure = new IOException(
+                            "Could not remove private recovery staging file; recovery bytes may remain in app-private storage");
+                }
+            } catch (SecurityException denied) {
+                cleanupFailure = new IOException(
+                        "Could not remove private recovery staging file; recovery bytes may remain in app-private storage",
+                        denied);
+            } finally {
+                // Never leave a failed cleanup marked as an active writer forever.
+                ACTIVE_CAPTURE_WRITES.remove(staged.getAbsolutePath());
+            }
         }
+        if (cleanupFailure != null) throw cleanupFailure;
     }
 
     private static void streamVerifiedBytes(Snapshot snapshot, FileInputStream input,
