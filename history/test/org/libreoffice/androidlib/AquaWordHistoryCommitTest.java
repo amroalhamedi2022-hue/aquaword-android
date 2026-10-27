@@ -4,11 +4,13 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Properties;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -25,6 +27,7 @@ public final class AquaWordHistoryCommitTest {
         File root = Files.createTempDirectory("aquaword-meta-commit-").toFile();
         try {
             testProcessDeathBetweenDataAndMetadataCommit(new File(root, "process-death"));
+            testOversizedSnapshotMetadataRejected(new File(root, "size-limit"));
             testOpenedRestoreDescriptorRejectsSameSizeReplacement(new File(root, "opened-descriptor"));
             testHistoryDirectorySymlinkRejected(new File(root, "history-symlink"));
             testMetadataRenameFailurePreservesBytes(new File(root, "rename-failure"));
@@ -294,6 +297,48 @@ public final class AquaWordHistoryCommitTest {
         } finally {
             lease.close();
         }
+    }
+
+    /**
+     * Persisted metadata must not bypass the hard per-snapshot size cap.
+     * Use a tiny payload with oversized metadata so the regression stays cheap
+     * on both Linux and Windows and proves rejection happens before hashing.
+     */
+    private static void testOversizedSnapshotMetadataRejected(File root) throws Exception {
+        final long limit = 512L * 1024L * 1024L;
+        check(AquaWordHistory.isWithinSnapshotSizeLimit(1L),
+                "positive recovery snapshot size should be allowed");
+        check(AquaWordHistory.isWithinSnapshotSizeLimit(limit),
+                "exact maximum recovery snapshot size should be allowed");
+        check(!AquaWordHistory.isWithinSnapshotSizeLimit(0L),
+                "zero-byte recovery snapshot size must be rejected");
+        check(!AquaWordHistory.isWithinSnapshotSizeLimit(-1L),
+                "negative recovery snapshot size must be rejected");
+        check(!AquaWordHistory.isWithinSnapshotSizeLimit(limit + 1L),
+                "oversized recovery snapshot size must be rejected");
+
+        check(root.mkdirs() || root.isDirectory(), "could not create size-limit fixture");
+        File dir = new File(root, "aquaword-history");
+        check(dir.mkdirs() || dir.isDirectory(), "could not create size-limit history directory");
+        File data = new File(dir, "oversized.snapshot");
+        File metadata = new File(dir, "oversized.properties");
+        Files.write(data.toPath(), new byte[] { 0x41 });
+        Properties props = new Properties();
+        props.setProperty("name", "oversized.docx");
+        props.setProperty("timestamp", String.valueOf(System.currentTimeMillis()));
+        props.setProperty("size", String.valueOf(limit + 1L));
+        props.setProperty("sha256", "0000000000000000000000000000000000000000000000000000000000000000");
+        props.setProperty("source_sha256", "0000000000000000000000000000000000000000000000000000000000000000");
+        props.setProperty("kind", "saved");
+        try (FileOutputStream output = new FileOutputStream(metadata)) {
+            props.store(output, "oversized metadata regression");
+        }
+
+        check(AquaWordHistory.list(root).isEmpty(),
+                "metadata-backed snapshot above the size cap must not enter recovery history");
+        check(data.isFile() && metadata.isFile(),
+                "rejected oversized recovery evidence must not be deleted by listing");
+        System.out.println("PASS: oversized persisted recovery metadata is rejected before hashing or restore");
     }
 
     /**
