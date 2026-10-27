@@ -866,7 +866,7 @@ def patch_history_activity(path: Path) -> bool:
                         // invoking openOutputStream: SAF providers may truncate
                         // immediately when "wt"/"rwt" is requested.
                         AquaWordHistory.restoreToDestination(item, () -> {
-                            return AquaWordSafOutput.openTruncating(
+                            return org.libreoffice.androidlib.AquaWordSafOutput.openTruncating(
                                     mode -> getContentResolver().openOutputStream(target, mode));
                         });
                         // AQUAWORD_RESTORE_READBACK_BARRIER: a provider can
@@ -942,7 +942,7 @@ def patch_async_new_document_creation(path: Path) -> bool:
                     "templates/untitled." + extension)) {
                 // A provider may return an existing URI; negotiate only explicit
                 // truncating modes through the shared, JVM-tested helper.
-                OutputStream opened = AquaWordSafOutput.openTruncating(
+                OutputStream opened = org.libreoffice.androidlib.AquaWordSafOutput.openTruncating(
                         mode -> getContentResolver().openOutputStream(uri, mode));
                 // AQUAWORD_NEW_DOC_READBACK: reject corrupted provider output.
                 final java.security.MessageDigest expectedDigest =

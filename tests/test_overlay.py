@@ -505,7 +505,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
             'case LO_ACTIVITY_REQUEST_CODE:',1)[0]
         self.assertEqual(restore.count('AQUAWORD_SAFE_HISTORY_RESTORE'),1)
         self.assertEqual(restore.count('AquaWordSafOutput.openTruncating('),1)
-        self.assertIn('return AquaWordSafOutput.openTruncating(',restore)
+        self.assertIn('return org.libreoffice.androidlib.AquaWordSafOutput.openTruncating(',restore)
         self.assertIn('mode -> getContentResolver().openOutputStream(target, mode)',restore)
         self.assertNotIn('openOutputStream(target, "w")',restore)
         self.assertNotIn('openOutputStream(target);',restore)
