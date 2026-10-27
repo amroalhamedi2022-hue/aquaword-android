@@ -49,7 +49,7 @@ class VerifyApkSignatureTests(unittest.TestCase):
         with self.assertRaisesRegex(SignatureReportError, "Unrecognized"):
             verify_signature_report(
                 "Verified using v2 scheme (APK Signature Scheme v2): true\n"
-                f"Certificate SHA-256 digest: {HEX}\n"
+                f"Other Signer: certificate SHA-256 digest: {HEX}\n"
             )
 
 
