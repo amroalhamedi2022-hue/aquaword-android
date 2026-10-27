@@ -33,3 +33,16 @@ Retry #3 authorization (2026-10-25; artifact-delivery question only): source Fas
 
 
 Execution note for the already-authorized artifact-route retry (2026-10-25): The only prior successful native run, #40215579687, checked out source SHA 7304b193 and has zero retained Actions artifacts. It predates the current workflow change that adds the SHA-pinned one-day Actions artifact upload. Current source/integration CI passed at PR head 0e3d620b61975c2d37b3b774cbf32044b69c22b0, and the previous native job is complete. This exact-marker commit now exercises that changed retention route once. Stop after its artifact outcome; no further native retry is authorized by this request.
+
+
+Fresh authorization — 2026-10-27 (M-NATIVE-01 current-source integration check)
+
+Purpose: run one free GitHub-hosted diagnostic compile/package of the current AquaWord feature branch using the pinned Collabora/LibreOffice ARM64 engine and current AquaWord overlay.
+
+Test question: does the current branch produce a structurally verified arm64-v8a APK with the expected package/manifest and real AArch64 native library, with APK integrity and SHA-256 evidence?
+
+Why source tests are insufficient: JVM history tests, source-contract checks and desktop DOCX fixtures do not execute the Android NDK/native linker, resource/manifest merge, Gradle packaging or final APK verification. The previous diagnostic artifact was built from an older source checkpoint and is not proof for the current branch.
+
+Scope/limits: compile/package and artifact-integrity evidence only. No emulator certification, no Android device install/launch, no real Writer Arabic/English round-trip, no SAF provider failure/recovery proof, no printing/PDF runtime proof and no Xiaomi Pad 5 visual/performance acceptance. Free hosted runner only. This is one new diagnostic attempt; do not automatically retry if it fails.
+
+Trigger authorization: this fresh 2026-10-27 authorization supersedes the previous one-shot stop for the earlier artifact-retention attempt. The request commit must change this marker and use the exact commit message AquaWordNativeDiagnosticRetryOnce. Report the actual run, checked-out SHA, logs, artifact URL/SHA-256 if produced, and all remaining NOT TESTED gates. Never claim a device test from a compile-only result.

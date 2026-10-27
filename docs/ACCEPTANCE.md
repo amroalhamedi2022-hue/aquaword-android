@@ -246,3 +246,12 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - Added JVM regression coverage for malformed content hashes and malformed source-identity hashes. The test also asserts that rejected snapshot/metadata files are preserved rather than deleted.
 - Acceptance is limited to local metadata parsing/listing. Android SAF provider failures, process-death behavior on-device, native Writer DOCX round-trip, printing/PDF, and Xiaomi Pad 5 UI remain NOT TESTED.
 - Milestone remains M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip (OPEN); no APK build is justified by this metadata-only safety change.
+
+
+## 2026-10-27 — M-NATIVE-01 diagnostic build request (pending)
+
+- **Purpose:** validate current-branch ARM64 native integration and APK packaging against pinned Collabora/LibreOffice, not to release the app.
+- **Question:** can the current AquaWord overlay and native engine produce an integrity-checked arm64-v8a APK with the expected application identity and native ELF?
+- **Why JVM/source tests are insufficient:** they do not run the NDK linker, Android resource/manifest merge, Gradle packaging or final APK inspection. The prior diagnostic APK belongs to an older source checkpoint.
+- **Status:** requested; CI result and artifact are pending. This is a single diagnostic attempt using free hosted CI.
+- **Not tested even if build passes:** emulator/device install and launch, Arabic/English DOCX round-trip, real SAF failure/recovery, printing/PDF and Xiaomi Pad 5 UI/performance.

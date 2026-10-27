@@ -397,3 +397,11 @@ Exact head: 359ff2dcb747ab46c2f7126de2e46701d3b9cf25.
 - JVM regression covers invalid content and source hashes and verifies rejected bytes/sidecars are preserved.
 - Not device tested: Android SAF provider behavior, process death on device, native Writer DOCX round-trip, print/PDF, and Xiaomi Pad 5 visual/performance acceptance.
 - M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip remains OPEN. No APK was built because this metadata-only guard is directly testable in JVM CI and a package build would not answer a stronger question.
+
+
+## 2026-10-27 — Current-source native diagnostic requested
+
+- One free, compile-only ARM64 diagnostic has been explicitly requested for milestone M-NATIVE-01 because the prior APK was built from an older source checkpoint.
+- Test question: current overlay + pinned native engine + Gradle can package a structurally verified APK with the expected application identity and AArch64 native library.
+- JVM/source tests cannot establish NDK linking, manifest/resource merging or APK packaging. CI/artifact outcome remains pending.
+- Even a passing build does not certify Android runtime, Writer DOCX round-trip, SAF failure recovery, print/PDF or Xiaomi Pad 5 acceptance. Do not retry automatically after failure.
