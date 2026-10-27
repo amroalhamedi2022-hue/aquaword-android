@@ -82,6 +82,13 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertIn("steps.diagnostic_apk_artifact.outputs.artifact-url", workflow)
         self.assertIn("No automatic native build dispatch on push", (ROOT / ".github/workflows/queue-current-native-once.yml").read_text(encoding="utf-8"))
 
+    def test_signature_certificate_gate_matches_apksigner_output_variants(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        check = next(line for line in workflow.splitlines() if "certificate SHA-256 digest:" in line and "grep -E" in line)
+        self.assertIn("Signer #[0-9]+ certificate SHA-256 digest:", check)
+        self.assertIn("V2 Signer: certificate SHA-256 digest:", check)
+        self.assertNotIn("grep -Fq 'Signer #1 certificate SHA-256 digest:'", workflow)
+
     def test_diagnostic_apk_contains_arm64_native_engine_not_just_java(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         verifier = (ROOT / "scripts/verify_native_apk.py").read_text(encoding="utf-8")

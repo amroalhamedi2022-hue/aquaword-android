@@ -255,3 +255,11 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Why JVM/source tests are insufficient:** they do not run the NDK linker, Android resource/manifest merge, Gradle packaging or final APK inspection. The prior diagnostic APK belongs to an older source checkpoint.
 - **Status:** requested; CI result and artifact are pending. This is a single diagnostic attempt using free hosted CI.
 - **Not tested even if build passes:** emulator/device install and launch, Arabic/English DOCX round-trip, real SAF failure/recovery, printing/PDF and Xiaomi Pad 5 UI/performance.
+
+
+## 2026-10-27 — Native diagnostic result and verifier correction
+
+- Run 40449362565 checked out request commit 45d94cc3bda67de693beb33018ebf159c4018ff4 and used pinned Collabora source 2333344185931274f9c49d6c12a408cefcef6844. Native engine reuse, Collabora configure, Android source compile and Gradle APK generation completed far enough to produce an APK.
+- **PASS within the failed verification step:** ZIP integrity and scripts/verify_native_apk.py reported arm64-v8a; the packaged native library was 198,019,656 bytes with SHA-256 ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2. APK SHA-256 printed by the verifier: 7bc4818d200c8590859300adc5635857576e752a6abba9226ef82bff20481bec. apksigner reported v2 signature verification true and printed a certificate SHA-256 digest.
+- **FAIL — CI verifier false negative:** the workflow required the literal text 'Signer #1 certificate SHA-256 digest:' while the installed apksigner printed 'V2 Signer: certificate SHA-256 digest:'. The step exited before package-ID/template assertions could be confirmed. No artifact was retained; the run's artifact list is empty. The logged SHA is evidence from the runner, not a downloadable APK or release deliverable.
+- Corrected the workflow to accept both supported apksigner labels and added a source-contract regression. This fix is not itself a native build retry; source CI must pass first. Any later native attempt must answer whether the corrected verification gate completes and a downloadable artifact is retained. Android install/launch and all device-level gates remain NOT TESTED.

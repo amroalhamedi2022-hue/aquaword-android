@@ -405,3 +405,11 @@ Exact head: 359ff2dcb747ab46c2f7126de2e46701d3b9cf25.
 - Test question: current overlay + pinned native engine + Gradle can package a structurally verified APK with the expected application identity and AArch64 native library.
 - JVM/source tests cannot establish NDK linking, manifest/resource merging or APK packaging. CI/artifact outcome remains pending.
 - Even a passing build does not certify Android runtime, Writer DOCX round-trip, SAF failure recovery, print/PDF or Xiaomi Pad 5 acceptance. Do not retry automatically after failure.
+
+
+## 2026-10-27 — Native diagnostic verifier false-negative
+
+- Native run 40449362565 (request commit 45d94cc3bda67de693beb33018ebf159c4018ff4) reused the pinned ARM64 engine, passed configure/source preflight, and generated an APK.
+- The APK verifier printed SHA-256 7bc4818d200c8590859300adc5635857576e752a6abba9226ef82bff20481bec and confirmed the expected AArch64 native library SHA-256 ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2. apksigner reported v2 verification true.
+- **FAIL at verification gate:** workflow expected 'Signer #1 certificate SHA-256 digest:' but this apksigner emitted 'V2 Signer: certificate SHA-256 digest:'. Package-ID and packaged-template comparisons were not confirmed; no artifact was retained (empty artifact list).
+- Corrected the label matcher to accept both formats and added a regression contract. Native build is not retried automatically. Android device, SAF provider, Writer round-trip, print/PDF and Xiaomi Pad 5 remain NOT TESTED.

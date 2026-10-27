@@ -311,7 +311,8 @@ jobs:
             signature_report="output/$(basename "$apk").signature.txt"
             "$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$signature_report"
             grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' "$signature_report"
-            grep -Fq 'Signer #1 certificate SHA-256 digest:' "$signature_report"
+            # apksigner versions differ: accept both the numbered signer label and the V2 Signer label.
+            grep -Eq '^(Signer #[0-9]+ certificate SHA-256 digest:|V2 Signer: certificate SHA-256 digest:)' "$signature_report"
             "$AAPT" dump badging "$apk" | grep -q "package: name='com.aquaword.app.debug'"
             for template in research_en research_ar clinical_case study_notes blank; do
               unzip -p "$apk" "assets/aquaword/$template.docx" > "output/$template.package.docx"
