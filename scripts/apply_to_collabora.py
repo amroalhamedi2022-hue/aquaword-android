@@ -286,6 +286,23 @@ def patch_native_saf_saveback(path: Path) -> bool:
         raise PatchError('Upstream direct-file save semantics drifted')
     direct = direct.replace('private void copyTempBackToFile()', 'private boolean copyTempBackToFile(java.io.File sourceFile, java.io.File resolvedFile)', 1)
     direct = direct.replace('new FileInputStream(mTempFile)', 'new FileInputStream(sourceFile)')
+    # A predictable sibling ".<name>.part" can collide with a user's own file
+    # and would be truncated before the save is known to be successful. Create
+    # an exclusively allocated, unique staging file in the same directory.
+    staging_declaration = '        File newContent = new File(resolvedFile.getParentFile(), "." + resolvedFile.getName() + ".part");'
+    if direct.count(staging_declaration) != 1:
+        raise PatchError('Upstream local save staging declaration changed')
+    direct = direct.replace(staging_declaration, '        File newContent = null;', 1)
+    try_anchor = '        try {\\n            long bytes = 0;'
+    if direct.count(try_anchor) != 1:
+        raise PatchError('Upstream local save try/byte-count anchor changed')
+    direct = direct.replace(try_anchor,
+        '        try {\\n            newContent = File.createTempFile(".aquaword-", ".part", resolvedFile.getParentFile());\\n            long bytes = 0;', 1)
+    # A failed createTempFile leaves newContent null; cleanup must not mask the
+    # original write error with a NullPointerException.
+    direct = direct.replace('            newContent.delete();\\n',
+        '            if (newContent != null && newContent.exists() && !newContent.delete())\\n'
+        '                Log.w(TAG, "Unable to remove failed local save staging file: " + newContent);\\n')
     direct = direct.replace('        final File resolvedFile = mResolvedFile;\n', '', 1)
     direct = direct.replace('            return;', '            return false;')
     # Successful copy and rename is the only path allowed to acknowledge SAVE.
