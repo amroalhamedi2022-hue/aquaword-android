@@ -633,3 +633,15 @@
 - **ما زال NOT TESTED:** تثبيت وتشغيل Android الحقيقي، DOCX عربي/إنجليزي حفظ/إغلاق/إعادة فتح، مزود SAF يرفض أو يقتطع الكتابة، قتل العملية على Xiaomi Pad 5، PDF والطباعة، الأداء والقبول البصري.
 - **Google Drive AquaWord — HANDOFF:** المزامنة FAILED / NOT AVAILABLE لعدم توفر موصل كتابة Docs/Drive في بيئة التشغيل. لم يتم تحديث مستند Drive ولم ندّع نجاح المزامنة.
 - **نقطة الاستئناف:** استكمال نفس `M-NATIVE-01`؛ لا تفتح milestone آخر قبل إغلاق معايير هذا الميلستون، ولا تدمج PR #7 أو تعدّل `main`.
+
+
+## 2026-10-27 — تحسين توافق أوضاع الكتابة مع مزودي SAF
+
+- **الميلستون:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` ما زال **OPEN**.
+- **تغيير الإنتاج:** في [`1257ee44e21989e8c6e9e8c95939c56279dd303b`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/1257ee44e21989e8c6e9e8c95939c56279dd303b)، أُضيف التعامل مع `IllegalArgumentException` عند رفض مزود المستندات وضع `wt`، في مساري حفظ DOCX وتصدير PDF. عندها يحاول التطبيق وضع `rwt` الصريح بدل إنهاء العملية قبل المحاولة البديلة. لا يوجد رجوع إلى وضع `w` الملتبس، وتظل عملية التحقق من البايتات بعد الكتابة قائمة.
+- **اختبار الانحدار:** [`e2a1f5b419be4ebb9555a5d85abf7dcc4f37883b`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/e2a1f5b419be4ebb9555a5d85abf7dcc4f37883b) يثبت وجود مسار الاستثناء والرجوع إلى `rwt` في حفظ DOCX وتصدير PDF.
+- **CI على رأس الكود/الاختبارات — PASS:** [Fast Source #40568761742](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40568761742)، [Recovery Core #40568761709](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40568761709)، [Integration #40568761864](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40568761864). هذه فحوص مصدر وJVM وتكامل سطح المكتب، وليست اختبارًا حقيقيًا لمزود Android.
+- **قرار البناء:** لم يُنشأ APK جديد؛ سؤال الجولة هو سلوك معالجة استثناء محدد في overlay، وقد غطته اختبارات المصدر على الرأس نفسه. بناء المحرك لا يثبت سلوك مزود SAF الفعلي.
+- **ما زال NOT TESTED:** مزود حقيقي يرفض `wt` بـ`IllegalArgumentException` ويقبل `rwt`، ومزود يرفض الوضعين، دورة تحرير وحفظ وإعادة فتح DOCX عربي/إنجليزي، تصدير PDF والطباعة على Android، والقبول على Xiaomi Pad 5.
+- **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE** لعدم توفر موصل كتابة Google Docs/Drive في بيئة الأتمتة؛ لم يُحدَّث المستند المحدد ولم ندّع نجاح المزامنة.
+- **نقطة الاستئناف:** متابعة نفس `M-NATIVE-01`، ثم إثبات السلوك على مزود Android حقيقي قبل إغلاق بوابات SAF/Writer. يبقى PR #7 Draft؛ لا دمج ولا تعديل لـ`main`.
