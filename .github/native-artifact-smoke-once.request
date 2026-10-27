@@ -1,0 +1,1 @@
+One-shot request: run the already-built ARM64 diagnostic APK through Android API 30 ARM64 emulator smoke. This is not a rebuild and the APK source SHA is intentionally recorded as older than current branch fixes.
