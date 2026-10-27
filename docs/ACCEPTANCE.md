@@ -214,3 +214,15 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - Build decision: no APK build. This bounded Java history/storage invariant is directly exercised by JVM and source-contract tests; packaging would not prove real SAF-provider behavior.
 - Still NOT TESTED: Android install/launch, real SAF provider refusal/truncation/readback, Android process death, native Writer Arabic/English edit-save-cold-reopen, print/PDF, and Xiaomi Pad 5 visual/performance acceptance.
 - Status: M-NATIVE-01 remains OPEN; PR #7 remains Draft/open; main unchanged. Google Drive Handoff sync remains FAILED / NOT AVAILABLE in this runtime; no Drive write is claimed.
+
+
+## 2026-10-27 — إظهار فشل تنظيف نسخة الاسترداد المؤقتة (M-NATIVE-01)
+
+- **المشكلة:** كان حذف ملف staging بعد الاستعادة best-effort صامتًا؛ إذا رفض نظام الملفات الحذف، يمكن أن تبقى نسخة إضافية من محتوى المستند داخل مجلد التطبيق الخاص دون إشارة إلى ذلك.
+- **الإنتاج:** `efd3b8d802f8c2f0501f5e9d699866ecbe92273f` يجعل فشل حذف نسخة staging يظهر كـ `IOException`. إذا فشلت الاستعادة أصلًا، يُضاف خطأ التنظيف كـ `suppressed exception` حتى لا يُخفي السبب الأساسي. يُزال تسجيل الملف من قائمة الكتابات النشطة حتى عند فشل الحذف.
+- **اختبار الانحدار:** `be536961000d2ebd2ee090354ead98180539ab33` يستبدل ملف staging عمدًا بمجلد غير فارغ، ويتحقق من أن وجهة SAF لا تُفتح، وأن فشل التنظيف يُبلّغ عنه دون إخفاء خطأ الاستعادة؛ ثم ينظف fixture الاختبار.
+- **الدليل على رأس الكود/الاختبار:** Recovery Core [#40437652804 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40437652804)، Fast Source + SAF Contract [#40437652701 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40437652701)، Integration [#40437652836 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40437652836). سجل Integration يؤكد نجاح اختبار التنظيف الجديد، ونجاح 125 اختبار Python ثم فحوص overlay.
+- **قرار البناء:** لا APK لهذه الدفعة؛ الاختبار المركزي JVM يجيب مباشرة عن ترتيب فتح الوجهة وظهور فشل التنظيف. حزمة Android لا تثبت سلوك حذف ملفات staging على نظام الملفات، ومسار البناء التشخيصي الأصلي أحادي الاستخدام سبق استهلاكه.
+- **حدود القبول:** Android install/launch، مزود SAF حقيقي يرفض أو يقتطع الكتابة، موت عملية Android، تحرير DOCX عربي/إنجليزي داخل Writer الأصلي مع cold-reopen، PDF/الطباعة، وXiaomi Pad 5 ما زالت **NOT TESTED**. التنظيف الفاشل قد يترك بيانات داخل مساحة التطبيق الخاصة؛ أصبح هذا الآن خطأً ظاهرًا بدل الصمت، لكنه لا يضمن حذفًا آمنًا عند تعطل نظام الملفات.
+- **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يتوفر موصل كتابة Google Docs/Drive في بيئة هذه الجولة، لذلك لم يُعدّل المستند المحدد.
+- **الاستئناف:** إبقاء `M-NATIVE-01` وPR #7 بوضع Draft/Open؛ مواصلة قبول Android/SAF الواقعي دون فتح milestone جديد أو تعديل `main`.
