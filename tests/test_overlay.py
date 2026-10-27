@@ -529,7 +529,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('if (finished)\n                                open(target);',restore)
         helper=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
         self.assertIn('public static synchronized void verifyForRestore(Snapshot snapshot)',helper)
-        self.assertIn('snapshot == null || snapshot.sizeBytes <= 0L || !verifyBytes(snapshot)',helper)
+        self.assertIn('snapshot == null || !isWithinSnapshotSizeLimit(snapshot.sizeBytes) || !verifyBytes(snapshot)',helper)
         self.assertIn('public static void restoreToDestination(Snapshot snapshot, DestinationOpener opener)',helper)
         self.assertIn('private static File stageRestoreCopy(Snapshot snapshot)',helper)
         self.assertIn('OutputStream opened = opener.open();',helper)
