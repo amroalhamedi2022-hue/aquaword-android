@@ -150,5 +150,15 @@ class NativePreflightContractTests(unittest.TestCase):
                         workflow.index("- name: Record real APK metadata and source provenance"))
 
 
+
+    def test_android_runtime_receipt_uses_observed_api_level_not_a_constant(self):
+        smoke = (ROOT / "scripts/run_android_smoke.sh").read_text(encoding="utf-8")
+        self.assertIn('getprop ro.build.version.sdk', smoke)
+        self.assertIn('tee "$ARTIFACTS/android-api-level.txt"', smoke)
+        self.assertIn('(root/"android-api-level.txt").read_text().strip()', smoke)
+        self.assertIn('(root/"android-version.txt").read_text().strip()', smoke)
+        self.assertNotIn('Android API 35 emulator', smoke)
+
+
 if __name__ == "__main__":
     unittest.main()
