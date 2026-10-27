@@ -340,6 +340,16 @@ public final class AquaWordHistory {
         return new File(dir, id + META_SUFFIX);
     }
 
+    /** Metadata hashes are generated as canonical lowercase SHA-256 hex. */
+    private static boolean isSha256Hex(String value) {
+        if (value == null || value.length() != 64) return false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+        }
+        return true;
+    }
+
     private static Snapshot load(File dir, File data) {
         if (!data.getParentFile().equals(dir) || !data.getName().endsWith(DATA_SUFFIX) ||
                 !data.isFile())
@@ -379,7 +389,10 @@ public final class AquaWordHistory {
                     return null;
                 long length = Long.parseLong(props.getProperty("size", "-1"));
                 long when = Long.parseLong(props.getProperty("timestamp", "0"));
-                if (hash.length() != 64 || sourceHash.length() != 64 ||
+                // Do not expose malformed metadata as a selectable recovery item.
+                // Keep its files untouched for forensic/manual recovery, but require
+                // the exact lowercase format produced by hex() before listing it.
+                if (!isSha256Hex(hash) || !isSha256Hex(sourceHash) ||
                         !isWithinSnapshotSizeLimit(length) || length != data.length() || when <= 0L)
                     return null;
                 return new Snapshot(data, name, when, length, hash, sourceHash, kind,

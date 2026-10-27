@@ -28,6 +28,7 @@ public final class AquaWordHistoryCommitTest {
         try {
             testProcessDeathBetweenDataAndMetadataCommit(new File(root, "process-death"));
             testOversizedSnapshotMetadataRejected(new File(root, "size-limit"));
+            testMalformedChecksumMetadataRejected(new File(root, "malformed-checksum"));
             testOpenedRestoreDescriptorRejectsSameSizeReplacement(new File(root, "opened-descriptor"));
             testHistoryDirectorySymlinkRejected(new File(root, "history-symlink"));
             testMetadataRenameFailurePreservesBytes(new File(root, "rename-failure"));
@@ -98,6 +99,44 @@ public final class AquaWordHistoryCommitTest {
                     }
                     return source.renameTo(target);
                 });
+    }
+
+    /**
+     * Corrupt metadata must not create a selectable recovery row. Keep the bytes
+     * and sidecars intact so validation never destroys evidence during listing.
+     */
+    private static void testMalformedChecksumMetadataRejected(File root) throws Exception {
+        check(root.mkdirs() || root.isDirectory(), "could not create malformed-checksum fixture");
+        File dir = new File(root, "aquaword-history");
+        check(dir.mkdirs() || dir.isDirectory(), "could not create malformed-checksum history");
+        byte[] payload = docxFixture();
+        String invalid = String.format(Locale.ROOT, "%064d", 0).replace('0', 'g');
+        String syntacticallyValid = String.format(Locale.ROOT, "%064d", 0);
+        String[] ids = {"bad-content-hash", "bad-source-hash"};
+        for (String id : ids) {
+            File data = new File(dir, id + ".snapshot");
+            File metadata = new File(dir, id + ".properties");
+            Files.write(data.toPath(), payload);
+            Properties props = new Properties();
+            props.setProperty("name", id + ".docx");
+            props.setProperty("timestamp", String.valueOf(System.currentTimeMillis()));
+            props.setProperty("size", String.valueOf(payload.length));
+            props.setProperty("sha256", "bad-content-hash".equals(id) ? invalid : syntacticallyValid);
+            props.setProperty("source_sha256", "bad-source-hash".equals(id) ? invalid : syntacticallyValid);
+            props.setProperty("kind", "saved");
+            try (FileOutputStream output = new FileOutputStream(metadata)) {
+                props.store(output, "malformed checksum regression");
+            }
+        }
+        check(AquaWordHistory.list(root).isEmpty(),
+                "metadata with non-hex SHA-256 must not be shown as a recovery item");
+        for (String id : ids) {
+            check(new File(dir, id + ".snapshot").isFile(),
+                    "rejecting malformed metadata deleted the recovery bytes");
+            check(new File(dir, id + ".properties").isFile(),
+                    "rejecting malformed metadata deleted its forensic sidecar");
+        }
+        System.out.println("PASS: malformed SHA-256 metadata is excluded without deleting recovery evidence");
     }
 
     /**

@@ -238,3 +238,11 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **حدود القبول:** Android install/launch، مزود SAF حقيقي يرفض أو يقتطع الكتابة، موت عملية Android، تحرير DOCX عربي/إنجليزي داخل Writer الأصلي مع cold-reopen، PDF/الطباعة، وقبول Xiaomi Pad 5 ما زالت **NOT TESTED**.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive متاح في هذه البيئة، ولم تتم مزامنة المستند المحدد.
 - **الاستئناف:** الاستمرار داخل `M-NATIVE-01` وPR #7 دون فتح milestone جديد أو تعديل `main`؛ لا يُعتبر أي اختبار مصدر بديلًا عن قبول Android/SAF الفعلي.
+
+
+## 2026-10-27 — Recovery metadata hash-format gate
+
+- Added a production validation gate requiring both persisted content and source SHA-256 fields to use the canonical lowercase 64-character hexadecimal format produced by the app.
+- Added JVM regression coverage for malformed content hashes and malformed source-identity hashes. The test also asserts that rejected snapshot/metadata files are preserved rather than deleted.
+- Acceptance is limited to local metadata parsing/listing. Android SAF provider failures, process-death behavior on-device, native Writer DOCX round-trip, printing/PDF, and Xiaomi Pad 5 UI remain NOT TESTED.
+- Milestone remains M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip (OPEN); no APK build is justified by this metadata-only safety change.

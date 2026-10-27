@@ -389,3 +389,11 @@ Exact head: 359ff2dcb747ab46c2f7126de2e46701d3b9cf25.
 - An intermediate Fast Source run on 9aae703 failed on an outdated source-contract assertion; it was corrected in 359ff2d, whose exact-head run passes.
 - No APK build was justified for this JVM storage invariant. Android/SAF device behavior and Xiaomi Pad 5 acceptance remain NOT TESTED. M-NATIVE-01 stays OPEN; PR #7 stays Draft/open and main is unchanged.
 - Google Drive Handoff write access is unavailable in this runtime; no external Handoff update is claimed.
+
+
+## 2026-10-27 — Recovery metadata checksum-format regression
+
+- Production AquaWordHistory.load() now rejects non-canonical SHA-256 metadata before a recovery entry can be offered to the UI.
+- JVM regression covers invalid content and source hashes and verifies rejected bytes/sidecars are preserved.
+- Not device tested: Android SAF provider behavior, process death on device, native Writer DOCX round-trip, print/PDF, and Xiaomi Pad 5 visual/performance acceptance.
+- M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip remains OPEN. No APK was built because this metadata-only guard is directly testable in JVM CI and a package build would not answer a stronger question.
