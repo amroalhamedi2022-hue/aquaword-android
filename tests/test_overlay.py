@@ -350,7 +350,10 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('if (++noProgressReads >= 8)',capture)
         self.assertIn('throw new IOException("Document input stream made no progress")',capture)
         self.assertIn('noProgressReads = 0;\n                    length += count;',capture)
-        self.assertIn('finally {\n            synchronized (AquaWordHistory.class) {\n                temp.delete();',capture)
+        self.assertIn('if (!temp.createNewFile())',capture)
+        self.assertIn('boolean tempCreated = false;',capture)
+        self.assertIn('if (tempCreated) temp.delete();',capture)
+        self.assertNotIn('temp.delete();',capture.replace('if (tempCreated) temp.delete();',''))
         self.assertIn('ACTIVE_CAPTURE_WRITES.add(tempKey);',capture)
         self.assertIn('ACTIVE_CAPTURE_WRITES.remove(tempKey);',capture)
         self.assertIn('ACTIVE_CAPTURE_WRITES.contains(entry.getAbsolutePath())',helper)
@@ -662,10 +665,18 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.run_phase('source')  # idempotent overlay
         history=(self.path/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java').read_text()
         self.assertIn('interface RenameStrategy', history)
-        self.assertIn('boolean dataCommitted = false;', history)
+        self.assertIn('boolean tempCreated = false;', history)
+        self.assertIn('boolean pendingMetaCreated = false;', history)
+        self.assertIn('if (!temp.createNewFile())', history)
+        self.assertIn('if (!pendingMeta.createNewFile())', history)
         self.assertLess(history.index('if (!renameStrategy.rename(temp, data))'),
-                        history.index('dataCommitted = true;'))
-        self.assertIn('if (!meta.exists() && !dataCommitted) data.delete();', history)
+                        history.index('if (!renameStrategy.rename(pendingMeta, meta))'))
+        # A failed rename never grants ownership of the destination path.
+        # Cleanup must preserve a pre-existing .snapshot rather than deleting it.
+        self.assertNotIn('data.delete();', history)
+        self.assertIn('Never delete the final .snapshot here', history)
+        self.assertIn('if (tempCreated) temp.delete();', history)
+        self.assertIn('if (pendingMetaCreated) pendingMeta.delete();', history)
 
     def test_native_file_uri_writer_save_does_not_require_saf_copyback(self):
         """Pinned native Writer writes file:// directly; source contract only.
