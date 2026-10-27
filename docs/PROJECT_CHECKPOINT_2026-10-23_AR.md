@@ -573,3 +573,15 @@
 - **NOT TESTED:** Android device/SAF provider behavior, process death on Xiaomi Pad 5, native Writer Arabic/English edit-save-cold-reopen, printing/PDF runtime, and device visual/performance acceptance. The earlier diagnostic APK is from an older source SHA and is not proof for this fix.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE** in this automation runtime; no Google Docs/Drive write connector is exposed, so the specified Drive document was not modified. No sync success is claimed.
 - **Next:** keep PR #7 Draft and `main` unchanged; continue `M-NATIVE-01` toward real Android SAF/Writer evidence. No further native build is triggered by this change.
+
+
+## 2026-10-27 — فحص تشغيل ARM64 على محاكي Android (قيد التنفيذ، دون إعادة بناء)
+
+- أُضيف سير عمل محدود لاختبار ملف APK التشخيصي الموجود فقط: [CI #40504114768](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40504114768). لا يعيد بناء LibreOffice أو التطبيق.
+- سؤال الاختبار: هل يثبت APK بمعمارية ARM64 ويشغّل محرك Writer الأصلي على محاكي Android ARM64، ثم ينجح فتح DOCX عربي فعلي وتعديله وحفظه وإعادة فتحه بعد إيقاف العملية؟
+- مصدر الحزمة: SHA `84b168b8dda1d1c6e89760631dddbb475d9ef59d`، وSHA-256 للـAPK `26851485b4dc7b3b1fa840f24276ed21fe9a0a4a388fbc69199a8d7b5d97ecfc`، وArtifact ID `12715085399`.
+- هذه الحزمة أقدم من إصلاحات الاسترداد والحفظ المحلي الأخيرة؛ أي نجاح سيكون **دليلًا أساسيًا فقط** وليس قبولًا لرأس المصدر الحالي.
+- الحالة وقت التوثيق: خطوة محاكي ARM64 **IN PROGRESS**؛ لا يُحتسب PASS قبل نجاح إيصال الاختبار وتقرير النتيجة.
+- لا إعادة بناء: الحزمة الموجودة تكفي للإجابة عن توافق المحاكي، بينما إعادة بناء المحرك لا تضيف دليلًا لهذا السؤال.
+- لا تزال تجربة Xiaomi Pad 5 الفعلية، مزود SAF حقيقي يرفض/يقتطع الكتابة، الطباعة/PDF، وقبول الحزمة الحالية **NOT TESTED**.
+- مزامنة Google Drive لمستند AquaWord — HANDOFF: **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive في هذه البيئة.
