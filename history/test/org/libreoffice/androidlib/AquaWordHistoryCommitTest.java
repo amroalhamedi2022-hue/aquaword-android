@@ -34,6 +34,7 @@ public final class AquaWordHistoryCommitTest {
             testRetentionPreservesLatestSnapshotPerDocument(new File(root, "retention"));
             testWritebackLeasePinsSnapshotDuringRetention(new File(root, "writeback-lease"));
             testRestoreStagesBeforeOpeningProvider(new File(root, "restore-staging"));
+            testRestoreReportsStagingCleanupFailure(new File(root, "restore-cleanup"));
         } finally {
             deleteRecursively(root);
         }
@@ -375,6 +376,55 @@ public final class AquaWordHistoryCommitTest {
         check(leftovers != null && leftovers.length == 0,
                 "restore staging file was not cleaned after successful writeback");
         System.out.println("PASS: recovery staging verifies bytes before opening destination and isolates later source replacement");
+    }
+
+    /**
+     * Staging cleanup is part of the recovery safety contract. If a staged
+     * private copy cannot be removed, report it without hiding the original
+     * restore failure and without opening the destructive SAF destination.
+     */
+    private static void testRestoreReportsStagingCleanupFailure(File root) throws Exception {
+        check(root.mkdirs() || root.isDirectory(), "could not create restore-cleanup fixture");
+        byte[] expected = "cleanup failure must be visible — مرحبا".getBytes("UTF-8");
+        AquaWordHistory.Snapshot snapshot = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(expected), "cleanup.docx",
+                "content://test/provider/restore-cleanup", "saved");
+        final boolean[] opened = {false};
+        final File[] residue = {null};
+        IOException restoreFailure = null;
+        try {
+            AquaWordHistory.restoreToDestination(snapshot, () -> {
+                opened[0] = true;
+                return new ByteArrayOutputStream();
+            }, staged -> {
+                // Deterministically model a filesystem cleanup failure by
+                // replacing the staged file with a non-empty directory.
+                check(staged.delete(), "could not replace staging fixture");
+                check(staged.mkdir(), "could not create blocking staging directory");
+                residue[0] = staged;
+                Files.write(new File(staged, "blocker.bin").toPath(), new byte[] {1});
+            });
+        } catch (IOException expectedFailure) {
+            restoreFailure = expectedFailure;
+        }
+
+        check(restoreFailure != null, "restore accepted a replaced staging file");
+        check(!opened[0], "destination opener ran after staging validation failed");
+        boolean cleanupReported = false;
+        for (Throwable suppressed : restoreFailure.getSuppressed()) {
+            if (suppressed.getMessage() != null &&
+                    suppressed.getMessage().contains("Could not remove private recovery staging file")) {
+                cleanupReported = true;
+                break;
+            }
+        }
+        check(cleanupReported,
+                "staging cleanup failure was silently lost or masked the original restore failure");
+        check(residue[0] != null && residue[0].isDirectory(),
+                "fixture did not preserve the deliberate cleanup failure");
+        deleteRecursively(residue[0]);
+        check(!residue[0].exists(), "could not clean deterministic residue fixture");
+        System.out.println("PASS: failed recovery staging cleanup is reported as suppressed without opening destination");
     }
 
     private static ByteArrayInputStream bytes(String value) throws IOException {
