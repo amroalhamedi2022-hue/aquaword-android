@@ -673,7 +673,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
                         history.index('if (!renameStrategy.rename(pendingMeta, meta))'))
         # A failed rename never grants ownership of the destination path.
         # Cleanup must preserve a pre-existing .snapshot rather than deleting it.
-        self.assertNotRegex(history, r'(?m)^\\s*data\\.delete\\(\\);')
+        self.assertNotRegex(history, r'(?m)^\s*data\.delete\(\);')
         self.assertIn('Never delete the final .snapshot here', history)
         self.assertIn('if (tempCreated) temp.delete();', history)
         self.assertIn('if (pendingMetaCreated) pendingMeta.delete();', history)
