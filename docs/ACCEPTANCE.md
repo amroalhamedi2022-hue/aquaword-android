@@ -330,3 +330,15 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Not device-certified:** actual local filesystem replacement on Android, SAF/cloud provider writeback, Android process death, native Writer Arabic/English edit-save-cold-reopen, PDF/print, and Xiaomi Pad 5 UI/performance remain **NOT TESTED**.
 - **Build decision:** no new APK build for this source-overlay invariant. The current-source diagnostic build already answered the ARM64 packaging question; this change is directly exercised by the pinned-source overlay tests, and a rebuild would not prove actual device filesystem behavior.
 - **Google Drive Handoff:** **FAILED / NOT AVAILABLE** in this runtime; no Google Docs/Drive write connector is exposed, so the specified AquaWord — HANDOFF document was not modified.
+
+
+## Independent diagnostic APK artifact recheck — 2026-10-27
+
+- Independently downloaded Actions artifact [#12715085399](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40459738117/artifacts/12715085399), created 2026-10-27 06:27:30 UTC; scheduled expiry 2026-10-28 06:27:26 UTC.
+- Outer ZIP SHA-256 verified locally: `bc9943af59f61ca09f756dfdc254730359c566b66ae6f028f2b7ebcae6f1e842`, matching the GitHub artifact digest. `unzip -t` passed with no archive errors.
+- Embedded APK: 265,562,824 bytes; SHA-256 `26851485b4dc7b3b1fa840f24276ed21fe9a0a4a388fbc69199a8d7b5d97ecfc`, matching the artifact's `SHA256SUMS`.
+- Independent APK inspection: ZIP integrity PASS; signature report states APK Signature Scheme v2=true; debug certificate SHA-256 `b1de54d42a34046f9f305cae3c34b25c1aeb95c9518b51021f8c998e7dadb15b`; embedded `liblo-native-code.so` is ELF64 little-endian AArch64, 198,019,656 bytes, SHA-256 `ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2`. The package ID `com.aquaword.app.debug` and five DOCX template checks were recorded by the successful build workflow.
+- **Provenance limitation:** this diagnostic artifact was built from source/request SHA `84b168b8dda1d1c6e89760631dddbb475d9ef59d`, pinned Collabora source `2333344185931274f9c49d6c12a408cefcef6844`. It predates the later local-save staging fix `4f24c606e5f736a683e120d8871c7b92d7bbb472` and its regression fixture. It therefore does **not** validate those later changes and is not a current-source release.
+- The APK is debug-signed and compile-only. Android install/launch, real SAF provider failures/recovery, Android process death, Arabic/English Writer edit-save-cold-reopen, print/PDF, and Xiaomi Pad 5 UI/performance remain **NOT TESTED**. The artifact is temporary and must not be described as a final release.
+- No rebuild was triggered: the existing checkpoint explicitly marks the diagnostic as one-shot and prohibits automatic retries. This entry is a download-and-integrity recheck, not a new CI run.
+- Google Drive “AquaWord — HANDOFF” synchronization remains **FAILED / NOT AVAILABLE** because this runtime exposes no Google Docs/Drive write connector; the specified Drive document was not modified.
