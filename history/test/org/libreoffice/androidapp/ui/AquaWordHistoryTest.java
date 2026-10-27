@@ -337,6 +337,36 @@ public class AquaWordHistoryTest {
         System.out.println("PASS: cached recovery snapshot rejects post-list symlink substitution");
     }
 
+    private static AquaWordHistory.Snapshot captureWithIdForRegression(
+            File root, InputStream input, String name, String sourceIdentity,
+            String kind, String id) throws IOException {
+        try {
+            Class<?> renameType = Class.forName(
+                    "org.libreoffice.androidlib.AquaWordHistory$RenameStrategy");
+            Object rename = java.lang.reflect.Proxy.newProxyInstance(
+                    renameType.getClassLoader(), new Class<?>[]{renameType},
+                    (proxy, method, arguments) -> {
+                        if ("rename".equals(method.getName()))
+                            return ((File) arguments[0]).renameTo((File) arguments[1]);
+                        if ("toString".equals(method.getName())) return "test rename strategy";
+                        return null;
+                    });
+            java.lang.reflect.Method capture = AquaWordHistory.class.getDeclaredMethod(
+                    "capture", File.class, InputStream.class, String.class, String.class,
+                    String.class, renameType, String.class);
+            capture.setAccessible(true);
+            return (AquaWordHistory.Snapshot) capture.invoke(null, root, input, name,
+                    sourceIdentity, kind, rename, id);
+        } catch (java.lang.reflect.InvocationTargetException wrapped) {
+            Throwable cause = wrapped.getCause();
+            if (cause instanceof IOException) throw (IOException) cause;
+            if (cause instanceof RuntimeException) throw (RuntimeException) cause;
+            throw new IOException("Deterministic capture fixture failed", cause);
+        } catch (ReflectiveOperationException reflectionFailure) {
+            throw new IOException("Could not access deterministic capture fixture", reflectionFailure);
+        }
+    }
+
     private static void testCollisionDoesNotUnregisterActiveCapture(File root) throws Exception {
         final byte[] first = "reserved recovery bytes — ".getBytes("UTF-8");
         final byte[] second = "مرحبا".getBytes("UTF-8");
@@ -392,9 +422,8 @@ public class AquaWordHistoryTest {
         final String id = "shared-capture-id";
         Thread worker = new Thread(() -> {
             try {
-                result.set(AquaWordHistory.capture(root, slowProvider, "collision.docx",
-                        "content://collision/provider", "pre-edit",
-                        (source, target) -> source.renameTo(target), id));
+                result.set(captureWithIdForRegression(root, slowProvider, "collision.docx",
+                        "content://collision/provider", "pre-edit", id));
             } catch (Throwable error) {
                 failure.set(error);
             }
@@ -415,10 +444,9 @@ public class AquaWordHistoryTest {
 
             boolean collisionRejected = false;
             try {
-                AquaWordHistory.capture(root, new ByteArrayInputStream(
+                captureWithIdForRegression(root, new ByteArrayInputStream(
                                 "competing payload".getBytes("UTF-8")),
-                        "collision.docx", "content://collision/provider", "pre-edit",
-                        (source, target) -> source.renameTo(target), id);
+                        "collision.docx", "content://collision/provider", "pre-edit", id);
             } catch (IOException expected) {
                 collisionRejected = expected.getMessage().contains("reserve unique snapshot staging path");
             }
