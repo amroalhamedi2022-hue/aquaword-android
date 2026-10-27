@@ -49,3 +49,6 @@ Trigger authorization: this fresh 2026-10-27 authorization supersedes the previo
 
 
 Execution request — 2026-10-27: source/integration preflight is green on the current PR head. Trigger this one authorized free ARM64 diagnostic now to answer the native linker/Gradle packaging and artifact-retention question for the exact current source. This is the sole execution of the fresh authorization above; if it fails, do not retry automatically. Compile/package evidence only; device acceptance remains NOT TESTED.
+
+
+Execution request confirmation — 2026-10-27: invoking the single authorized current-source diagnostic after green exact-head Fast Source, Recovery Core and Integration runs. No retry is authorized if this run fails.
