@@ -49,6 +49,23 @@ public final class AquaWordHistory {
 
     private AquaWordHistory() { }
 
+    /** Reference-count shared temporary paths so a failed colliding writer cannot unpin another. */
+    private static void registerActiveCaptureWrite(String key) {
+        synchronized (AquaWordHistory.class) {
+            Integer active = ACTIVE_CAPTURE_WRITES.get(key);
+            ACTIVE_CAPTURE_WRITES.put(key, active == null ? 1 : active + 1);
+        }
+    }
+
+    private static void unregisterActiveCaptureWrite(String key) {
+        synchronized (AquaWordHistory.class) {
+            Integer active = ACTIVE_CAPTURE_WRITES.get(key);
+            if (active == null) return;
+            if (active <= 1) unregisterActiveCaptureWrite(key);
+            else ACTIVE_CAPTURE_WRITES.put(key, active - 1);
+        }
+    }
+
     public interface DestinationOpener {
         /** Open the selected destination only after the recovery bytes are staged and verified. */
         OutputStream open() throws IOException;
@@ -247,10 +264,7 @@ public final class AquaWordHistory {
         final String tempKey = temp.getAbsolutePath();
         // Register before creating the file; cleanup uses the same monitor, so
         // it cannot race between file creation and active-write registration.
-        synchronized (AquaWordHistory.class) {
-            Integer activeCaptures = ACTIVE_CAPTURE_WRITES.get(tempKey);
-            ACTIVE_CAPTURE_WRITES.put(tempKey, activeCaptures == null ? 1 : activeCaptures + 1);
-        }
+        registerActiveCaptureWrite(tempKey);
         MessageDigest sha = digest();
         long length = 0L;
         boolean tempCreated = false;
@@ -338,11 +352,7 @@ public final class AquaWordHistory {
                 // rename followed by metadata failure must preserve the orphan bytes.
                 if (tempCreated) temp.delete();
                 if (pendingMetaCreated) pendingMeta.delete();
-                Integer activeCaptures = ACTIVE_CAPTURE_WRITES.get(tempKey);
-                if (activeCaptures != null) {
-                    if (activeCaptures <= 1) ACTIVE_CAPTURE_WRITES.remove(tempKey);
-                    else ACTIVE_CAPTURE_WRITES.put(tempKey, activeCaptures - 1);
-                }
+                unregisterActiveCaptureWrite(tempKey);
             }
         }
     }
@@ -987,9 +997,7 @@ public final class AquaWordHistory {
         File dir = snapshot.file.getParentFile();
         File staged = new File(dir, "restore-" + UUID.randomUUID().toString() + ".partial");
         String key = staged.getAbsolutePath();
-        synchronized (AquaWordHistory.class) {
-            ACTIVE_CAPTURE_WRITES.add(key);
-        }
+        registerActiveCaptureWrite(key);
         boolean created = false;
         boolean ready = false;
         try {
@@ -1084,7 +1092,7 @@ public final class AquaWordHistory {
                         denied);
             } finally {
                 // Never leave a failed cleanup marked as an active writer forever.
-                ACTIVE_CAPTURE_WRITES.remove(staged.getAbsolutePath());
+                unregisterActiveCaptureWrite(staged.getAbsolutePath());
             }
         }
         if (cleanupFailure != null) throw cleanupFailure;
