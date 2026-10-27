@@ -531,3 +531,17 @@
 - **NOT TESTED:** Android emulator step was intentionally skipped by the one-shot compile-only trigger. No Android install/launch, real SAF provider failure/truncation and recovery, Android process death, Arabic/English Writer edit-save-cold-reopen, print/PDF runtime, or Xiaomi Pad 5 visual/performance acceptance. Keep `M-NATIVE-01` OPEN and PR #7 Draft.
 - **No retry:** this was the sole fresh diagnostic authorization; do not trigger another native build automatically.
 - **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE; this runtime has no Google Docs/Drive write connector. The specified Drive document was not modified.
+
+
+## 2026-10-27 — منع تصادم ملف staging في الحفظ المحلي
+
+- **الميلستون:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` ما زال **OPEN**.
+- **التغيير الإنتاجي:** كان مسار الحفظ المحلي في overlay يستخدم اسمًا ثابتًا `.<اسم-الوجهة>.part`؛ قد يتعارض مع ملف موجود مسبقًا ويُفرّغ ثم يُحذف إذا فشل الحفظ. أصبح ينشئ ملف staging فريدًا في مجلد الوجهة عبر `File.createTempFile(".aquaword-", ".part", resolvedFile.getParentFile())`، ويحتفظ بكتابة المحتوى ثم `flush + fsync` قبل محاولة الاستبدال بالـrename. التنظيف أصبح null-safe ويُسجل تعذّر إزالة ملف staging بدل إخفاء الخطأ الأصلي.
+- **اختبار الانحدار:** عُدّل fixture ليطابق حلقة النسخ الفعلية من Collabora ويكتب كل chunk فعلًا ثم ينفّذ fsync. أضيفت تأكيدات تمنع رجوع المسار الثابت وتتحقق من الملف الفريد والنسخ المتين.
+- **المراجع:** كود overlay `4f24c606e5f736a683e120d8871c7b92d7bbb472`؛ إصلاح anchor `d1f586ed0dc58cf0b1061dc3d0edfb50a0f1bbf7`؛ اختبار العقد `23c9cab13795c31e2ebf9044570c7e93ee393e5f`؛ رأس الاختبار النهائي `3d3a8235a018fdfbee10228b64701dde06ac893b`.
+- **CI على الرأس النهائي — PASS:** [Fast Source #40463302415](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40463302415) — 132 اختبار Python؛ [Integration #40463302399](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40463302399) — فحص overlay على مصدر Collabora المثبّت واختبارات JVM/PDF وDOCX round-trip عبر LibreOffice المكتبي؛ [Recovery Core #40463302400](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40463302400).
+- **المحاولات الفاشلة التي تم تجاوزها:** فشل تشغيلان وسيطان لأن anchor الجديد لم يطابق fixture الاختبار المبسّط. عولج بناء anchor باستخدام `chr(10)`، ثم جرى جعل fixture يطابق بنية upstream؛ التشغيلات الثلاثة النهائية أعلاه ناجحة.
+- **حدود القبول:** لم يُختبر هذا السلوك على نظام ملفات Android الحقيقي أو مزود SAF/cloud. كذلك ما زالت دورة Writer عربية/إنجليزية مع cold-reopen، موت عملية Android، الطباعة/PDF، وواجهة وأداء Xiaomi Pad 5 **NOT TESTED**.
+- **قرار البناء:** لم يُنشأ APK جديد؛ اختبار overlay يجيب مباشرة عن invariant المصدر. بناء جديد لن يثبت سلوك نظام الملفات على الجهاز. بناء ARM64 التشخيصي الحالي موثق أعلاه وهو دليل packaging فقط، وليس قبولًا نهائيًا.
+- **مزامنة Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive في هذه البيئة، ولم يُعدّل المستند المحدد.
+- **نقطة الاستئناف:** متابعة `M-NATIVE-01` وPR #7 بوضع Draft/Open، مع إعطاء الأولوية لاختبار SAF/Writer على Android فعلي؛ لا تعديل لـ`main` ولا دمج.
