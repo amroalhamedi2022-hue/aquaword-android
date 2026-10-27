@@ -443,3 +443,14 @@ Exact head: 359ff2dcb747ab46c2f7126de2e46701d3b9cf25.
 - **Still NOT TESTED:** current-source native APK download/retention, install/launch, real Android SAF provider failure/truncation and recovery, Android process death, Writer Arabic/English edit-save-cold-reopen, print/PDF runtime, and Xiaomi Pad 5 visual/performance acceptance.
 - **Milestone:** M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip remains OPEN. PR #7 remains Draft/open; main was not changed.
 - **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE; this runtime exposes no Google Docs/Drive write connector, so the specified Drive document was not modified.
+
+
+## 2026-10-27 — ARM64 emulator smoke blocked by host architecture; receipt corrected
+
+- One-shot workflow [#40504114768](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40504114768) completed **FAIL before APK install**. The hosted Ubuntu runner is x86_64; the Android Emulator rejected the requested arm64 AVD with `Avd's CPU Architecture 'arm64' is not supported by the QEMU2 emulator on x86_64 host`. ADB never found a booted emulator. No runtime evidence artifact was retained. Do not classify this as an app regression or claim a runtime pass.
+- Artifact provenance and APK SHA/ZIP checks and synthetic Arabic/English DOCX generation passed before emulator launch. APK build SHA `84b168b8dda1d1c6e89760631dddbb475d9ef59d`; APK SHA-256 `26851485b4dc7b3b1fa840f24276ed21fe9a0a4a388fbc69199a8d7b5d97ecfc`; artifact ID `12715085399`. This diagnostic APK predates current recovery/staging fixes.
+- No retry or rebuild was started because the runtime workflow was explicitly one-shot. A future attempt needs a confirmed compatible free ARM64 test environment.
+- Audit found the smoke receipt hard-coded API 35 while the workflow requested API 30. Script commit [`5cc1c54`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/5cc1c54ed5cee7b8ea41ab45e4fe869588476d08) now records observed SDK API/release; regression test [`16d585b`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/16d585bcc449a41c5977a22be195c6b4081e0511) guards the evidence contract.
+- Exact code/test head `16d585bcc449a41c5977a22be195c6b4081e0511`: Fast Source [#40506893261 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893261), Recovery Core [#40506893297 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893297), Integration [#40506893283 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893283).
+- Physical Xiaomi Pad 5, real SAF failure/recovery, current-source native APK, print/PDF and production signing remain **NOT TESTED**.
+- Google Drive AquaWord — HANDOFF sync: **FAILED / NOT AVAILABLE**; this runtime exposes no Google Docs/Drive write connector. The named document was not modified.
