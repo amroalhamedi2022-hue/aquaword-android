@@ -46,3 +46,6 @@ Why source tests are insufficient: JVM history tests, source-contract checks and
 Scope/limits: compile/package and artifact-integrity evidence only. No emulator certification, no Android device install/launch, no real Writer Arabic/English round-trip, no SAF provider failure/recovery proof, no printing/PDF runtime proof and no Xiaomi Pad 5 visual/performance acceptance. Free hosted runner only. This is one new diagnostic attempt; do not automatically retry if it fails.
 
 Trigger authorization: this fresh 2026-10-27 authorization supersedes the previous one-shot stop for the earlier artifact-retention attempt. The request commit must change this marker and use the exact commit message AquaWordNativeDiagnosticRetryOnce. Report the actual run, checked-out SHA, logs, artifact URL/SHA-256 if produced, and all remaining NOT TESTED gates. Never claim a device test from a compile-only result.
+
+
+Execution request — 2026-10-27: source/integration preflight is green on the current PR head. Trigger this one authorized free ARM64 diagnostic now to answer the native linker/Gradle packaging and artifact-retention question for the exact current source. This is the sole execution of the fresh authorization above; if it fails, do not retry automatically. Compile/package evidence only; device acceptance remains NOT TESTED.
