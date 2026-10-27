@@ -337,6 +337,116 @@ public class AquaWordHistoryTest {
         System.out.println("PASS: cached recovery snapshot rejects post-list symlink substitution");
     }
 
+    private static void testCollisionDoesNotUnregisterActiveCapture(File root) throws Exception {
+        final byte[] first = "reserved recovery bytes — ".getBytes("UTF-8");
+        final byte[] second = "مرحبا".getBytes("UTF-8");
+        final java.util.concurrent.CountDownLatch firstChunkWritten =
+                new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.CountDownLatch allowFinish =
+                new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.atomic.AtomicReference<AquaWordHistory.Snapshot> result =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        final java.util.concurrent.atomic.AtomicReference<Throwable> failure =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        InputStream slowProvider = new InputStream() {
+            private int phase;
+            private int offset;
+            @Override public int read() throws IOException {
+                byte[] one = new byte[1];
+                int count = read(one, 0, 1);
+                return count < 0 ? -1 : one[0] & 0xff;
+            }
+            @Override public int read(byte[] buffer, int start, int length) throws IOException {
+                if (length == 0) return 0;
+                if (phase == 0) {
+                    int count = Math.min(length, first.length - offset);
+                    System.arraycopy(first, offset, buffer, start, count);
+                    offset += count;
+                    if (offset == first.length) {
+                        phase = 1;
+                        offset = 0;
+                        firstChunkWritten.countDown();
+                    }
+                    return count;
+                }
+                if (phase == 1) {
+                    try {
+                        if (!allowFinish.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                            throw new IOException("timed out waiting to finish collision fixture");
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("collision fixture interrupted", interrupted);
+                    }
+                    phase = 2;
+                }
+                if (phase == 2) {
+                    int count = Math.min(length, second.length - offset);
+                    System.arraycopy(second, offset, buffer, start, count);
+                    offset += count;
+                    if (offset == second.length) phase = 3;
+                    return count;
+                }
+                return -1;
+            }
+        };
+        final String id = "shared-capture-id";
+        Thread worker = new Thread(() -> {
+            try {
+                result.set(AquaWordHistory.capture(root, slowProvider, "collision.docx",
+                        "content://collision/provider", "pre-edit",
+                        (source, target) -> source.renameTo(target), id));
+            } catch (Throwable error) {
+                failure.set(error);
+            }
+        }, "first-capture-with-shared-id");
+        worker.start();
+        try {
+            check(firstChunkWritten.await(3, java.util.concurrent.TimeUnit.SECONDS),
+                    "first capture did not begin writing");
+            File partial = new File(new File(root, "aquaword-history"), id + ".partial");
+            check(partial.isFile() && partial.length() >= first.length,
+                    "first capture did not reserve and write its partial file");
+            long stale = System.currentTimeMillis() - 15L * 24L * 60L * 60L * 1000L;
+            check(partial.setLastModified(stale), "could not age shared partial fixture");
+
+            boolean collisionRejected = false;
+            try {
+                AquaWordHistory.capture(root, new ByteArrayInputStream(
+                                "competing payload".getBytes("UTF-8")),
+                        "collision.docx", "content://collision/provider", "pre-edit",
+                        (source, target) -> source.renameTo(target), id);
+            } catch (IOException expected) {
+                collisionRejected = expected.getMessage().contains("reserve unique snapshot staging path");
+            }
+            check(collisionRejected, "competing capture did not reject the occupied staging path");
+
+            // The failed contender must release only its own registration.
+            // The original writer remains active, so a scan cannot unlink its aged partial.
+            AquaWordHistory.list(root);
+            check(partial.isFile(),
+                    "failed identifier-collision contender unregistered the active writer");
+        } finally {
+            allowFinish.countDown();
+            worker.join(6000L);
+            if (worker.isAlive()) {
+                worker.interrupt();
+                worker.join(1000L);
+            }
+        }
+        check(!worker.isAlive(), "shared-id capture worker did not terminate");
+        check(failure.get() == null, "original shared-id capture failed: " + failure.get());
+        AquaWordHistory.Snapshot captured = result.get();
+        check(captured != null && captured.file.isFile(),
+                "original capture lost its committed recovery checkpoint");
+        byte[] expected = new byte[first.length + second.length];
+        System.arraycopy(first, 0, expected, 0, first.length);
+        System.arraycopy(second, 0, expected, first.length, second.length);
+        ByteArrayOutputStream restored = new ByteArrayOutputStream();
+        AquaWordHistory.restore(captured, restored);
+        check(Arrays.equals(expected, restored.toByteArray()),
+                "original capture bytes changed after the collision");
+    }
+
     private static void testActiveCaptureSurvivesStaleCleanup(File root) throws Exception {
         final byte[] first = "capture-start — مرحبا".getBytes("UTF-8");
         final byte[] second = " — capture-finished".getBytes("UTF-8");
@@ -457,6 +567,7 @@ public class AquaWordHistoryTest {
             testRecoveryRejectsSymlinksOutsideHistoryDirectory(new File(root, "symlink-escape-fixture"));
             testRecoveryRejectsInDirectorySymlinkAliases(new File(root, "symlink-alias-fixture"));
             testVerifyRejectsSymlinkSwapAfterListing(new File(root, "symlink-swap-fixture"));
+            testCollisionDoesNotUnregisterActiveCapture(new File(root, "capture-id-collision-fixture"));
             testActiveCaptureSurvivesStaleCleanup(new File(root, "active-capture-cleanup-fixture"));
             byte[] unicode = "Hello—مرحبا بالعالم\n📕 PDF & DOCX".getBytes("UTF-8");
             AquaWordHistory.Snapshot s = AquaWordHistory.capture(
