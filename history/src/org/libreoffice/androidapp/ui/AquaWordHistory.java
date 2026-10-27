@@ -45,7 +45,7 @@ public final class AquaWordHistory {
     private static final long INCOMPLETE_GRACE_MILLIS = 7L * 24L * 60L * 60L * 1000L;
     private static final Map<String, Integer> ACTIVE_WRITEBACKS = new HashMap<>();
     // Protect live captures from stale-partial cleanup triggered by another history scan.
-    private static final Set<String> ACTIVE_CAPTURE_WRITES = new HashSet<>();
+    private static final Map<String, Integer> ACTIVE_CAPTURE_WRITES = new HashMap<>();
 
     private AquaWordHistory() { }
 
@@ -187,7 +187,7 @@ public final class AquaWordHistory {
                 // Serialize the active check with registration and deletion so a live
                 // .partial cannot be unlinked merely because its timestamp is old.
                 synchronized (AquaWordHistory.class) {
-                    if (ACTIVE_CAPTURE_WRITES.contains(entry.getAbsolutePath())) continue;
+                    if (ACTIVE_CAPTURE_WRITES.containsKey(entry.getAbsolutePath())) continue;
                     entry.delete(); // best effort; never block recovery
                 }
             }
@@ -248,7 +248,8 @@ public final class AquaWordHistory {
         // Register before creating the file; cleanup uses the same monitor, so
         // it cannot race between file creation and active-write registration.
         synchronized (AquaWordHistory.class) {
-            ACTIVE_CAPTURE_WRITES.add(tempKey);
+            Integer activeCaptures = ACTIVE_CAPTURE_WRITES.get(tempKey);
+            ACTIVE_CAPTURE_WRITES.put(tempKey, activeCaptures == null ? 1 : activeCaptures + 1);
         }
         MessageDigest sha = digest();
         long length = 0L;
@@ -337,7 +338,11 @@ public final class AquaWordHistory {
                 // rename followed by metadata failure must preserve the orphan bytes.
                 if (tempCreated) temp.delete();
                 if (pendingMetaCreated) pendingMeta.delete();
-                ACTIVE_CAPTURE_WRITES.remove(tempKey);
+                Integer activeCaptures = ACTIVE_CAPTURE_WRITES.get(tempKey);
+                if (activeCaptures != null) {
+                    if (activeCaptures <= 1) ACTIVE_CAPTURE_WRITES.remove(tempKey);
+                    else ACTIVE_CAPTURE_WRITES.put(tempKey, activeCaptures - 1);
+                }
             }
         }
     }
