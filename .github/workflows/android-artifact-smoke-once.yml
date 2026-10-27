@@ -1,0 +1,131 @@
+name: AquaWord ARM64 artifact runtime smoke (one-shot)
+
+on:
+  push:
+    branches:
+      - fix/saf-save-failure-recovery-20261023
+    paths:
+      - .github/native-artifact-smoke-once.request
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: aquaword-artifact-smoke-once
+  cancel-in-progress: false
+
+jobs:
+  runtime-smoke:
+    if: ${{ github.event.head_commit.message == 'AquaWordArtifactSmokeOnce' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ARTIFACT_RUN_ID: '40459738117'
+      ARTIFACT_ID: '12715085399'
+      ARTIFACT_NAME: aquaword-native-diagnostic-84b168b8dda1d1c6e89760631dddbb475d9ef59d
+      EXPECTED_SOURCE_SHA: 84b168b8dda1d1c6e89760631dddbb475d9ef59d
+      EXPECTED_APK_SHA256: 26851485b4dc7b3b1fa840f24276ed21fe9a0a4a388fbc69199a8d7b5d97ecfc
+    steps:
+      - name: Checkout test harness at the current feature branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download and verify the existing diagnostic APK (no rebuild)
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ARTIFACT_RUN_ID" --jq '.head_sha')"
+          test "$run_sha" = "$EXPECTED_SOURCE_SHA"
+          artifact_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID")"
+          printf '%s' "$artifact_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["expired"] is False; assert d["name"] == "'"$ARTIFACT_NAME"'"; print("Artifact is available; expires at", d["expires_at"])'
+          mkdir -p downloaded smoke-evidence
+          gh run download "$ARTIFACT_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT_NAME" --dir downloaded
+          mapfile -t apks < <(find downloaded -type f -name '*.apk' -print)
+          test "${#apks[@]}" -eq 1
+          apk="${apks[0]}"
+          actual_sha="$(sha256sum "$apk" | cut -d' ' -f1)"
+          test "$actual_sha" = "$EXPECTED_APK_SHA256"
+          manifest="$(find downloaded -type f -name SHA256SUMS -print -quit)"
+          test -n "$manifest"
+          grep -Fq "$EXPECTED_APK_SHA256" "$manifest"
+          unzip -t "$apk" >/dev/null
+          echo "AQUAWORD_APK=$GITHUB_WORKSPACE/$apk" >> "$GITHUB_ENV"
+          {
+            echo '## Existing APK provenance (no build performed)'
+            echo "- Artifact run: $ARTIFACT_RUN_ID"
+            echo "- Artifact ID: $ARTIFACT_ID"
+            echo "- Build source SHA: $run_sha"
+            echo "- APK SHA-256: $actual_sha"
+            echo "- Purpose: test ARM64 install/launch and native Writer edit-save-cold-reopen on an ARM64 Android emulator."
+            echo '- Limitation: this APK predates the latest recovery/staging source fixes; runtime evidence is baseline-only and does not certify current branch source.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate the synthetic Arabic/English DOCX fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'Pillow==11.3.0' 'python-docx==1.2.0'
+          python3 scripts/generate_templates.py
+          python3 quality/build_rich_fixture.py
+          test -s quality/fixtures/qa_rich_arabic.docx
+
+      # Apache-2.0 action, pinned to immutable v2.38.0 commit.
+      # API 30 is used because the upstream action documents ARM64 system images
+      # as available only for a limited set of API levels (including 30).
+      - name: Boot ARM64 Android emulator and run real AquaWord smoke
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 30
+          target: google_apis
+          arch: arm64-v8a
+          profile: pixel_5
+          emulator-boot-timeout: 1200
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          script: |
+            set -euo pipefail
+            adb shell getprop ro.product.cpu.abilist | tee smoke-evidence/emulator-abis.txt
+            bash scripts/run_android_smoke.sh "$AQUAWORD_APK" "$PWD/smoke-evidence"
+
+      - name: Record actual runtime outcome and limits
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## ARM64 emulator runtime result'
+            if test -s smoke-evidence/smoke-result.txt; then
+              cat smoke-evidence/smoke-result.txt
+            else
+              echo 'NOT TESTED / FAIL: the full runtime smoke did not produce a passing receipt. Inspect the failed step logs and any partial evidence below.'
+            fi
+            echo
+            echo 'Physical Xiaomi Pad 5, real user-selected SAF providers, print/PDF, and current-source fixes remain separate acceptance gates.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload synthetic runtime evidence (best effort)
+        id: evidence_upload
+        if: always() && hashFiles('smoke-evidence/**') != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: aquaword-arm64-emulator-smoke-${{ github.sha }}
+          path: smoke-evidence/
+          if-no-files-found: warn
+          retention-days: 1
+          compression-level: 1
+
+      - name: Report evidence retention
+        if: always()
+        shell: bash
+        env:
+          UPLOAD_OUTCOME: ${{ steps.evidence_upload.outcome }}
+        run: |
+          if [ "$UPLOAD_OUTCOME" = success ]; then
+            echo 'Runtime evidence artifact uploaded; short retention applies.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Runtime evidence upload unavailable; inspect this run summary/logs. No artifact-retention success is claimed.' >> "$GITHUB_STEP_SUMMARY"
+          fi
