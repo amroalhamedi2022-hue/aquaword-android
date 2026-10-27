@@ -440,3 +440,15 @@
 - **حدود القبول:** Android install/launch، مزود SAF حقيقي يرفض أو يقتطع الكتابة، موت عملية Android، تحرير DOCX عربي/إنجليزي داخل Writer الأصلي مع cold-reopen، PDF/الطباعة، وXiaomi Pad 5 ما زالت **NOT TESTED**. التنظيف الفاشل قد يترك بيانات داخل مساحة التطبيق الخاصة؛ أصبح هذا الآن خطأً ظاهرًا بدل الصمت، لكنه لا يضمن حذفًا آمنًا عند تعطل نظام الملفات.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يتوفر موصل كتابة Google Docs/Drive في بيئة هذه الجولة، لذلك لم يُعدّل المستند المحدد.
 - **الاستئناف:** إبقاء `M-NATIVE-01` وPR #7 بوضع Draft/Open؛ مواصلة قبول Android/SAF الواقعي دون فتح milestone جديد أو تعديل `main`.
+
+
+## 2026-10-27 — تنظيف رابط staging معلّق (M-NATIVE-01)
+
+- **الثغرة الدقيقة:** `File.exists()` يتبع الروابط الرمزية ويُرجع `false` للرابط المعلّق؛ لذلك كان مسار التنظيف قد يتجاوز `delete()` ويترك رابط staging داخل مجلد الاسترداد.
+- **الإنتاج:** [`8677130684bae1994d6e299c85987a465c39e282`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/8677130684bae1994d6e299c85987a465c39e282) يستدعي حذف المسار مباشرة حتى لو أعاد `exists()==false`، مع إبقاء الإبلاغ عن فشل الحذف وإزالة تسجيل الكتابة النشطة. كما رُتبت مسافات كتلة الاستعادة لتبقى القراءة والصيانة واضحتين.
+- **اختبار الانحدار:** [`4327ed7d331cd026a0bb8d1d3efda86c6b971046`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/4327ed7d331cd026a0bb8d1d3efda86c6b971046) ينشئ رابطًا رمزيًا إلى هدف غير موجود، ويثبت أن الاستعادة ترفض فتح وجهة SAF وأن رابط staging نفسه يُحذف. إذا منع نظام الاختبار إنشاء الروابط الرمزية، يسجّل الاختبار SKIP لهذه الحالة فقط.
+- **CI على رأس الكود/الاختبار:** Recovery Core [#40438130392 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40438130392)، Fast Source + SAF Contract [#40438130338 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40438130338)، Integration [#40438130406 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40438130406). سجل Integration يثبت نجاح اختبار فشل التنظيف واختبار الرابط المعلّق، ونجاح 125 اختبار Python وفحص Collabora source-layout.
+- **قرار البناء:** لا APK؛ الاختبار JVM يختبر حالة رابط نظام الملفات مباشرة، والبناء لا يضيف دليلًا على مزود SAF أو الجهاز. لم يُستخدم runner أو API مدفوع.
+- **حدود القبول:** Android install/launch، مزود SAF حقيقي يرفض أو يقتطع الكتابة، موت عملية Android، تحرير DOCX عربي/إنجليزي داخل Writer الأصلي مع cold-reopen، PDF/الطباعة، وقبول Xiaomi Pad 5 ما زالت **NOT TESTED**.
+- **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive متاح في هذه البيئة، ولم تتم مزامنة المستند المحدد.
+- **الاستئناف:** الاستمرار داخل `M-NATIVE-01` وPR #7 دون فتح milestone جديد أو تعديل `main`؛ لا يُعتبر أي اختبار مصدر بديلًا عن قبول Android/SAF الفعلي.
