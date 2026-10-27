@@ -380,3 +380,13 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Build decision:** no APK build. This is a deterministic Java filesystem contract directly tested by JVM regression; native packaging would not establish Android-provider behavior.
 - **Still NOT TESTED:** real Android SAF provider collisions/failures, on-device process death, Writer Arabic/English cold-reopen, print/PDF, and Xiaomi Pad 5 visual/performance acceptance.
 - **Google Drive AquaWord — HANDOFF:** sync remains **FAILED / NOT AVAILABLE** until the specified Google Docs document can actually be written; no sync success is claimed.
+
+
+## 2026-10-27 — Current-source ARM64 diagnostic request (pending outcome)
+
+- **M-NATIVE-01 remains OPEN.** One purpose-bound free ARM64 compile/package diagnostic is running at source SHA [`77f45d80e32269e1b2d3aff111ba0611f865e9b3`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/77f45d80e32269e1b2d3aff111ba0611f865e9b3): [native run #40528607353](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528607353) — **IN PROGRESS** at checkpoint time.
+- Question: whether the pinned Collabora/LibreOffice ARM64 engine, AquaWord overlay and Gradle package the current source into a structurally verified ARM64 APK with valid package identity, native ELF and SHA-256. JVM/source tests cannot prove native linker/Gradle packaging, so this build has a distinct integration purpose.
+- Exact trigger-SHA source checks passed: [Fast Source #40528616229](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528616229), [Recovery Core #40528615964](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528615964), [Integration #40528616032](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528616032).
+- The workflow is purpose-bound and compile-only for this exact trigger; it skips emulator acceptance and must not be retried automatically if it fails. APK SHA/artifact link will be recorded only if the workflow actually produces and retains the file.
+- **NOT TESTED regardless of compile result:** Android install/launch, real Writer Arabic/English round-trip, real SAF failure/recovery, print/PDF, Xiaomi Pad 5 and final release signing.
+- Google Drive `AquaWord — HANDOFF`: **FAILED / NOT AVAILABLE**; no Docs/Drive write connector is exposed, so the named document was not updated.

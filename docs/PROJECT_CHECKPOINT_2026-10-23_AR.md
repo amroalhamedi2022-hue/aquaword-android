@@ -57,7 +57,7 @@
 
 **Acceptance:** (1) source and integration CI PASS at exact SHA; (2) a purpose-bound internal diagnostic build with native engine + Gradle + package/asset SHA256 checks and actual `lib/arm64-v8a/*.so` presence PASS; (3) compatible Android runtime installs, opens Arabic/English Writer DOCX, edits and reopens without loss, and exercises SAF failure paths; (4) Android device/emulator evidence with precise ABI and reproducible logs; (5) independent final source review before user-facing APK. Each unrun gate is NOT TESTED.
 
-**Implementation slice:** the branch-local manual `android-native.yml` now separates diagnostic compile-only from runtime acceptance. Compile-only intentionally skips the x86_64 emulator when its ABI cannot prove ARM64, retains only an unpublished UNVERIFIED draft, and never satisfies the final approval digest gate. Native compile and real Android runtime are still NOT TESTED. `main` is unchanged. No automatic builds, no paid runners.
+**Implementation slice:** the branch-local manual `android-native.yml` now separates diagnostic compile-only from runtime acceptance. Compile-only intentionally skips the x86_64 emulator when its ABI cannot prove ARM64, retains only an unpublished UNVERIFIED draft, and never satisfies the final approval digest gate. Native compile and real Android runtime are still NOT TESTED. `main` is unchanged. No automatic builds on ordinary pushes; the only push-triggered native build is a purpose-bound one-shot marker with an exact commit-message guard. Free GitHub-hosted runner only; no paid runners.
 
 **Next:** validate the new workflow via source CI; inspect the pinned native toolchain for actual compiler failures; launch one justified diagnostic build only through an available authorized manual dispatch path, then repair real failures and run Android device roundtrip. A successful compile-only diagnostic is not evidence of SAF or Writer runtime.
 
@@ -597,3 +597,15 @@
 - **Build decision:** no APK build. This is a deterministic Java filesystem contract directly tested by JVM regression; native packaging would not establish Android-provider behavior.
 - **Still NOT TESTED:** real Android SAF provider collisions/failures, on-device process death, Writer Arabic/English cold-reopen, print/PDF, and Xiaomi Pad 5 visual/performance acceptance.
 - **Google Drive AquaWord — HANDOFF:** sync remains **FAILED / NOT AVAILABLE** until the specified Google Docs document can actually be written; no sync success is claimed.
+
+
+## 2026-10-27 — Current-source ARM64 diagnostic (one-shot; run in progress)
+
+- **Milestone:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` remains **OPEN**.
+- Exact source/trigger SHA: [`77f45d80e32269e1b2d3aff111ba0611f865e9b3`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/77f45d80e32269e1b2d3aff111ba0611f865e9b3). The purpose-bound one-shot native workflow is running at [#40528607353](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528607353) (**IN PROGRESS** as of this checkpoint).
+- **Test question:** can the current pinned Collabora/LibreOffice ARM64 engine plus AquaWord overlay compile, package, sign-check and retain a structurally verified `arm64-v8a` diagnostic APK at this source SHA?
+- **Why source tests are insufficient:** JVM recovery tests and desktop DOCX fixtures cannot execute the NDK/native linker, Collabora Android configure/make, Gradle manifest/resource merge, APK packaging or actual native-library inclusion.
+- Exact source CI on the trigger SHA: Fast Source [#40528616229 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528616229), Recovery Core [#40528615964 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528615964), Integration [#40528616032 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528616032).
+- **Scope:** compile/package, package ID, ABI/native ELF, signature report, APK ZIP integrity, SHA-256 and short-lived artifact retention. It intentionally skips Android runtime; this is not final release acceptance. No automatic retry is authorized if the one-shot run fails.
+- **Still NOT TESTED:** install/launch, Arabic/English Writer edit-save-cold-reopen, actual SAF provider failure/truncation and recovery, print/PDF, Xiaomi Pad 5 UI/performance and independent final source/device recheck.
+- Google Drive `AquaWord — HANDOFF` sync remains **FAILED / NOT AVAILABLE** because no Google Docs/Drive write connector is exposed in this runtime. No successful sync is claimed.

@@ -462,3 +462,14 @@ Exact head: 359ff2dcb747ab46c2f7126de2e46701d3b9cf25.
 - Exact code/test head `16d585bcc449a41c5977a22be195c6b4081e0511`: Fast Source [#40506893261 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893261), Recovery Core [#40506893297 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893297), Integration [#40506893283 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893283).
 - Physical Xiaomi Pad 5, real SAF failure/recovery, current-source native APK, print/PDF and production signing remain **NOT TESTED**.
 - Google Drive AquaWord — HANDOFF sync: **FAILED / NOT AVAILABLE**; this runtime exposes no Google Docs/Drive write connector. The named document was not modified.
+
+
+## 2026-10-27 — Superseding current-source ARM64 diagnostic status
+
+This entry supersedes earlier dated statements in this file that described `android-native.yml` as manual-dispatch-only or said no diagnostic retry was authorized. The later branch-local workflow explicitly allows one exact marker-path push with commit message `AquaWordNativeDiagnosticRetryOnce`; ordinary pushes still do not trigger native packaging.
+
+- Trigger/source SHA: `77f45d80e32269e1b2d3aff111ba0611f865e9b3`.
+- Native compile/package run [#40528607353](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528607353): **IN PROGRESS** at this checkpoint.
+- Same-SHA Fast Source [#40528616229 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528616229), Recovery Core [#40528615964 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528615964), Integration [#40528616032 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40528616032).
+- This run answers native configure/link/package/ABI/SHA and artifact-retention questions that source tests cannot. It is a single compile-only diagnostic; no automatic retry, final release, or device acceptance is authorized by its success alone.
+- Android install/launch, Writer round-trip, SAF provider failure/recovery, print/PDF and Xiaomi Pad 5 remain **NOT TESTED**. Google Drive Handoff sync remains unavailable; no sync success is claimed.
