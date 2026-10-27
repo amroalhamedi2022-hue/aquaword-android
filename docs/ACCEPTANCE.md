@@ -438,3 +438,15 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Still NOT TESTED:** an actual SAF provider throwing `IllegalArgumentException` for `wt` and accepting `rwt`; provider rejection of both modes; real recovery restore and blank-document creation; Android install/launch; native Writer Arabic/English edit-save-cold-reopen; print/PDF; Xiaomi Pad 5 visual/performance acceptance.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**; no Google Docs/Drive write connector is exposed in this runtime, so the specified document was not updated and no sync success is claimed.
 - **Resume:** continue `M-NATIVE-01`; keep PR #7 Draft/open and `main` unchanged. Require exact-head source/recovery/integration CI and then real Android provider/device evidence before closing the milestone.
+
+
+## 2026-10-28 — shared SAF truncation-mode helper
+
+- Added `history/src/org/libreoffice/androidlib/AquaWordSafOutput.java` and integrated it into native DOCX save, PDF export, recovery restore, blank-document creation, and template creation.
+- The helper only tries explicit truncating modes (`wt`, then `rwt` when the first mode is rejected or null). It does not use plain `w`; `SecurityException` and ordinary I/O failures are not swallowed as mode-negotiation failures.
+- The JVM regression executes the helper against fake provider behaviors for `FileNotFoundException`, `UnsupportedOperationException`, `IllegalArgumentException`, null streams, permission denial, and generic I/O failure. Overlay contracts confirm the Android-generated code delegates to the helper.
+- Tested code/test state plus corrected explicit Java compile lists: [Fast Source #40601163452 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40601163452), [Recovery Core #40601163437 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40601163437), [Integration #40601163615 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40601163615), tested head `0160bed77339e2ef05fa4948e3adff3e1deb310f`.
+- Initial recovery/integration compile attempts failed because the new helper was omitted from their explicit `javac` file lists; the workflow source lists were fixed and the final exact-head runs passed.
+- **Not device-certified:** actual SAF provider behavior, Android process death, Writer Arabic/English DOCX roundtrip, print/PDF, and Xiaomi Pad 5 remain **NOT TESTED**. No APK was built because JVM tests directly answer this helper-level question.
+- Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** in this runtime; no Docs/Drive write connector is exposed.
+- M-NATIVE-01 remains **OPEN**; this update does not authorize PR merge, `main` changes, or a final APK handoff.
