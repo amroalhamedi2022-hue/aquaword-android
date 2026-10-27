@@ -114,6 +114,47 @@ public class AquaWordHistoryTest {
 
 
     /**
+     * Orphan recovery must not truncate an existing metadata staging file.
+     */
+    private static void testOrphanRecoveryPreservesOccupiedMetadataStaging(File root)
+            throws Exception {
+        File dir = new File(root, "aquaword-history");
+        check(dir.mkdirs() || dir.isDirectory(),
+                "could not create orphan metadata-staging fixture directory");
+        ByteArrayOutputStream packageBytes = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(packageBytes)) {
+            zip.putNextEntry(new ZipEntry("[Content_Types].xml"));
+            zip.write("<Types xmlns='http://schemas.openxmlformats.org/package/2006/content-types'/>".getBytes("UTF-8"));
+            zip.closeEntry();
+            zip.putNextEntry(new ZipEntry("word/document.xml"));
+            zip.write("<w:document xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main'><w:body><w:p><w:r><w:t>مرحبا</w:t></w:r></w:p></w:body></w:document>".getBytes("UTF-8"));
+            zip.closeEntry();
+        }
+        byte[] payload = packageBytes.toByteArray();
+        File orphan = new File(dir, "staging-collision.snapshot");
+        try (FileOutputStream output = new FileOutputStream(orphan)) {
+            output.write(payload);
+            output.getFD().sync();
+        }
+        byte[] sentinel = "another interrupted metadata write — preserve me".getBytes("UTF-8");
+        File occupied = new File(dir, "staging-collision.meta-partial");
+        try (FileOutputStream output = new FileOutputStream(occupied)) {
+            output.write(sentinel);
+            output.getFD().sync();
+        }
+
+        List<AquaWordHistory.Snapshot> recovered = AquaWordHistory.list(root);
+        check(recovered.isEmpty(),
+                "orphan recovery should defer while its metadata staging path is occupied");
+        check(Arrays.equals(sentinel, Files.readAllBytes(occupied.toPath())),
+                "orphan recovery truncated or replaced a pre-existing metadata staging file");
+        check(Arrays.equals(payload, Files.readAllBytes(orphan.toPath())),
+                "orphan recovery changed the original committed snapshot bytes");
+        check(!new File(dir, "staging-collision.properties").exists(),
+                "orphan recovery published metadata after a staging collision");
+    }
+
+    /**
      * A valid snapshot basename may contain the data suffix before its final
      * extension. Recovery and retention must strip only the terminal suffix.
      */
@@ -411,6 +452,7 @@ public class AquaWordHistoryTest {
         try {
             testProcessDeathRecovery(new File(root, "process-death-fixture"));
             testOrphanSnapshotRecovery(new File(root, "orphan-recovery-fixture"));
+            testOrphanRecoveryPreservesOccupiedMetadataStaging(new File(root, "orphan-staging-collision-fixture"));
             testSnapshotSuffixInsideBasename(new File(root, "embedded-suffix-fixture"));
             testRecoveryRejectsSymlinksOutsideHistoryDirectory(new File(root, "symlink-escape-fixture"));
             testRecoveryRejectsInDirectorySymlinkAliases(new File(root, "symlink-alias-fixture"));

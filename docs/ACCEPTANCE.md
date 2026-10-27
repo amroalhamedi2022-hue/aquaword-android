@@ -369,3 +369,14 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Exact code/test head CI:** Fast Source [#40506893261 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893261), Recovery Core [#40506893297 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893297), Integration [#40506893283 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893283). These validate source/tests at `16d585bcc449a41c5977a22be195c6b4081e0511`, not Android device acceptance.
 - **Remaining NOT TESTED:** physical Xiaomi Pad 5; real SAF provider refusal/truncation and recovery; current-source native package; print/PDF; production signing and visual/performance acceptance.
 - **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE; no Google Docs/Drive write connector is exposed in this runtime, so the named document was not modified.
+
+
+## 2026-10-27 — Orphan recovery metadata-staging collision guard
+
+- **Milestone:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` remains **OPEN**.
+- **Production fix:** `recoverOrphanSnapshot()` previously opened `.meta-partial` with truncating `FileOutputStream`. An occupied staging path could be overwritten and then published as committed metadata. Recovery now reserves the path with `createNewFile()`, defers when it is occupied, and only cleans a staging file it successfully created.
+- **Regression:** the JVM suite creates a valid orphan DOCX snapshot plus a byte-sentinel `.meta-partial` collision, runs the real history scan, and verifies that the sentinel and original snapshot remain byte-identical and no final metadata is published.
+- **Code/test validation:** CI must pass on the exact head before this change is considered accepted; see the linked PR checks after completion.
+- **Build decision:** no APK build. This is a deterministic Java filesystem contract directly tested by JVM regression; native packaging would not establish Android-provider behavior.
+- **Still NOT TESTED:** real Android SAF provider collisions/failures, on-device process death, Writer Arabic/English cold-reopen, print/PDF, and Xiaomi Pad 5 visual/performance acceptance.
+- **Google Drive AquaWord — HANDOFF:** sync remains **FAILED / NOT AVAILABLE** until the specified Google Docs document can actually be written; no sync success is claimed.

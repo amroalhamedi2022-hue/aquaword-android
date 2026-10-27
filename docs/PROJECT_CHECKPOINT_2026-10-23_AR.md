@@ -586,3 +586,14 @@
 - **CI لرأس الكود والاختبارات `16d585bcc449a41c5977a22be195c6b4081e0511` — PASS:** Fast Source [#40506893261](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893261)، Recovery Core [#40506893297](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893297)، Integration [#40506893283](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40506893283). هذه أدلة مصدر/اختبارات وليست قبولًا على Android.
 - **المتبقي:** Xiaomi Pad 5 فعلي، SAF يرفض/يقتطع الكتابة والتعافي، حزمة من رأس المصدر الحالي، الطباعة/PDF، توقيع الإنتاج والقبول البصري/الأداء: **NOT TESTED**.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive في بيئة التشغيل، ولم يُعدّل المستند المحدد.
+
+
+## 2026-10-27 — Orphan recovery metadata-staging collision guard
+
+- **Milestone:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` remains **OPEN**.
+- **Production fix:** `recoverOrphanSnapshot()` previously opened `.meta-partial` with truncating `FileOutputStream`. An occupied staging path could be overwritten and then published as committed metadata. Recovery now reserves the path with `createNewFile()`, defers when it is occupied, and only cleans a staging file it successfully created.
+- **Regression:** the JVM suite creates a valid orphan DOCX snapshot plus a byte-sentinel `.meta-partial` collision, runs the real history scan, and verifies that the sentinel and original snapshot remain byte-identical and no final metadata is published.
+- **Code/test validation:** CI must pass on the exact head before this change is considered accepted; see the linked PR checks after completion.
+- **Build decision:** no APK build. This is a deterministic Java filesystem contract directly tested by JVM regression; native packaging would not establish Android-provider behavior.
+- **Still NOT TESTED:** real Android SAF provider collisions/failures, on-device process death, Writer Arabic/English cold-reopen, print/PDF, and Xiaomi Pad 5 visual/performance acceptance.
+- **Google Drive AquaWord — HANDOFF:** sync remains **FAILED / NOT AVAILABLE** until the specified Google Docs document can actually be written; no sync success is claimed.

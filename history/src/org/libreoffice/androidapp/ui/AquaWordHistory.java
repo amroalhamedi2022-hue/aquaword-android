@@ -486,6 +486,7 @@ public final class AquaWordHistory {
         final File meta = new File(dir, id + META_SUFFIX);
         if (meta.exists()) return null;
         File pending = null;
+        boolean pendingCreated = false;
         try {
             // Orphan recovery must reject symlink aliases too, including links
             // whose targets remain inside the private directory. Otherwise a
@@ -537,6 +538,12 @@ public final class AquaWordHistory {
             props.setProperty("kind", "recovered");
 
             pending = new File(dir, id + ".meta-partial");
+            // Never open an existing staging path with FileOutputStream: that
+            // would truncate another incomplete write or follow a planted link.
+            // Exclusive creation makes a collision a recoverable "not listed yet"
+            // state while preserving the orphan bytes and existing temp file.
+            if (!pending.createNewFile()) return null;
+            pendingCreated = true;
             try (FileOutputStream output = new FileOutputStream(pending)) {
                 props.store(output, "Recovered complete snapshot after metadata loss");
                 output.getFD().sync();
@@ -556,7 +563,8 @@ public final class AquaWordHistory {
         } catch (IOException | SecurityException failure) {
             return null;
         } finally {
-            if (pending != null && pending.exists()) pending.delete();
+            // Delete only the staging file this recovery attempt reserved.
+            if (pendingCreated && pending != null && pending.exists()) pending.delete();
         }
     }
 
