@@ -419,3 +419,13 @@ Exact head: 359ff2dcb747ab46c2f7126de2e46701d3b9cf25.
 
 - Initial Fast Source on the verifier fix failed on a stale test assertion expecting the obsolete signer label; the new dual-label regression passed.
 - Updated the stale assertion. Recheck Fast Source and Integration on the new exact commit before treating the verifier correction as accepted.
+
+
+## 2026-10-27 — Executable apksigner report gate
+
+- Replaced the workflow's brittle literal grep checks with scripts/verify_apk_signature.py. The helper requires an explicit successful v2-verification line and a valid 32-byte SHA-256 certificate digest, accepting both the numbered signer and V2 Signer formats emitted by Android build-tools.
+- Added executable unit cases for both formats, colon-separated digests, false v2 status, missing/malformed digest, and unknown labels. This addresses the previous false-negative where a native APK was produced but a label mismatch stopped the workflow before package/template acceptance.
+- CI status at commit creation: pending; do not count this gate as accepted until Fast Source and Integration pass on the exact code SHA.
+- This source-only change does not authorize another native build; the previous one-shot diagnostic attempt failed at the old verifier gate and the existing request explicitly prohibits automatic retries.
+- Android install/launch, real SAF provider failure/recovery, native Writer Arabic/English edit-save-cold-reopen, print/PDF, and Xiaomi Pad 5 remain NOT TESTED.
+- Google Drive AquaWord — HANDOFF sync: FAILED / NOT AVAILABLE in this runtime; no Google Docs/Drive write connector is exposed, so the specified document was not updated.

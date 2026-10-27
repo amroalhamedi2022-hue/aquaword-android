@@ -269,3 +269,13 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 
 - The first Fast Source run after the verifier fix failed only because an older test still asserted the obsolete literal 'Signer #1 certificate SHA-256 digest:'. The new regression for both apksigner labels passed in that same run.
 - Updated the older test to assert the new dual-format grep contract. Re-run Fast Source and Integration on the new exact commit before considering the verifier fix accepted.
+
+
+## 2026-10-27 — Executable apksigner report gate
+
+- Replaced the workflow's brittle literal grep checks with scripts/verify_apk_signature.py. The helper requires an explicit successful v2-verification line and a valid 32-byte SHA-256 certificate digest, accepting both the numbered signer and V2 Signer formats emitted by Android build-tools.
+- Added executable unit cases for both formats, colon-separated digests, false v2 status, missing/malformed digest, and unknown labels. This addresses the previous false-negative where a native APK was produced but a label mismatch stopped the workflow before package/template acceptance.
+- CI status at commit creation: pending; do not count this gate as accepted until Fast Source and Integration pass on the exact code SHA.
+- This source-only change does not authorize another native build; the previous one-shot diagnostic attempt failed at the old verifier gate and the existing request explicitly prohibits automatic retries.
+- Android install/launch, real SAF provider failure/recovery, native Writer Arabic/English edit-save-cold-reopen, print/PDF, and Xiaomi Pad 5 remain NOT TESTED.
+- Google Drive AquaWord — HANDOFF sync: FAILED / NOT AVAILABLE in this runtime; no Google Docs/Drive write connector is exposed, so the specified document was not updated.

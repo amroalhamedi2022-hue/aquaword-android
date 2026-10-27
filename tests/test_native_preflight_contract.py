@@ -82,12 +82,17 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertIn("steps.diagnostic_apk_artifact.outputs.artifact-url", workflow)
         self.assertIn("No automatic native build dispatch on push", (ROOT / ".github/workflows/queue-current-native-once.yml").read_text(encoding="utf-8"))
 
-    def test_signature_certificate_gate_matches_apksigner_output_variants(self):
+    def test_signature_gate_uses_executable_report_validator(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        check = next(line for line in workflow.splitlines() if "certificate SHA-256 digest:" in line and "grep -E" in line)
-        self.assertIn("Signer #[0-9]+ certificate SHA-256 digest:", check)
-        self.assertIn("V2 Signer: certificate SHA-256 digest:", check)
-        self.assertNotIn("grep -Fq 'Signer #1 certificate SHA-256 digest:'", workflow)
+        verifier = (ROOT / "scripts/verify_apk_signature.py").read_text(encoding="utf-8")
+        invocation = 'python3 scripts/verify_apk_signature.py --report "$signature_report"'
+        self.assertIn(invocation, workflow)
+        self.assertIn("Signer #\\\\d+ certificate SHA-256 digest:", verifier)
+        self.assertIn("V2 Signer: certificate SHA-256 digest:", verifier)
+        self.assertIn("Verified using v2 scheme", verifier)
+        self.assertNotIn("grep -Eq '^(Signer #", workflow)
+        self.assertLess(workflow.index('"$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$signature_report"'),
+                        workflow.index(invocation))
 
     def test_diagnostic_apk_contains_arm64_native_engine_not_just_java(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -138,8 +143,8 @@ class NativePreflightContractTests(unittest.TestCase):
         self.assertIn('APKSIGNER="$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner"', workflow)
         verify = '"$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$signature_report"'
         self.assertIn(verify, workflow)
-        self.assertIn("Verified using v2 scheme (APK Signature Scheme v2): true", workflow)
-        self.assertIn("grep -Eq '^(Signer #[0-9]+ certificate SHA-256 digest:|V2 Signer: certificate SHA-256 digest:)'", workflow)
+        self.assertIn('python3 scripts/verify_apk_signature.py --report "$signature_report"', workflow)
+        self.assertIn("output/*.signature.txt", workflow)
         self.assertIn("output/*.signature.txt", workflow)
         self.assertLess(workflow.index(verify),
                         workflow.index("- name: Record real APK metadata and source provenance"))
