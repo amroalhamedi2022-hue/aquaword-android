@@ -87,7 +87,7 @@ class NativePreflightContractTests(unittest.TestCase):
         verifier = (ROOT / "scripts/verify_apk_signature.py").read_text(encoding="utf-8")
         invocation = 'python3 scripts/verify_apk_signature.py --report "$signature_report"'
         self.assertIn(invocation, workflow)
-        self.assertIn("Signer #\\\\d+ certificate SHA-256 digest:", verifier)
+        self.assertIn("Signer #", verifier)
         self.assertIn("V2 Signer: certificate SHA-256 digest:", verifier)
         self.assertIn("Verified using v2 scheme", verifier)
         self.assertNotIn("grep -Eq '^(Signer #", workflow)

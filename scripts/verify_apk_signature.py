@@ -17,12 +17,12 @@ class SignatureReportError(ValueError):
 
 
 _V2_OK = re.compile(
-    r"^\\s*Verified using v2 scheme \\(APK Signature Scheme v2\\):\\s*true\\s*$",
+    r"^\s*Verified using v2 scheme \(APK Signature Scheme v2\):\s*true\s*$",
     re.MULTILINE,
 )
 _DIGEST_PREFIX = re.compile(
-    r"^\\s*(?:Signer #\\d+ certificate SHA-256 digest:|"
-    r"V2 Signer: certificate SHA-256 digest:)\\s*(?P<digest>.*?)\\s*$"
+    r"^\s*(?:Signer #\d+ certificate SHA-256 digest:|"
+    r"V2 Signer: certificate SHA-256 digest:)\s*(?P<digest>.*?)\s*$"
 )
 _HEX_DIGEST = re.compile(r"^[0-9a-fA-F]{64}$")
 
