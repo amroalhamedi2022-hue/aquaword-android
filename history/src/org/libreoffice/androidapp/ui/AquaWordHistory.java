@@ -36,6 +36,11 @@ public final class AquaWordHistory {
     private static final long MAX_SINGLE_BYTES = 512L * 1024L * 1024L;
     private static final long MAX_TOTAL_BYTES = 1024L * 1024L * 1024L;
     private static final int MAX_SNAPSHOTS = 60;
+
+    /** Shared guard for persisted, cached, staged, and provider-bound snapshots. */
+    static boolean isWithinSnapshotSizeLimit(long size) {
+        return size > 0L && size <= MAX_SINGLE_BYTES;
+    }
     // Leave interrupted writes available for manual recovery for one week.
     private static final long INCOMPLETE_GRACE_MILLIS = 7L * 24L * 60L * 60L * 1000L;
     private static final Map<String, Integer> ACTIVE_WRITEBACKS = new HashMap<>();
@@ -375,7 +380,7 @@ public final class AquaWordHistory {
                 long length = Long.parseLong(props.getProperty("size", "-1"));
                 long when = Long.parseLong(props.getProperty("timestamp", "0"));
                 if (hash.length() != 64 || sourceHash.length() != 64 ||
-                        length <= 0L || length != data.length() || when <= 0L)
+                        !isWithinSnapshotSizeLimit(length) || length != data.length() || when <= 0L)
                     return null;
                 return new Snapshot(data, name, when, length, hash, sourceHash, kind,
                         canonicalDir.getPath());
@@ -458,7 +463,7 @@ public final class AquaWordHistory {
                     !canonicalData.equals(expectedData))
                 return null;
             final long size = data.length();
-            if (size <= 0L || size > MAX_SINGLE_BYTES) return null;
+            if (!isWithinSnapshotSizeLimit(size)) return null;
             final String extension = guessRecoveredExtension(data);
             if (extension == null) return null;
             final long modified = data.lastModified();
@@ -668,8 +673,8 @@ public final class AquaWordHistory {
 
     /** Do not deduplicate against a corrupted or path-aliased safety copy. */
     private static boolean verifyBytes(Snapshot snapshot) {
-        if (snapshot == null || !isCanonicalSnapshotChild(snapshot.file) ||
-                !snapshot.file.isFile())
+        if (snapshot == null || !isWithinSnapshotSizeLimit(snapshot.sizeBytes) ||
+                !isCanonicalSnapshotChild(snapshot.file) || !snapshot.file.isFile())
             return false;
         long initialModified = snapshot.file.lastModified();
         if (snapshot.file.length() != snapshot.sizeBytes) return false;
@@ -705,7 +710,7 @@ public final class AquaWordHistory {
      * Call this before ContentResolver.openOutputStream(), not afterwards.
      */
     public static synchronized void verifyForRestore(Snapshot snapshot) throws IOException {
-        if (snapshot == null || snapshot.sizeBytes <= 0L || !verifyBytes(snapshot))
+        if (snapshot == null || !isWithinSnapshotSizeLimit(snapshot.sizeBytes) || !verifyBytes(snapshot))
             throw new IOException("Recovery snapshot missing or checksum mismatch");
     }
 
@@ -718,7 +723,7 @@ public final class AquaWordHistory {
      */
     public static void verifyProviderWriteback(Snapshot snapshot, InputStream providerInput)
             throws IOException {
-        if (snapshot == null || snapshot.sizeBytes <= 0L || providerInput == null)
+        if (snapshot == null || !isWithinSnapshotSizeLimit(snapshot.sizeBytes) || providerInput == null)
             throw new IOException("SAF provider readback unavailable");
         MessageDigest checksum = digest();
         byte[] buffer = new byte[64 * 1024];
@@ -769,7 +774,7 @@ public final class AquaWordHistory {
     private static void verifyOpenedFile(File file, String parentPath, long expectedSize,
                                          String expectedHash, FileInputStream input,
                                          String failureMessage) throws IOException {
-        if (file == null || input == null || expectedSize <= 0L ||
+        if (file == null || input == null || !isWithinSnapshotSizeLimit(expectedSize) ||
                 !isCanonicalChildAtParent(file, parentPath) || !file.isFile() ||
                 file.length() != expectedSize)
             throw new IOException(failureMessage);
@@ -808,8 +813,8 @@ public final class AquaWordHistory {
 
     static void restoreToDestination(Snapshot snapshot, DestinationOpener opener,
                                      RestoreStageHook hook) throws IOException {
-        if (snapshot == null || opener == null)
-            throw new IOException("Missing recovery destination");
+        if (snapshot == null || opener == null || !isWithinSnapshotSizeLimit(snapshot.sizeBytes))
+            throw new IOException("Missing or oversized recovery destination");
         try (WritebackLease lease = holdForWriteback(snapshot)) {
             File staged = stageRestoreCopy(snapshot);
             try {
@@ -839,7 +844,8 @@ public final class AquaWordHistory {
      * can truncate an existing provider document.
      */
     public static void restore(Snapshot snapshot, OutputStream target) throws IOException {
-        if (snapshot == null || target == null) throw new IOException("Missing recovery destination");
+        if (snapshot == null || target == null || !isWithinSnapshotSizeLimit(snapshot.sizeBytes))
+            throw new IOException("Missing or oversized recovery destination");
         try (WritebackLease lease = holdForWriteback(snapshot)) {
             File staged = stageRestoreCopy(snapshot);
             try (FileInputStream input = new FileInputStream(staged)) {
@@ -854,7 +860,7 @@ public final class AquaWordHistory {
     }
 
     private static File stageRestoreCopy(Snapshot snapshot) throws IOException {
-        if (snapshot == null || snapshot.sizeBytes <= 0L ||
+        if (snapshot == null || !isWithinSnapshotSizeLimit(snapshot.sizeBytes) ||
                 !isCanonicalSnapshotChild(snapshot) || !snapshot.file.isFile() ||
                 snapshot.file.length() != snapshot.sizeBytes)
             throw new IOException("Recovery snapshot changed before staging");
@@ -916,7 +922,8 @@ public final class AquaWordHistory {
 
     private static boolean verifyStagedBytes(File file, String parentPath,
                                              long expectedSize, String expectedHash) {
-        if (!isCanonicalChildAtParent(file, parentPath) || !file.isFile() ||
+        if (!isWithinSnapshotSizeLimit(expectedSize) ||
+                !isCanonicalChildAtParent(file, parentPath) || !file.isFile() ||
                 file.length() != expectedSize) return false;
         long modified = file.lastModified();
         MessageDigest checksum = digest();
