@@ -376,3 +376,16 @@ Current PR #7 head is `aea1a5792e90634080b85d7a1cd0a450beccb7d8`.
 - Exact code/test commits: 091fee88160582cfd6c60a4dc154618cc2d6bce7, fd9609e4862f9204da232386881abf2d0fad3f66, d5b7e53f331c41a10c78f412e575c874f66d5480, 35d8e8009604e9ca6d979f4bff6b5803f3ebf1b3.
 - NOT TESTED: Android device runtime and real SAF failure/truncation, native Writer DOCX roundtrip, PDF/print and Xiaomi Pad 5 acceptance. No APK was built because source/JVM tests directly cover the change and the one-shot native diagnostic route must not be repeated.
 - Google Drive AquaWord — HANDOFF: FAILED / NOT AVAILABLE; no Docs/Drive write connector is exposed, and the specified document was not modified. Continue the same milestone; PR #7 remains Draft and main is unchanged.
+
+## 2026-10-27 — Persisted recovery size cap
+
+The shared 512 MiB snapshot-size guard is now applied consistently to metadata-backed history entries and every restore/provider-bound path, not only new capture and orphan recovery. A malformed or legacy sidecar can no longer make an oversized file appear as a usable recovery point or trigger unbounded staging during restore.
+
+Exact head: 359ff2dcb747ab46c2f7126de2e46701d3b9cf25.
+- Recovery Core JVM-only: #40425553795 PASS.
+- Fast Source + SAF Contract: #40425553801 PASS.
+- Integration: #40425553688 PASS, including desktop LibreOffice DOCX roundtrip and JVM history tests.
+- Regression covers size guard boundaries and rejects a tiny payload whose persisted metadata claims a size above the cap without hashing or deleting the evidence.
+- An intermediate Fast Source run on 9aae703 failed on an outdated source-contract assertion; it was corrected in 359ff2d, whose exact-head run passes.
+- No APK build was justified for this JVM storage invariant. Android/SAF device behavior and Xiaomi Pad 5 acceptance remain NOT TESTED. M-NATIVE-01 stays OPEN; PR #7 stays Draft/open and main is unchanged.
+- Google Drive Handoff write access is unavailable in this runtime; no external Handoff update is claimed.

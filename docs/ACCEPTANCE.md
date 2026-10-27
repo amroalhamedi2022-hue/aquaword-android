@@ -204,3 +204,13 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - NOT TESTED: real Android SAF provider failure/truncation, device process death, native Writer DOCX roundtrip, print/PDF, Xiaomi Pad 5 visual/performance, and device runtime. The staging design does not make a provider's mid-write failure atomic.
 - No APK build: JVM/overlay tests directly answer the source-staging ordering question; no fresh native build is authorized by the consumed one-shot diagnostic route.
 - Google Drive AquaWord — HANDOFF sync: FAILED / NOT AVAILABLE because this runtime exposes no Docs/Drive write connector; no Drive update is claimed. PR #7 stays Draft; main unchanged.
+
+## 2026-10-27 — Recovery snapshot size-bound hardening
+
+- Production: added the shared isWithinSnapshotSizeLimit(long) guard for the 512 MiB per-snapshot ceiling. Persisted metadata loading, cached snapshot verification, provider readback, opened-descriptor verification, staging, and both restore APIs now reject zero, negative, or oversized sizes before hashing or opening a destructive destination. Orphan recovery uses the same guard.
+- Regression: AquaWordHistoryCommitTest.testOversizedSnapshotMetadataRejected covers zero, negative, the exact 512 MiB boundary, and cap+1. A tiny fixture with oversized metadata proves history listing rejects it before hashing and leaves the evidence files intact.
+- Exact code/test/contract head: 359ff2dcb747ab46c2f7126de2e46701d3b9cf25. Production: 61ec7aa473f263760ebaacd2bcb06bb6f34b266c; JVM regression: 9aae703f43c3b2bc2c813d8e32c0d4fd97330eed; stale overlay assertion corrected in 359ff2dcb747ab46c2f7126de2e46701d3b9cf25.
+- Exact-head CI: Recovery Core JVM-only #40425553795 PASS; Fast Source + SAF Contract #40425553801 PASS; Integration #40425553688 PASS. The two broader workflows each ran 125 Python tests; Integration also completed the desktop LibreOffice DOCX roundtrip and JVM recovery core. An earlier Fast Source run on intermediate SHA 9aae703 failed because the source-contract assertion still expected the previous size-check expression; the assertion was updated and the current-head run passes.
+- Build decision: no APK build. This bounded Java history/storage invariant is directly exercised by JVM and source-contract tests; packaging would not prove real SAF-provider behavior.
+- Still NOT TESTED: Android install/launch, real SAF provider refusal/truncation/readback, Android process death, native Writer Arabic/English edit-save-cold-reopen, print/PDF, and Xiaomi Pad 5 visual/performance acceptance.
+- Status: M-NATIVE-01 remains OPEN; PR #7 remains Draft/open; main unchanged. Google Drive Handoff sync remains FAILED / NOT AVAILABLE in this runtime; no Drive write is claimed.
