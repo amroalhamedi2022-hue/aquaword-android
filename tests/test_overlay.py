@@ -68,6 +68,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
             return;
         File newContent = new File(resolvedFile.getParentFile(), "." + resolvedFile.getName() + ".part");
         try {
+            long bytes = 0;
             try (InputStream inputStream = new FileInputStream(mTempFile)) {
                 int len = inputStream.available();
                 if (len <= 0)
@@ -77,6 +78,7 @@ class AquaWordIntegrationTests(unittest.TestCase):
                     int length;
                     while ((length = inputStream.read(buffer)) != -1) {
                         outputStream.write(buffer, 0, length);
+                        bytes += length;
                     }
                     outputStream.flush();
                     outputStream.getFD().sync();
