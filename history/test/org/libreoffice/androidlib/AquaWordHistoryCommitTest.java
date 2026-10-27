@@ -35,6 +35,7 @@ public final class AquaWordHistoryCommitTest {
             testWritebackLeasePinsSnapshotDuringRetention(new File(root, "writeback-lease"));
             testRestoreStagesBeforeOpeningProvider(new File(root, "restore-staging"));
             testRestoreReportsStagingCleanupFailure(new File(root, "restore-cleanup"));
+            testRestoreRemovesDanglingStagingSymlink(new File(root, "restore-dangling-link"));
         } finally {
             deleteRecursively(root);
         }
@@ -425,6 +426,50 @@ public final class AquaWordHistoryCommitTest {
         deleteRecursively(residue[0]);
         check(!residue[0].exists(), "could not clean deterministic residue fixture");
         System.out.println("PASS: failed recovery staging cleanup is reported as suppressed without opening destination");
+    }
+
+    /**
+     * File.exists() follows symlinks and returns false for a dangling link.
+     * Cleanup must still unlink that path instead of silently leaving it behind.
+     */
+    private static void testRestoreRemovesDanglingStagingSymlink(File root) throws Exception {
+        check(root.mkdirs() || root.isDirectory(), "could not create dangling-link fixture");
+        byte[] expected = "dangling staging link — مرحبا".getBytes("UTF-8");
+        AquaWordHistory.Snapshot snapshot = AquaWordHistory.capture(
+                root, new ByteArrayInputStream(expected), "dangling.docx",
+                "content://test/provider/dangling-stage", "saved");
+        final boolean[] openerCalled = {false};
+        final boolean[] symlinkCreated = {false};
+        final File[] stagedPath = {null};
+        IOException restoreFailure = null;
+        try {
+            AquaWordHistory.restoreToDestination(snapshot, () -> {
+                openerCalled[0] = true;
+                return new ByteArrayOutputStream();
+            }, staged -> {
+                stagedPath[0] = staged;
+                check(staged.delete(), "could not replace staging file with dangling link");
+                try {
+                    Files.createSymbolicLink(staged.toPath(),
+                            new File(root, "target-that-does-not-exist.bin").toPath());
+                    symlinkCreated[0] = true;
+                } catch (IOException | UnsupportedOperationException | SecurityException unavailable) {
+                    throw new IOException("SYMLINK_FIXTURE_UNAVAILABLE", unavailable);
+                }
+            });
+        } catch (IOException expectedFailure) {
+            restoreFailure = expectedFailure;
+        }
+
+        if (!symlinkCreated[0]) {
+            System.out.println("SKIP: host does not permit a dangling symlink cleanup fixture");
+            return;
+        }
+        check(restoreFailure != null, "restore accepted a dangling staging symlink");
+        check(!openerCalled[0], "destination opener ran for a dangling staging symlink");
+        check(stagedPath[0] != null && !Files.isSymbolicLink(stagedPath[0].toPath()),
+                "dangling staging symlink was not removed during cleanup");
+        System.out.println("PASS: dangling recovery staging symlink is removed even when File.exists() is false");
     }
 
     private static ByteArrayInputStream bytes(String value) throws IOException {
