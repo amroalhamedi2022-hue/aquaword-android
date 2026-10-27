@@ -645,3 +645,15 @@
 - **ما زال NOT TESTED:** مزود حقيقي يرفض `wt` بـ`IllegalArgumentException` ويقبل `rwt`، ومزود يرفض الوضعين، دورة تحرير وحفظ وإعادة فتح DOCX عربي/إنجليزي، تصدير PDF والطباعة على Android، والقبول على Xiaomi Pad 5.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE** لعدم توفر موصل كتابة Google Docs/Drive في بيئة الأتمتة؛ لم يُحدَّث المستند المحدد ولم ندّع نجاح المزامنة.
 - **نقطة الاستئناف:** متابعة نفس `M-NATIVE-01`، ثم إثبات السلوك على مزود Android حقيقي قبل إغلاق بوابات SAF/Writer. يبقى PR #7 Draft؛ لا دمج ولا تعديل لـ`main`.
+
+
+## 2026-10-27 — SAF fallback parity for restore and blank-document creation
+
+- **Milestone:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` remains **OPEN**.
+- **Production change:** `scripts/apply_to_collabora.py` now treats `IllegalArgumentException` from `ContentResolver.openOutputStream(uri, "wt")` as a rejected mode in both recovery restore and new-document creation, then tries explicit `rwt`. This aligns those two paths with the existing native DOCX save and PDF export fallback. No ambiguous `w` fallback was introduced.
+- **Regression coverage:** `tests/test_overlay.py` asserts that both generated Java paths catch `FileNotFoundException | UnsupportedOperationException | IllegalArgumentException`, keep the explicit `rwt` fallback, and do not use plain `w`. These are overlay/source-contract tests, not proof of behavior on a real Android provider.
+- **Build decision:** no APK build. The question is whether the overlay emits the complete exception/fallback contract in both code paths; the source-contract suite directly checks that. A native build would not prove real ContentProvider behavior.
+- **Status before CI:** code and regression changes committed to the feature branch; exact-head CI must pass before these requirements are marked PASS.
+- **Still NOT TESTED:** an actual SAF provider throwing `IllegalArgumentException` for `wt` and accepting `rwt`; provider rejection of both modes; real recovery restore and blank-document creation; Android install/launch; native Writer Arabic/English edit-save-cold-reopen; print/PDF; Xiaomi Pad 5 visual/performance acceptance.
+- **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**; no Google Docs/Drive write connector is exposed in this runtime, so the specified document was not updated and no sync success is claimed.
+- **Resume:** continue `M-NATIVE-01`; keep PR #7 Draft/open and `main` unchanged. Require exact-head source/recovery/integration CI and then real Android provider/device evidence before closing the milestone.
