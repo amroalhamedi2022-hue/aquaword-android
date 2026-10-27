@@ -293,16 +293,16 @@ def patch_native_saf_saveback(path: Path) -> bool:
     if direct.count(staging_declaration) != 1:
         raise PatchError('Upstream local save staging declaration changed')
     direct = direct.replace(staging_declaration, '        File newContent = null;', 1)
-    try_anchor = '        try {\\n            long bytes = 0;'
+    try_anchor = '        try {\n            long bytes = 0;'
     if direct.count(try_anchor) != 1:
         raise PatchError('Upstream local save try/byte-count anchor changed')
     direct = direct.replace(try_anchor,
-        '        try {\\n            newContent = File.createTempFile(".aquaword-", ".part", resolvedFile.getParentFile());\\n            long bytes = 0;', 1)
+        '        try {\n            newContent = File.createTempFile(".aquaword-", ".part", resolvedFile.getParentFile());\n            long bytes = 0;', 1)
     # A failed createTempFile leaves newContent null; cleanup must not mask the
     # original write error with a NullPointerException.
-    direct = direct.replace('            newContent.delete();\\n',
-        '            if (newContent != null && newContent.exists() && !newContent.delete())\\n'
-        '                Log.w(TAG, "Unable to remove failed local save staging file: " + newContent);\\n')
+    direct = direct.replace('            newContent.delete();\n',
+        '            if (newContent != null && newContent.exists() && !newContent.delete())\n'
+        '                Log.w(TAG, "Unable to remove failed local save staging file: " + newContent);\n')
     direct = direct.replace('        final File resolvedFile = mResolvedFile;\n', '', 1)
     direct = direct.replace('            return;', '            return false;')
     # Successful copy and rename is the only path allowed to acknowledge SAVE.
