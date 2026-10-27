@@ -888,7 +888,7 @@ def patch_history_activity(path: Path) -> bool:
                             OutputStream opened;
                             try {
                                 opened = getContentResolver().openOutputStream(target, "wt");
-                            } catch (java.io.FileNotFoundException | UnsupportedOperationException rejected) {
+                            } catch (java.io.FileNotFoundException | UnsupportedOperationException | IllegalArgumentException rejected) {
                                 Log.w(LOGTAG, "Restore provider rejected wt; trying rwt", rejected);
                                 opened = null;
                             }
@@ -975,7 +975,7 @@ def patch_async_new_document_creation(path: Path) -> bool:
                 OutputStream opened;
                 try {
                     opened = getContentResolver().openOutputStream(uri, "wt");
-                } catch (java.io.FileNotFoundException | UnsupportedOperationException rejected) {
+                } catch (java.io.FileNotFoundException | UnsupportedOperationException | IllegalArgumentException rejected) {
                     Log.w(LOGTAG, "Provider rejected wt for new document; trying rwt", rejected);
                     opened = null;
                 }
