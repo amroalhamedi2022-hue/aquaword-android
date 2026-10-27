@@ -61,7 +61,7 @@ public final class AquaWordHistory {
         synchronized (AquaWordHistory.class) {
             Integer active = ACTIVE_CAPTURE_WRITES.get(key);
             if (active == null) return;
-            if (active <= 1) unregisterActiveCaptureWrite(key);
+            if (active <= 1) ACTIVE_CAPTURE_WRITES.remove(key);
             else ACTIVE_CAPTURE_WRITES.put(key, active - 1);
         }
     }
@@ -1042,7 +1042,7 @@ public final class AquaWordHistory {
             if (!ready) {
                 synchronized (AquaWordHistory.class) {
                     if (created) staged.delete();
-                    ACTIVE_CAPTURE_WRITES.remove(key);
+                    unregisterActiveCaptureWrite(key);
                 }
             }
         }
