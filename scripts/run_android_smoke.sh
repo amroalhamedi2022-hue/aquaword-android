@@ -12,6 +12,7 @@ MIME="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 mkdir -p "$ARTIFACTS"
 adb wait-for-device
 adb shell getprop ro.build.version.release | tee "$ARTIFACTS/android-version.txt"
+adb shell getprop ro.build.version.sdk | tr -d '\r' | tee "$ARTIFACTS/android-api-level.txt"
 adb shell getprop ro.product.cpu.abilist | tr -d '\r' | tee "$ARTIFACTS/android-abis.txt"
 # Do not assume x86_64 emulators can load an ARM64-only LibreOffice engine.
 # Google API images may advertise native ARM translation; check, don't guess.
@@ -227,7 +228,7 @@ def proof(requirement, files, method, observed):
       "result":"PASS",
       "tester":"GitHub Actions Android runtime harness (automated; NOT a human reviewer)",
       "device_class":"emulator",
-      "device":"Android API 35 emulator; advertised ABIs: " + (root/"android-abis.txt").read_text().strip(),
+      "device":"Android API " + (root/"android-api-level.txt").read_text().strip() + " emulator; Android release " + (root/"android-version.txt").read_text().strip() + "; advertised ABIs: " + (root/"android-abis.txt").read_text().strip(),
       "method":method,
       "observed":observed,
       "time_utc":now,
