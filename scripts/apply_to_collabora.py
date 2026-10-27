@@ -339,7 +339,7 @@ def patch_native_saf_saveback(path: Path) -> bool:
             OutputStream opened;
             try {
                 opened = getContentResolver().openOutputStream(destination, "wt");
-            } catch (FileNotFoundException | UnsupportedOperationException noTruncateMode) {
+            } catch (FileNotFoundException | UnsupportedOperationException | IllegalArgumentException noTruncateMode) {
                 Log.w(TAG, "Provider rejected wt; trying explicit rwt truncate mode", noTruncateMode);
                 opened = null;
             }
@@ -459,7 +459,7 @@ def patch_native_export_writeback(path: Path) -> bool:
                                 try {
                                     destination = getContentResolver().openOutputStream(
                                             exportTarget, "wt");
-                                } catch (FileNotFoundException | UnsupportedOperationException unsupportedMode) {
+                                } catch (FileNotFoundException | UnsupportedOperationException | IllegalArgumentException unsupportedMode) {
                                     destination = getContentResolver().openOutputStream(exportTarget, "rwt");
                                 }
                                 if (destination == null)
