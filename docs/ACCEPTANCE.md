@@ -263,3 +263,9 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **PASS within the failed verification step:** ZIP integrity and scripts/verify_native_apk.py reported arm64-v8a; the packaged native library was 198,019,656 bytes with SHA-256 ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2. APK SHA-256 printed by the verifier: 7bc4818d200c8590859300adc5635857576e752a6abba9226ef82bff20481bec. apksigner reported v2 signature verification true and printed a certificate SHA-256 digest.
 - **FAIL — CI verifier false negative:** the workflow required the literal text 'Signer #1 certificate SHA-256 digest:' while the installed apksigner printed 'V2 Signer: certificate SHA-256 digest:'. The step exited before package-ID/template assertions could be confirmed. No artifact was retained; the run's artifact list is empty. The logged SHA is evidence from the runner, not a downloadable APK or release deliverable.
 - Corrected the workflow to accept both supported apksigner labels and added a source-contract regression. This fix is not itself a native build retry; source CI must pass first. Any later native attempt must answer whether the corrected verification gate completes and a downloadable artifact is retained. Android install/launch and all device-level gates remain NOT TESTED.
+
+
+### 2026-10-27 — Source-test contract correction
+
+- The first Fast Source run after the verifier fix failed only because an older test still asserted the obsolete literal 'Signer #1 certificate SHA-256 digest:'. The new regression for both apksigner labels passed in that same run.
+- Updated the older test to assert the new dual-format grep contract. Re-run Fast Source and Integration on the new exact commit before considering the verifier fix accepted.

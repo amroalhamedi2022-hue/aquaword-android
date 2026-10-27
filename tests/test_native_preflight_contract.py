@@ -139,7 +139,7 @@ class NativePreflightContractTests(unittest.TestCase):
         verify = '"$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$signature_report"'
         self.assertIn(verify, workflow)
         self.assertIn("Verified using v2 scheme (APK Signature Scheme v2): true", workflow)
-        self.assertIn("Signer #1 certificate SHA-256 digest:", workflow)
+        self.assertIn("grep -Eq '^(Signer #[0-9]+ certificate SHA-256 digest:|V2 Signer: certificate SHA-256 digest:)'", workflow)
         self.assertIn("output/*.signature.txt", workflow)
         self.assertLess(workflow.index(verify),
                         workflow.index("- name: Record real APK metadata and source provenance"))
