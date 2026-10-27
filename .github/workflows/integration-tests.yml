@@ -107,6 +107,7 @@ jobs:
           mkdir -p build/history-classes
           javac -encoding UTF-8 -d build/history-classes \
             history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java \
+            history/src/org/libreoffice/androidlib/AquaWordSafOutput.java \
             history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java \
             history/test/org/libreoffice/androidlib/AquaWordHistoryCommitTest.java \
             history/src/org/libreoffice/androidapp/ui/AquaWordPdfPreflight.java \
