@@ -493,3 +493,17 @@
 - This source-only change does not authorize another native build; the previous one-shot diagnostic attempt failed at the old verifier gate and the existing request explicitly prohibits automatic retries.
 - Android install/launch, real SAF provider failure/recovery, native Writer Arabic/English edit-save-cold-reopen, print/PDF, and Xiaomi Pad 5 remain NOT TESTED.
 - Google Drive AquaWord — HANDOFF sync: FAILED / NOT AVAILABLE in this runtime; no Google Docs/Drive write connector is exposed, so the specified document was not updated.
+
+
+## 2026-10-27 — Executable apksigner gate: exact-head CI result
+
+- **Code/test SHA:** 91f4ae27e2c45f1472c1e88b43a03a1533171fc9.
+- **PASS — Fast Source + SAF Contract:** [run #40451699143](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40451699143). All 132 Python tests passed in 5.227 s; the pinned-source and native overlay preflight completed.
+- **PASS — Integration:** [run #40451699170](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40451699170). All 132 Python tests passed in 4.033 s; desktop LibreOffice DOCX import/re-save, snapshot-history JVM regressions, PDF preflight tests and pinned Collabora overlay smoke passed. This remains host/desktop/JVM evidence, not Android device acceptance.
+- **PASS — Recovery Core JVM-only:** [run #40451699130](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40451699130).
+- **Superseded failures, not counted as passes:** [Fast Source #40451553723](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40451553723) exposed double-escaped parser/test newlines; [Fast Source #40451612303](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40451612303) then exposed an unknown-label fixture that did not match the parser's case-sensitive detection. Both were corrected, and the exact-head runs above passed.
+- The new executable report parser requires apksigner's v2 verification result to be explicitly true and a syntactically valid 32-byte SHA-256 certificate digest in a supported signer-label format. It parses the report; the preceding apksigner process and its exit status remain the actual signature-verification step.
+- **Build decision:** no native rebuild in this round. The previous one-shot diagnostic failed at its old report gate, and the branch's explicit request says not to retry that diagnostic automatically. The source/test fix is now validated without consuming another multi-hour runner.
+- **Still NOT TESTED:** current-source native APK download/retention, install/launch, real Android SAF provider failure/truncation and recovery, Android process death, Writer Arabic/English edit-save-cold-reopen, print/PDF runtime, and Xiaomi Pad 5 visual/performance acceptance.
+- **Milestone:** M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip remains OPEN. PR #7 remains Draft/open; main was not changed.
+- **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE; this runtime exposes no Google Docs/Drive write connector, so the specified Drive document was not modified.
