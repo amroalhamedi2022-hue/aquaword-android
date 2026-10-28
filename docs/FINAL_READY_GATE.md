@@ -1,6 +1,6 @@
 # AquaWord — Final-Ready gate (source-only)
 
-Status: **BLOCKED**. Do not create an approval file or run native packaging while any acceptance requirement is incomplete.
+Status: **FINAL RELEASE BLOCKED**. Do not create the Final-Ready approval file or run final-release packaging while any acceptance requirement is incomplete. A purpose-bound internal diagnostic build is allowed only under the dated policy below when source tests cannot answer a specific integration/device question; it must be labeled diagnostic, documented with exact SHA/results, and never treated as final acceptance.
 
 
 ## Diagnostic build policy — 24 October 2026
