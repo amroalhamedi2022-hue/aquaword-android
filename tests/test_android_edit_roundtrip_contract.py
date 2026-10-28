@@ -35,7 +35,7 @@ class AndroidEditRoundtripContractTests(unittest.TestCase):
             run_body.index("evaluate_on_real_editor(port, EDIT_EXPRESSION)"),
         )
 
-        self.assertIn('"EDITMODE on" in latest', SOURCE)
+        self.assertIn('"postMobileMessage: EDITMODE on" in latest', SOURCE)
         self.assertIn('"setviewreadonly value=false" in latest', SOURCE)
         self.assertIn("Native Writer did not confirm edit mode", SOURCE)
 
