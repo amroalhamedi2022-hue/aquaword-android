@@ -98,7 +98,8 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
           disable-linux-hw-accel: false
           script: |
-            set -euo pipefail
+            # The action executes this inline script with /usr/bin/sh, not bash.
+            set -eu
             adb shell getprop ro.product.cpu.abilist | tee smoke-evidence/emulator-abis.txt
             bash scripts/run_android_smoke.sh "$AQUAWORD_APK" "$PWD/smoke-evidence"
 

@@ -505,3 +505,12 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Build decision:** no new APK was built. Existing diagnostic APK verified at source `df65aa2d92881f34160eadbbfcc0a96dd5f859ab`, SHA-256 `6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc`, artifact ID `12785090689` from run `40613885226`. It predates current source fixes and remains baseline-only.
 - **Next:** one corrected runtime attempt is triggered by the workflow change. If boot/translation fails, retain exact logs and leave runtime acceptance NOT TESTED.
 - **Google Drive Handoff:** FAILED / NOT AVAILABLE; no Docs/Drive write connector is exposed, and the specified Drive document was not updated.
+
+
+## 2026-10-28 — Second runtime harness failure (emulator boot passed; app script did not start)
+
+- **Run:** [#40631390483](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40631390483) — **FAIL before APK installation**. The API 35 x86_64 emulator and KVM setup succeeded; Android reported boot complete. The inline script then failed immediately because `android-emulator-runner` invokes its `script:` input with `/usr/bin/sh`, where `set -o pipefail` is not supported. The app smoke script was never called; this is a harness shell mismatch, not an app failure.
+- **Fix:** the action's inline script now uses POSIX-compatible `set -eu`; `scripts/run_android_smoke.sh` itself remains Bash and retains `set -euo pipefail`. Added a source regression test to prevent reintroducing the unsupported shell option in the inline block.
+- **Next:** one more targeted run uses the same existing APK and API 35 bridge-capable emulator; no app build is repeated. The runtime script will verify `libndk_translation.so` and record the mode before install. If the bridge is missing, it will fail closed without attempting to launch an ARM64-only package.
+- **Limits:** no app install/launch/edit/save/cold-reopen was exercised in this failed run. Native ARM64 hardware, physical Xiaomi Pad 5, user-selected SAF providers and print/PDF remain NOT TESTED.
+- **Handoff:** Google Drive write connector remains unavailable; no successful sync is claimed.

@@ -729,3 +729,11 @@
 - **لم يُبنَ APK جديد.** استُخدمت الحزمة التشخيصية الموجودة بعد التحقق من SHA `6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc`، مصدرها `df65aa2d92881f34160eadbbfcc0a96dd5f859ab`، Artifact ID `12785090689`. هي أقدم من إصلاحات المصدر الحالية، وتظل baseline فقط.
 - **نقطة الاستئناف:** تشغيل محاولة واحدة بعد تصحيح بنية المحاكي؛ إذا فشل الإقلاع أو الجسر تُحفظ السجلات وتبقى بوابات runtime بحالة NOT TESTED دون ادعاء نجاح.
 - **Google Drive Handoff:** FAILED / NOT AVAILABLE؛ لا تتوفر أداة كتابة Docs/Drive ولم يُحدّث المستند المحدد. يبقى M-NATIVE-01 مفتوحًا وPR #7 Draft، بلا دمج أو تعديل لـmain.
+
+
+## 2026-10-28 — تصحيح ثاني لبيئة runtime smoke
+
+- **Run:** [#40631390483](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40631390483) — **FAIL قبل تثبيت APK**. نجح إعداد KVM وإقلاع محاكي API 35 x86_64، لكن مدخل `script:` في action نُفذ عبر `/usr/bin/sh` ورفض `set -o pipefail`؛ لم يُستدعَ سكربت اختبار التطبيق. هذا خطأ في غلاف الاختبار، وليس فشلًا في AquaWord.
+- **الإصلاح:** استبدال الأمر داخل مدخل action فقط بـ `set -eu` المتوافق مع POSIX؛ يظل `scripts/run_android_smoke.sh` سكربت Bash ويحتفظ بـ `set -euo pipefail`. أضيف اختبار مصدر لمنع عودة الخطأ.
+- **نقطة الاستئناف:** محاولة محددة أخرى بنفس APK الموجود ومحاكي API 35؛ لا بناء جديد. يتحقق السكربت من `libndk_translation.so` قبل التثبيت، وإلا يرفض الاختبار بأمان.
+- **النتيجة الحالية:** لم يحدث تثبيت أو تشغيل للتطبيق أو تحرير/حفظ/إعادة فتح في هذه المحاولة. Xiaomi Pad 5 وSAF الحقيقي والطباعة/PDF ما زالت NOT TESTED. مزامنة Google Drive Handoff ما زالت FAILED / NOT AVAILABLE لغياب موصل الكتابة.

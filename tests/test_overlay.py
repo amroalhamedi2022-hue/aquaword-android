@@ -1193,6 +1193,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('api-level: 35',workflow)
         self.assertIn('arch: x86_64',workflow)
         self.assertIn('disable-linux-hw-accel: false',workflow)
+        self.assertIn('script: |\n            # The action executes this inline script with /usr/bin/sh, not bash.\n            set -eu\n',workflow)
+        self.assertNotIn('script: |\n            set -euo pipefail\n',workflow)
         self.assertNotIn('arch: arm64-v8a',workflow)
         self.assertIn('ro.dalvik.vm.native.bridge',smoke)
         self.assertIn('libndk_translation.so',smoke)

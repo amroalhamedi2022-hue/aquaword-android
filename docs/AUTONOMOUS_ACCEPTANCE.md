@@ -544,3 +544,17 @@ This entry supersedes the earlier 2026-10-28 text above that said the diagnostic
 - M-NATIVE-01 remains OPEN. The prior API 30 ARM64 emulator run failed before boot because QEMU2 cannot boot an ARM64 guest on the x86_64 hosted runner; no app-level runtime test occurred.
 - The workflow now uses API 35 x86_64 Google APIs with a verified Google ARM64 native bridge. A translated pass will be reported as translated runtime only, never native ARM64 hardware acceptance.
 - The diagnostic APK is an older baseline; current source fixes and physical Xiaomi Pad 5 acceptance remain open.
+
+
+## 2026-10-28 — Second runtime harness failure (emulator boot passed; app script did not start)
+
+- **Run:** [#40631390483](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40631390483) — **FAIL before APK installation**. The API 35 x86_64 emulator and KVM setup succeeded; Android reported boot complete. The inline script then failed immediately because `android-emulator-runner` invokes its `script:` input with `/usr/bin/sh`, where `set -o pipefail` is not supported. The app smoke script was never called; this is a harness shell mismatch, not an app failure.
+- **Fix:** the action's inline script now uses POSIX-compatible `set -eu`; `scripts/run_android_smoke.sh` itself remains Bash and retains `set -euo pipefail`. Added a source regression test to prevent reintroducing the unsupported shell option in the inline block.
+- **Next:** one more targeted run uses the same existing APK and API 35 bridge-capable emulator; no app build is repeated. The runtime script will verify `libndk_translation.so` and record the mode before install. If the bridge is missing, it will fail closed without attempting to launch an ARM64-only package.
+- **Limits:** no app install/launch/edit/save/cold-reopen was exercised in this failed run. Native ARM64 hardware, physical Xiaomi Pad 5, user-selected SAF providers and print/PDF remain NOT TESTED.
+- **Handoff:** Google Drive write connector remains unavailable; no successful sync is claimed.
+
+
+## Current M-NATIVE-01 checkpoint
+- Run #40631390483 is an infrastructure/harness FAIL before APK install: emulator booted, but the action's inline `script:` ran under POSIX `sh` and rejected Bash-only `set -o pipefail`. No application-level assertion ran.
+- Corrected inline script uses `set -eu`; Bash test logic remains in `scripts/run_android_smoke.sh`. The one-shot is retriggered only after this harness change, using the existing verified APK; no rebuild.
