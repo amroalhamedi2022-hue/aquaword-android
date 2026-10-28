@@ -39,7 +39,7 @@ class AndroidEditRoundtripContractTests(unittest.TestCase):
         state_at = enter_body.index("evaluate_on_real_editor(9223, READ_ONLY_STATE_EXPRESSION)")
         self.assertLess(click_at, wait_at)
         self.assertLess(wait_at, state_at)
-        self.assertIn("state.get('readOnly') is not False", SOURCE)
+        self.assertIn('state.get("readOnly") is not False', SOURCE)
         self.assertIn('call("shell", "input", "tap"', SOURCE)
 
         enter_at = run_body.index("enter_edit_mode(directory)")
