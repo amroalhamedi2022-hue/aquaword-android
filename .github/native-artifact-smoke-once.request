@@ -1,26 +1,18 @@
-One-shot request (2026-10-28, Edit-mode-aware runtime attempt): reuse the existing ARM64 diagnostic APK; do not rebuild.
+One-shot request — 2026-10-28, edit-mode/viewport harness corrected (NO APK rebuild).
 
-Artifact run: 40613885226
-Artifact ID: 12785090689
-Artifact name: aquaword-native-diagnostic-df65aa2d92881f34160eadbbfcc0a96dd5f859ab
-Build source SHA: df65aa2d92881f34160eadbbfcc0a96dd5f859ab
-Expected APK SHA-256: 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc
+Existing diagnostic APK:
+- Native build run: 40613885226
+- Artifact ID: 12785090689
+- Source SHA: df65aa2d92881f34160eadbbfcc0a96dd5f859ab
+- Expected APK SHA-256: 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc
 
-Previous attempts:
-- Run 40626355489: ARM64 guest unsupported on x86_64 QEMU host; app never installed.
-- Run 40631390483: emulator booted, but action inline script used Bash-only pipefail under /usr/bin/sh; app never installed.
-- Run 40631716803: API 35 x86_64 emulator and native bridge worked; app installed, real Writer Activity/document layer/Focus Mode/16:10 viewport passed. Edit/save assertion failed because Writer remained in Viewing mode (EDITMODE off); no cold-reopen assertion ran.
+Prior runtime attempts:
+- 40626355489: ARM64 guest unsupported on x86_64; no app boot.
+- 40631390483: shell mismatch; app script never started.
+- 40631716803: real Writer opened but edit/save was attempted in Viewing mode; no cold reopen.
+- The harness now fixes the viewport regex, taps #mobile-edit-button, verifies native edit mode before UNO, checks saved DOCX bytes and performs force-stop/cold-reopen.
 
-Current test question: with the corrected harness, does tapping the visible Edit FAB produce native edit-mode evidence, then does a real UNO text insertion survive native save, produce changed DOCX bytes with all existing Arabic/table/image content intact, and survive force-stop/cold-reopen?
-
-The harness records and checks the viewport, taps Edit, requires "EDITMODE on" or "setviewreadonly value=false" in native logs before issuing UNO, then validates actual DOCX bytes and cold reopen. A pass means translated ARM64 runtime on x86_64, NOT native ARM64 CPU or Xiaomi Pad 5 acceptance. Real user-selected SAF providers and print/PDF remain untested. No new APK build is authorized.
-
-
-One-shot request — 2026-10-28, actual mobile Edit control + native mode acknowledgement (NO APK rebuild)
-
-- Source/test checkpoint: 4f4c612e5acc18f7faa2f02e81423a8ec8a5b40a. Fast Source + SAF Contract, Recovery Core, and Integration Tests all PASS on this exact head (137 source/integration tests per source suite; JVM recovery suite PASS).
-- The previous runtime run 40631716803 installed the existing APK and rendered the Arabic/table/image fixture, but failed because the harness issued UNO mutations while the document remained in Viewing mode. Reviewing the saved script confirmed it never clicked the visible Edit button; a successful JavaScript call alone was not proof of editability.
-- Harness fix: click Collabora's real #mobile-edit-button, clear startup's stale EDITMODE-off logs, require native LOActivity confirmation ("postMobileMessage: EDITMODE on" or "setviewreadonly value=false"), then and only then issue UNO edit/save. Preserve byte-level DOCX content checks and force-stop/cold-reopen verification. New evidence files record the click, native acknowledgement, and viewport geometry.
-- Test question: does this corrected harness complete actual Writer edit -> save -> content-preserving DOCX bytes -> force-stop/cold-reopen using the already-built diagnostic APK?
-- Why source tests are insufficient: only the Android runtime can prove the visible control switches the native editor from read-only to editable and that the saved package contains the actual inserted text.
-- Reuse artifact run 40613885226 / artifact 12785090689; expected APK SHA-256 remains 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc. No new APK build is authorized. A translated ARM64 guest on x86_64 is integration evidence, not physical ARM64/Xiaomi Pad 5 acceptance. Real user SAF providers, print/PDF, and target-device UI remain separate gates.
+Test question: does the corrected harness now complete a real Writer edit-save-cold-reopen on the existing diagnostic APK?
+Why source tests are insufficient: only Android runtime can establish the visible Edit control transition and persisted bytes across a fresh process.
+Scope: translated ARM64 on the free x86_64 API 35 Google APIs emulator only. No native ARM64 CPU, physical Xiaomi Pad 5, real user SAF provider, print/PDF, or current-source build acceptance is implied.
+No APK build is authorized for this attempt.
