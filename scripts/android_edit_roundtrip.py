@@ -26,30 +26,28 @@ FILE = "files/aquaword-research-ar.docx"
 SENTINEL = "AQUAWORD_ANDROID_SAVE_ROUNDTRIP_2026"
 
 # Sending a UNO command is not proof that it actually changed or saved a file.
-CLICK_EDIT_EXPRESSION = r"""(() => {
+CLICK_READ_ONLY_STATE_EXPRESSION = r"""(() => {
     const editor = window.app && window.app.map;
     if (!editor || editor.getDocType() !== 'text' || !editor._docLayer) {
+        return JSON.stringify({target: false, readOnly: null, reason: 'Writer edit layer unavailable'});
+    }
+    if (typeof editor.isReadOnlyMode !== 'function') {
+        return JSON.stringify({target: true, readOnly: null, reason: 'Collabora read-only state API unavailable'});
+    }
+    return JSON.stringify({target: true, readOnly: editor.isReadOnlyMode()});
+})()"""
+
+GO_TO_END_EXPRESSION = r"""(() => {
+    const editor = window.app && window.app.map;
+    if (!editor || editor.getDocType() !== 'text' ||
+        !editor._docLayer || typeof editor.sendUnoCommand !== 'function') {
         return JSON.stringify({target: false, issued: false, reason: 'Writer edit layer unavailable'});
     }
-    // Collabora's real mobile view-mode control. Do not send UNO edits while
-    // the document is still read-only: those commands can be silently ignored.
-    const button = document.getElementById('mobile-edit-button');
-    if (!button) {
-        return JSON.stringify({target: true, issued: false,
-            reason: 'Collabora mobile edit button #mobile-edit-button not found'});
+    if (typeof editor.isReadOnlyMode === 'function' && editor.isReadOnlyMode()) {
+        return JSON.stringify({target: true, issued: false, reason: 'Writer is still read-only'});
     }
-    const style = getComputedStyle(button);
-    const visible = style.display !== 'none' && style.visibility !== 'hidden' &&
-                    button.getClientRects().length > 0;
-    if (!visible) {
-        return JSON.stringify({target: true, issued: false,
-            reason: 'Collabora mobile edit button is not visible',
-            display: style.display, visibility: style.visibility,
-            outerHTML: button.outerHTML.slice(0, 500)});
-    }
-    button.click();
-    return JSON.stringify({target: true, issued: true,
-        editButtonClicked: true, buttonId: button.id});
+    editor.sendUnoCommand('.uno:GoToEndOfDoc');
+    return JSON.stringify({target: true, issued: true, command: 'GoToEndOfDoc'});
 })()"""
 
 EDIT_EXPRESSION = r"""(() => {
@@ -58,12 +56,30 @@ EDIT_EXPRESSION = r"""(() => {
         !editor._docLayer || typeof editor.sendUnoCommand !== 'function') {
         return JSON.stringify({target: false, issued: false, reason: 'Writer edit layer unavailable'});
     }
-    editor.sendUnoCommand('.uno:GoToEndOfDoc');
+    if (typeof editor.isReadOnlyMode === 'function' && editor.isReadOnlyMode()) {
+        return JSON.stringify({target: true, issued: false, reason: 'Writer is still read-only'});
+    }
     editor.sendUnoCommand('.uno:InsertText', {
         Text: {type: 'string', value: 'AQUAWORD_ANDROID_SAVE_ROUNDTRIP_2026'}
     });
-    editor.sendUnoCommand('.uno:Save');
-    return JSON.stringify({target: true, issued: true, commands: ['GoToEndOfDoc', 'InsertText', 'Save']});
+    return JSON.stringify({target: true, issued: true, command: 'InsertText'});
+})()"""
+
+SAVE_EXPRESSION = r"""(() => {
+    const editor = window.app && window.app.map;
+    if (!editor || editor.getDocType() !== 'text' ||
+        !editor._docLayer || typeof editor.save !== 'function') {
+        return JSON.stringify({target: false, issued: false, reason: 'Native mobile save API unavailable'});
+    }
+    if (typeof editor.isReadOnlyMode === 'function' && editor.isReadOnlyMode()) {
+        return JSON.stringify({target: true, issued: false, reason: 'Writer is still read-only'});
+    }
+    // Use Collabora's mobile save path so LOActivity receives its native SAVE
+    // callback and performs the Android content:// writeback/checkpoint flow.
+    // Sending .uno:Save directly only saves the core document and bypasses
+    // the app-wrapper callback that this roundtrip is intended to test.
+    editor.save(false, false);
+    return JSON.stringify({target: true, issued: true, method: 'map.save(false,false)'});
 })()"""
 
 # Backward-compatible name used by existing source contract tests.
@@ -179,9 +195,15 @@ def enter_edit_mode(directory: Path) -> None:
         raise RuntimeError("Could not activate Collabora edit mode: " +
                            json.dumps(clicked, ensure_ascii=False))
     mode_log = wait_for_edit_mode(25)
+    state = evaluate_on_real_editor(9223, READ_ONLY_STATE_EXPRESSION)
+    (directory/"edit-mode-state.json").write_text(
+        json.dumps(state, indent=2)+"\n", encoding="utf-8")
+    if state.get("readOnly") is not False:
+        raise RuntimeError("Native edit-mode log arrived, but live Collabora map is not confirmed editable: " +
+                           json.dumps(state, ensure_ascii=False))
     # These are consumed by the receipt/audit stage; save both raw mode
     # acknowledgement and a screenshot taken only after edit mode is confirmed.
-    (directory/"edit-mode-logcat.txt").write_text(mode_log+"\\n", encoding="utf-8")
+    (directory/"edit-mode-logcat.txt").write_text(mode_log+"\n", encoding="utf-8")
     (directory/"edit-mode-screen.png").write_bytes(
         call("exec-out", "screencap", "-p", binary=True))
     mode_lines = [
@@ -190,8 +212,23 @@ def enter_edit_mode(directory: Path) -> None:
         and ("EDITMODE" in line or "setviewreadonly" in line)
     ]
     (directory/"edit-mode-confirmation.txt").write_text(
-        "\\n".join(mode_lines[-12:])+"\\n", encoding="utf-8")
+        "\n".join(mode_lines[-12:])+"\n", encoding="utf-8")
 
+
+def tap_document_canvas(directory: Path) -> dict:
+    """Give Writer a real Android pointer event so a text cursor has focus."""
+    geometry = (directory/"edit-mode-screen-geometry.txt").read_text(encoding="utf-8")
+    match = re.search(r"(\d+)x(\d+)", geometry)
+    if not match:
+        raise RuntimeError("Missing validated Android viewport before document tap")
+    width, height = int(match.group(1)), int(match.group(2))
+    # The QA fixture's page covers the viewport centre in both the portrait
+    # opening and 16:10 landscape smoke. This is a genuine ADB touch, not a
+    # synthetic DOM click, and the subsequent UNO command moves to document end.
+    x, y = width // 2, height // 2
+    call("shell", "input", "tap", str(x), str(y))
+    time.sleep(0.75)
+    return {"x": x, "y": y, "width": width, "height": height}
 
 def run(directory: Path, timeout: int) -> None:
     directory.mkdir(parents=True, exist_ok=True)
@@ -207,20 +244,38 @@ def run(directory: Path, timeout: int) -> None:
     call("forward", f"tcp:{port}", f"localabstract:webview_devtools_remote_{pid}")
     try:
         enter_edit_mode(directory)
-        issued = evaluate_on_real_editor(port, EDIT_EXPRESSION)
+        canvas_tap = tap_document_canvas(directory)
+        goto_end = evaluate_on_real_editor(port, GO_TO_END_EXPRESSION)
+        if goto_end.get("issued") is not True:
+            raise RuntimeError("Writer could not position the document cursor: " +
+                               json.dumps(goto_end, ensure_ascii=False))
+        time.sleep(0.5)
+        inserted = evaluate_on_real_editor(port, EDIT_EXPRESSION)
+        if inserted.get("issued") is not True:
+            raise RuntimeError("Writer rejected the QA text insertion: " +
+                               json.dumps(inserted, ensure_ascii=False))
+        time.sleep(1.0)
+        saved = evaluate_on_real_editor(port, SAVE_EXPRESSION)
+        receipt = {
+            "target": True,
+            "issued": saved.get("issued") is True,
+            "canvasTap": canvas_tap,
+            "cursor": goto_end,
+            "insert": inserted,
+            "save": saved,
+        }
         (directory/"edit-command.json").write_text(
-            json.dumps(issued, indent=2)+"\n", encoding="utf-8")
-        if issued.get("issued") is not True:
-            raise RuntimeError("Writer edit layer rejected UNO commands: " +
-                               json.dumps(issued, ensure_ascii=False))
+            json.dumps(receipt, indent=2)+"\n", encoding="utf-8")
+        if saved.get("issued") is not True:
+            raise RuntimeError("Writer native save API rejected the save request: " +
+                               json.dumps(saved, ensure_ascii=False))
     finally:
         subprocess.run(["adb", "forward", "--remove", f"tcp:{port}"],
                        stdout=subprocess.DEVNULL, check=False)
 
-    # Force the native lifecycle onPause save as a user would by switching apps.
-    # This is in addition to the regular .uno:Save command above.
-    call("shell", "input", "keyevent", "KEYCODE_HOME")
-
+    # Wait for the native Android SAVE callback/writeback while Writer remains
+    # foreground. Do not send HOME first: that can surface a slow launcher ANR
+    # and would confound whether the editor's explicit save completed.
     deadline=time.monotonic()+timeout
     last_error=None
     while time.monotonic()<deadline:
@@ -229,12 +284,20 @@ def run(directory: Path, timeout: int) -> None:
             if check_document(payload):
                 if hashlib.sha256(payload).hexdigest() == original_checksum:
                     raise AssertionError("DOCX saved bytes did not change")
+                saved_hash = hashlib.sha256(payload).hexdigest()
                 (directory/"roundtrip-hash.txt").write_text(
-                    hashlib.sha256(payload).hexdigest()+"\n", encoding="utf-8")
+                    saved_hash+"\n", encoding="utf-8")
+                # Now exercise the native pause/save lifecycle after explicit
+                # persistence has been proven, then compare the bytes again.
+                call("shell", "input", "keyevent", "KEYCODE_HOME")
+                time.sleep(2.0)
+                after_pause = call("exec-out", "run-as", PKG, "cat", FILE, binary=True)
+                if hashlib.sha256(after_pause).hexdigest() != saved_hash or not check_document(after_pause):
+                    raise AssertionError("DOCX changed or lost content after Android onPause")
                 (directory/"roundtrip-result.txt").write_text(
-                    "PASS: actual Android app-owned DOCX contains inserted UNO text after save.\n",
+                    "PASS: native Android save callback persisted inserted text; DOCX bytes and rich content survived onPause.\n",
                     encoding="utf-8")
-                print("PASS: real Android Writer edit/save persisted to DOCX.")
+                print("PASS: real Android Writer edit/native-save persisted to DOCX.")
                 return
             last_error="Sentinel not present in saved DOCX"
         except Exception as failure:
