@@ -23,12 +23,17 @@ class AndroidEditRoundtripContractTests(unittest.TestCase):
         self.assertIn(".uno:Save", edit_expression)
 
     def test_native_edit_mode_acknowledgement_is_required_before_uno(self):
+        enter_body = SOURCE.split("def enter_edit_mode(directory: Path) -> None:", 1)[1].split(
+            "def run(directory: Path, timeout: int) -> None:", 1
+        )[0]
         run_body = SOURCE.split("def run(directory: Path, timeout: int) -> None:", 1)[1]
-        click_at = run_body.index("evaluate_on_real_editor(port, CLICK_EDIT_EXPRESSION)")
-        wait_at = run_body.index("wait_for_edit_mode(min(timeout, 25))")
-        edit_at = run_body.index("evaluate_on_real_editor(port, EDIT_EXPRESSION)")
+        click_at = enter_body.index("evaluate_on_real_editor(9223, CLICK_EDIT_EXPRESSION)")
+        wait_at = enter_body.index("wait_for_edit_mode(25)")
         self.assertLess(click_at, wait_at)
-        self.assertLess(wait_at, edit_at)
+        self.assertLess(
+            run_body.index("enter_edit_mode(directory)"),
+            run_body.index("evaluate_on_real_editor(port, EDIT_EXPRESSION)"),
+        )
 
         self.assertIn('"EDITMODE on" in latest', SOURCE)
         self.assertIn('"setviewreadonly value=false" in latest', SOURCE)
