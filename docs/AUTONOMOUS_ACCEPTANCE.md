@@ -574,3 +574,7 @@ This entry supersedes the earlier 2026-10-28 text above that said the diagnostic
 ## Current M-NATIVE-01 runtime checkpoint
 - Run #40631716803 reached the API 35 emulator and real Writer Activity; native bridge verification, APK install, document-layer and Focus Mode checks, and 16:10 screenshot checks passed. It failed the edit/save assertion because the UI remained in Viewing mode (`EDITMODE off`, `setviewreadonly value=true`). This is not yet a confirmed save-path defect because the harness had not tapped the Edit FAB.
 - The harness now taps the real Edit FAB and requires native edit-mode log evidence before issuing UNO. Re-run the same existing artifact only; no build. Cold-reopen and save-persistence acceptance remain open.
+
+
+### Harness review correction before the next runtime attempt
+- Static review caught a doubled backslash in the viewport-size regex, which would have prevented parsing `wm size` output before tapping the Edit FAB. Corrected it to match decimal width/height values and added a source assertion for the regex. The smoke receipt now hashes the post-tap screenshot/log and explicit edit-mode confirmation. No runtime result is claimed for this correction until the next run.

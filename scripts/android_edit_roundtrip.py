@@ -102,7 +102,7 @@ def enter_edit_mode(directory: Path) -> None:
     parent smoke script; keep a portrait fallback for diagnostic reruns.
     """
     size_output = call("shell", "wm", "size").decode("utf-8", errors="replace")
-    dimensions = re.findall(r"(\\d+)x(\\d+)", size_output)
+    dimensions = re.findall(r"(\d+)x(\d+)", size_output)
     if not dimensions:
         raise RuntimeError("Cannot determine current Android viewport for Edit FAB")
     width, height = map(int, dimensions[-1])
@@ -127,7 +127,7 @@ def enter_edit_mode(directory: Path) -> None:
             f"Writer did not enter edit mode after tapping ({x},{y}) on {width}x{height}; "
             "no EDITMODE on / setviewreadonly=false evidence")
     (directory / "edit-mode-confirmation.txt").write_text(
-        f"PASS: edit mode confirmed by native log after tap ({x},{y}) on {width}x{height}.\\n",
+        f"PASS: edit mode confirmed by native log after tap ({x},{y}) on {width}x{height}.\n",
         encoding="utf-8")
 
 

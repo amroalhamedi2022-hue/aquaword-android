@@ -263,7 +263,7 @@ receipts=[
           "Chrome DevTools queried live Android WebView and clicked Focus Mode twice",
           "Focus Mode entered and exited; editor page remained visible"),
     proof("FILE-03",
-          ("edit-command.json","roundtrip-result.txt","original-docx-sha256.txt","roundtrip-hash.txt",
+          ("edit-command.json","edit-mode-screen.png","edit-mode-logcat.txt","edit-mode-confirmation.txt","roundtrip-result.txt","original-docx-sha256.txt","roundtrip-hash.txt",
            "reopened-writer-state.json","cold-reopened-document.docx","smoke-result.txt"),
           "UNO InsertText + native Save + read actual DOCX bytes + reopen",
           "Inserted QA text survived save to app-owned DOCX and Android reopen")

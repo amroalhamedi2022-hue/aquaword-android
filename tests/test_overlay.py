@@ -1204,6 +1204,8 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('def enter_edit_mode(directory: Path)',roundtrip)
         self.assertIn('postMobileMessage: EDITMODE on',roundtrip)
         self.assertIn('setviewreadonly value=false',roundtrip)
+        self.assertIn('re.findall(r"(\\d+)x(\\d+)"',roundtrip)
+        self.assertIn('edit-mode-confirmation.txt',roundtrip)
         self.assertIn('enter_edit_mode(directory)',roundtrip)
 
 if __name__=='__main__':

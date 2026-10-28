@@ -525,3 +525,7 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Build decision:** no APK rebuild. The same verified diagnostic APK remains baseline-only and predates current recovery source changes.
 - **Next:** one targeted runtime rerun after the test-harness fix. A pass must include persisted sentinel, changed DOCX SHA, cold-process reopen and the existing content checks; a UI-only pass is insufficient.
 - **Handoff:** Google Drive `AquaWord — HANDOFF` sync remains FAILED / NOT AVAILABLE; no Docs/Drive write connector is exposed.
+
+
+### Harness review correction before the next runtime attempt
+- Static review caught a doubled backslash in the viewport-size regex, which would have prevented parsing `wm size` output before tapping the Edit FAB. Corrected it to match decimal width/height values and added a source assertion for the regex. The smoke receipt now hashes the post-tap screenshot/log and explicit edit-mode confirmation. No runtime result is claimed for this correction until the next run.
