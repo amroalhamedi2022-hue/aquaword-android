@@ -586,3 +586,14 @@ These runs validate source/test contracts only. The one-shot translated runtime 
 - **NOT TESTED:** current-source Writer edit/save/DOCX SHA/cold-reopen; real SAF provider failure/truncation and recovery; process-death recovery; PDF export/print; physical Xiaomi Pad 5 visuals/performance.
 - **Handoff sync:** Google Drive `AquaWord — HANDOFF` remains **FAILED / NOT AVAILABLE** because no Google Docs/Drive write connector is exposed. The named document was not updated.
 - **Resume:** keep M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip **OPEN**, PR #7 **Draft**, and `main` untouched. Continue source review while waiting for a newly authorized runtime attempt; do not treat these green checks as runtime acceptance.
+
+
+### Superseding runtime checkpoint — 2026-10-28 11:17 UTC
+
+This entry supersedes the immediately preceding note that no further runtime attempt was authorized: a new, bounded authorization was committed at [80cc63d7388b1e8ab2e358c18f940d2e469e9a75](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/80cc63d7388b1e8ab2e358c18f940d2e469e9a75) after the landscape/Edit-FAB harness correction. It reuses existing APK artifact [#12797042192 from native run #40643360016](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40643360016), built at SHA `710691adb757c9580e5574307f39091e6d68aad4`; APK SHA-256 `25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736`. **No APK rebuild was performed or requested.**
+
+- Request-commit source CI: Fast Source [#40679256518 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679256518), Recovery Core [#40679256516 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679256516), Integration [#40679256600 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679256600).
+- Runtime acceptance is **NOT VERIFIED**: the available GitHub connector did not expose a verifiable run ID/result for the push-triggered one-shot workflow. Do not claim app-level PASS from source CI.
+- Remaining gates are unchanged: Writer edit/save/DOCX hash/cold reopen; real SAF failure/truncation and recovery; process-death recovery; PDF export/print; physical Xiaomi Pad 5 UI/performance.
+- Stop after this single newly authorized attempt if it fails or evidence upload is unavailable; no automatic retry. M-NATIVE-01 remains OPEN, PR #7 remains Draft, and `main` is untouched.
+- Google Drive `AquaWord — HANDOFF` sync remains **FAILED / NOT AVAILABLE** because this runtime exposes no Docs/Drive write connector. The named Drive document was not updated.
