@@ -26,7 +26,31 @@ FILE = "files/aquaword-research-ar.docx"
 SENTINEL = "AQUAWORD_ANDROID_SAVE_ROUNDTRIP_2026"
 
 # Sending a UNO command is not proof that it actually changed or saved a file.
-CLICK_READ_ONLY_STATE_EXPRESSION = r"""(() => {
+CLICK_EDIT_EXPRESSION = r"""(() => {
+    const editor = window.app && window.app.map;
+    if (!editor || editor.getDocType() !== 'text' || !editor._docLayer) {
+        return JSON.stringify({target: false, issued: false, reason: 'Writer edit layer unavailable'});
+    }
+    const button = document.getElementById('mobile-edit-button');
+    if (!button) {
+        return JSON.stringify({target: true, issued: false,
+            reason: 'Collabora mobile edit button #mobile-edit-button not found'});
+    }
+    const style = getComputedStyle(button);
+    const visible = style.display !== 'none' && style.visibility !== 'hidden' &&
+                    button.getClientRects().length > 0;
+    if (!visible) {
+        return JSON.stringify({target: true, issued: false,
+            reason: 'Collabora mobile edit button is not visible',
+            display: style.display, visibility: style.visibility,
+            outerHTML: button.outerHTML.slice(0, 500)});
+    }
+    button.click();
+    return JSON.stringify({target: true, issued: true,
+        editButtonClicked: true, buttonId: button.id});
+})()"""
+
+READ_ONLY_STATE_EXPRESSION = r"""(() => {
     const editor = window.app && window.app.map;
     if (!editor || editor.getDocType() !== 'text' || !editor._docLayer) {
         return JSON.stringify({target: false, readOnly: null, reason: 'Writer edit layer unavailable'});
@@ -83,7 +107,7 @@ SAVE_EXPRESSION = r"""(() => {
 })()"""
 
 # Backward-compatible name used by existing source contract tests.
-EXPRESSION = EDIT_EXPRESSION
+EXPRESSION = GO_TO_END_EXPRESSION + "\n" + EDIT_EXPRESSION
 
 
 def check_document(payload: bytes) -> bool:
