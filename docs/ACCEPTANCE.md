@@ -450,3 +450,16 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Not device-certified:** actual SAF provider behavior, Android process death, Writer Arabic/English DOCX roundtrip, print/PDF, and Xiaomi Pad 5 remain **NOT TESTED**. No APK was built because JVM tests directly answer this helper-level question.
 - Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** in this runtime; no Docs/Drive write connector is exposed.
 - M-NATIVE-01 remains **OPEN**; this update does not authorize PR merge, `main` changes, or a final APK handoff.
+
+
+## 2026-10-28 — Current-source ARM64 diagnostic (one-shot; pending)
+
+- Milestone `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` remains **OPEN**.
+- Purpose-bound authorization commit: [`df65aa2d92881f34160eadbbfcc0a96dd5f859ab`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/df65aa2d92881f34160eadbbfcc0a96dd5f859ab). It authorizes one free native diagnostic because the shared `AquaWordSafOutput.java` helper was wired into five generated output paths after the previous native build.
+- Exact question: can pinned Collabora/LibreOffice plus current AquaWord overlay pass the full native Android/NDK integration, Gradle manifest/resource processing, ARM64 APK packaging, integrity checks, and short-lived artifact upload?
+- Why source tests are insufficient: the JVM helper tests and overlay contracts do not execute the full native linker/build, Gradle packaging or verify the final APK ABI/manifest.
+- Run [#40613885226](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226) is **IN PROGRESS** at checked-out source SHA `df65aa2d92881f34160eadbbfcc0a96dd5f859ab`; no final build result, APK SHA-256, or downloadable artifact is confirmed yet.
+- Preflight source CI at code/test head `0160bed77339e2ef05fa4948e3adff3e1deb310f`: Fast Source [PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40601163452), Recovery Core [PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40601163437), Integration [PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40601163615). The native workflow reruns its own preflight at the authorized SHA.
+- This diagnostic is compile/package/artifact-integrity only. Install/launch, real SAF failure/recovery, Arabic/English Writer roundtrip, print/PDF runtime and Xiaomi Pad 5 visual/performance remain **NOT TESTED**.
+- No automatic retry is authorized after this run's outcome is known. PR #7 remains Draft/open; no merge or `main` changes.
+- Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** because this runtime exposes no Google Docs/Drive write connector; no sync success is claimed.

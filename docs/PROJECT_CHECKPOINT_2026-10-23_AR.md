@@ -670,3 +670,17 @@
 - **Still NOT TESTED:** a real SAF provider rejecting `wt` and accepting `rwt`; provider rejection of both modes; actual native Writer Arabic/English DOCX edit-save-cold-reopen; Android process-death recovery; print/PDF and Xiaomi Pad 5 runtime/visual/performance acceptance.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**. No Google Docs/Drive write connector is exposed in this runtime, so the specified document was not updated and no successful sync is claimed.
 - **Resume:** continue this same milestone. Keep PR #7 Draft/open and `main` unchanged; require real provider/device evidence before closing M-NATIVE-01.
+
+
+## 2026-10-28 — فحص تكامل ARM64 الحالي قيد التنفيذ
+
+- **الميلستون:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` ما زال **OPEN**.
+- **التغيير الحالي:** لم يتغير كود الإنتاج في هذه الدفعة؛ أُضيف تفويض محدد لمرة واحدة لفحص البناء الأصلي بعد دمج `AquaWordSafOutput.java` في خمسة مسارات خرج مولّدة: حفظ DOCX، وتصدير PDF، واستعادة المستند، وإنشاء مستند فارغ، وإنشاء مستند من قالب.
+- **سؤال الاختبار:** هل يترجم المصدر الحالي مع Collabora/LibreOffice المثبت إلى APK ARM64 قابل للتحقق، بما يشمل NDK والربط الأصلي وGradle ودمج manifest/resources وسلامة الحزمة ورفع artifact مؤقت؟ اختبارات JVM وعقود overlay لا تجيب عن ذلك لأنها لا تشغّل سلسلة البناء الأصلية كاملة.
+- **مرجع التفويض/المصدر:** [`df65aa2d92881f34160eadbbfcc0a96dd5f859ab`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/df65aa2d92881f34160eadbbfcc0a96dd5f859ab).
+- **CI قبل البناء على رأس الكود والاختبارات `0160bed77339e2ef05fa4948e3adff3e1deb310f`:** Fast Source [PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40601163452)، Recovery Core [PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40601163437)، Integration [PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40601163615). شغّل البناء اختبارات preflight مرة أخرى على رأس التفويض.
+- **حالة البناء:** [Run #40613885226](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226) — **IN PROGRESS** عند آخر تحقق، وبدأت مهمة `native-debug` واستنساخ مصدر Collabora المثبت. لا توجد نتيجة نهائية أو artifact SHA مؤكدة بعد.
+- **قرار البناء:** مبرر لأن الاختبارات السابقة لا تتحقق من NDK/Gradle/ABI أو APK الناتج. النطاق compile/package فقط؛ لا محاكي ولا قبول جهاز. هذا تفويض جديد واحد بسبب تكامل مصدر ذي صلة، وإذا فشل فلن تُعاد المحاولة تلقائيًا.
+- **ما زال NOT TESTED:** تثبيت وتشغيل APK، مزود SAF حقيقي يرفض أو يقتطع الكتابة، دورة Writer عربية/إنجليزية حفظ/إغلاق/إعادة فتح، استعادة بعد موت العملية، الطباعة/PDF، القبول البصري والأداء على Xiaomi Pad 5.
+- **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive في هذه البيئة، ولم يُعدّل المستند المحدد.
+- **نقطة الاستئناف:** انتظر نتيجة run #40613885226، وثّق SHA والـartifact وسجلات التحقق إن وُجدت، ولا تكرر البناء بعد ظهور النتيجة. يبقى PR #7 Draft، ولا تعديل لـ`main` أو دمج.
