@@ -26,18 +26,44 @@ FILE = "files/aquaword-research-ar.docx"
 SENTINEL = "AQUAWORD_ANDROID_SAVE_ROUNDTRIP_2026"
 
 # Sending a UNO command is not proof that it actually changed or saved a file.
-EXPRESSION = r"""(() => {
+CLICK_EDIT_EXPRESSION = r"""(() => {
+    const editor = window.app && window.app.map;
+    if (!editor || editor.getDocType() !== 'text' || !editor._docLayer) {
+        return JSON.stringify({target: false, issued: false, reason: 'Writer edit layer unavailable'});
+    }
+    // Collabora's real mobile view-mode control. Do not send UNO edits while
+    // the document is still read-only: those commands can be silently ignored.
+    const button = document.getElementById('mobile-edit-button');
+    if (!button) {
+        return JSON.stringify({target: true, issued: false,
+            reason: 'Collabora mobile edit button #mobile-edit-button not found'});
+    }
+    const style = getComputedStyle(button);
+    const visible = style.display !== 'none' && style.visibility !== 'hidden' &&
+                    button.getClientRects().length > 0;
+    if (!visible) {
+        return JSON.stringify({target: true, issued: false,
+            reason: 'Collabora mobile edit button is not visible',
+            display: style.display, visibility: style.visibility,
+            outerHTML: button.outerHTML.slice(0, 500)});
+    }
+    button.click();
+    return JSON.stringify({target: true, issued: true,
+        editButtonClicked: true, buttonId: button.id});
+})()"""
+
+EDIT_EXPRESSION = r"""(() => {
     const editor = window.app && window.app.map;
     if (!editor || editor.getDocType() !== 'text' ||
         !editor._docLayer || typeof editor.sendUnoCommand !== 'function') {
-        return JSON.stringify({issued: false, reason: 'Writer edit layer unavailable'});
+        return JSON.stringify({target: false, issued: false, reason: 'Writer edit layer unavailable'});
     }
     editor.sendUnoCommand('.uno:GoToEndOfDoc');
     editor.sendUnoCommand('.uno:InsertText', {
         Text: {type: 'string', value: 'AQUAWORD_ANDROID_SAVE_ROUNDTRIP_2026'}
     });
     editor.sendUnoCommand('.uno:Save');
-    return JSON.stringify({issued: true});
+    return JSON.stringify({target: true, issued: true, commands: ['GoToEndOfDoc', 'InsertText', 'Save']});
 })()"""
 
 
@@ -62,7 +88,8 @@ def call(*args, binary=False):
     return result if binary else result.strip()
 
 
-def evaluate_on_real_editor(port: int) -> dict:
+def evaluate_on_real_editor(port: int, expression: str) -> dict:
+    """Evaluate one expression only on the live Collabora Writer document page."""
     import websocket
     with urlopen(f"http://127.0.0.1:{port}/json", timeout=5) as response:
         pages = json.load(response)
@@ -74,62 +101,57 @@ def evaluate_on_real_editor(port: int) -> dict:
                                            timeout=10, suppress_origin=True)
         try:
             sock.send(json.dumps({"id": 77, "method": "Runtime.evaluate",
-                    "params": {"expression": EXPRESSION, "returnByValue": True}}))
+                    "params": {"expression": expression, "returnByValue": True}}))
             while True:
                 message = json.loads(sock.recv())
                 if message.get("id") != 77:
                     continue
                 if message.get("exceptionDetails"):
-                    raise RuntimeError("UNO JavaScript execution failed: " + str(message))
+                    raise RuntimeError("Writer JavaScript execution failed: " + str(message))
                 value = message.get("result", {}).get("result", {}).get("value")
                 if isinstance(value, str):
                     obj = json.loads(value)
-                    if obj.get("issued") is True:
-                        return obj
+                    if obj.get("target") is False:
+                        break
+                    return obj
                 break
         finally:
             sock.close()
-    raise RuntimeError("Unable to send real Writer UNO edit/save commands")
+    raise RuntimeError("No live Collabora Writer document layer was found")
 
 
-def enter_edit_mode(directory: Path) -> None:
-    """Tap the real Writer Edit FAB and require an explicit edit-mode transition.
+def native_edit_mode_confirmed(logcat: str) -> bool:
+    """Return true only when native LOActivity explicitly reports edit mode."""
+    states = [
+        line for line in logcat.splitlines()
+        if "postMobileMessage:" in line
+        and ("EDITMODE" in line or "setviewreadonly" in line)
+    ]
+    if not states:
+        return False
+    latest = states[-1]
+    return "EDITMODE on" in latest or "setviewreadonly value=false" in latest
 
-    The QA flow intentionally opens a document in Viewing mode first. Issuing
-    UNO commands while read-only can look successful at the CDP layer but does
-    not mutate the DOCX, so never treat the command receipt as edit acceptance.
-    The viewport has already been set to the 16:10 tablet geometry by the
-    parent smoke script; keep a portrait fallback for diagnostic reruns.
-    """
-    size_output = call("shell", "wm", "size").decode("utf-8", errors="replace")
-    dimensions = re.findall(r"(\d+)x(\d+)", size_output)
-    if not dimensions:
-        raise RuntimeError("Cannot determine current Android viewport for Edit FAB")
-    width, height = map(int, dimensions[-1])
-    if width > height:
-        x, y = round(width * 0.965), round(height * 0.905)
-    else:
-        x, y = round(width * 0.888), round(height * 0.921)
 
-    # Keep this evidence isolated to the explicit tap; the earlier smoke
-    # script already saved the pre-edit editor logcat.
-    call("logcat", "-c")
-    call("shell", "input", "tap", str(x), str(y))
-    time.sleep(3)
-    (directory / "edit-mode-screen.png").write_bytes(
-        call("exec-out", "screencap", "-p", binary=True))
-    logs = call("logcat", "-d", "-v", "time").decode("utf-8", errors="replace")
-    (directory / "edit-mode-logcat.txt").write_text(logs, encoding="utf-8")
-    # Collabora's native bridge logs both signals on the real transition.
-    markers = ("postMobileMessage: EDITMODE on", "setviewreadonly value=false")
-    if not any(marker in logs for marker in markers):
-        raise RuntimeError(
-            f"Writer did not enter edit mode after tapping ({x},{y}) on {width}x{height}; "
-            "no EDITMODE on / setviewreadonly=false evidence")
-    (directory / "edit-mode-confirmation.txt").write_text(
-        f"PASS: edit mode confirmed by native log after tap ({x},{y}) on {width}x{height}.\n",
-        encoding="utf-8")
-
+def wait_for_edit_mode(timeout_s: int) -> str:
+    """Wait for the native bridge confirmation after tapping the real edit button."""
+    deadline = time.monotonic() + timeout_s
+    last_log = ""
+    while time.monotonic() < deadline:
+        last_log = call("logcat", "-d", "-v", "time", "LOActivity:D", "*:S").decode(
+            "utf-8", errors="replace")
+        if native_edit_mode_confirmed(last_log):
+            return last_log
+        time.sleep(1)
+    relevant = [
+        line for line in last_log.splitlines()
+        if "postMobileMessage:" in line
+        and ("EDITMODE" in line or "setviewreadonly" in line)
+    ]
+    raise RuntimeError(
+        "Native Writer did not confirm edit mode after tapping #mobile-edit-button; "
+        "last mode messages: " + " | ".join(relevant[-8:])
+    )
 
 def run(directory: Path, timeout: int) -> None:
     directory.mkdir(parents=True, exist_ok=True)
@@ -145,12 +167,32 @@ def run(directory: Path, timeout: int) -> None:
     call("forward", f"tcp:{port}", f"localabstract:webview_devtools_remote_{pid}")
     enter_edit_mode(directory)
     try:
-        issued = evaluate_on_real_editor(port)
+        # Isolate the native edit-mode acknowledgement from startup's expected
+        # EDITMODE off/read-only messages, then click the actual mobile pencil.
+        call("logcat", "-c")
+        clicked = evaluate_on_real_editor(port, CLICK_EDIT_EXPRESSION)
+        (directory/"edit-button-click.json").write_text(
+            json.dumps(clicked, indent=2)+"\n", encoding="utf-8")
+        if clicked.get("issued") is not True or clicked.get("editButtonClicked") is not True:
+            raise RuntimeError("Could not activate Collabora edit mode: " +
+                               json.dumps(clicked, ensure_ascii=False))
+        mode_log = wait_for_edit_mode(min(timeout, 25))
+        mode_lines = [
+            line for line in mode_log.splitlines()
+            if "postMobileMessage:" in line
+            and ("EDITMODE" in line or "setviewreadonly" in line)
+        ]
+        (directory/"edit-mode-confirmation.txt").write_text(
+            "\n".join(mode_lines[-12:])+"\n", encoding="utf-8")
+        issued = evaluate_on_real_editor(port, EDIT_EXPRESSION)
+        (directory/"edit-command.json").write_text(
+            json.dumps(issued, indent=2)+"\n", encoding="utf-8")
+        if issued.get("issued") is not True:
+            raise RuntimeError("Writer edit layer rejected UNO commands: " +
+                               json.dumps(issued, ensure_ascii=False))
     finally:
         subprocess.run(["adb", "forward", "--remove", f"tcp:{port}"],
                        stdout=subprocess.DEVNULL, check=False)
-    (directory/"edit-command.json").write_text(
-        json.dumps(issued, indent=2)+"\n", encoding="utf-8")
 
     # Force the native lifecycle onPause save as a user would by switching apps.
     # This is in addition to the regular .uno:Save command above.
