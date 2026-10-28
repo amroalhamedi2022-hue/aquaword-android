@@ -20,7 +20,7 @@
 - Original AquaWord branding overlay, Arabic recovery labels, 5 launcher icon densities and native Writer new-document flow.
 
 ## Requested extras still missing or awaiting end-to-end tests
-- Reliable autosave delivery and crash recovery tested under Android process death: periodic native save commands are implemented, **but successful on-device persistence has not yet been demonstrated**.
+- Reliable autosave delivery and crash recovery under Android process death: periodic native save commands are implemented; a translated-emulator Writer save/cold-reopen roundtrip passed in [run #40679248867](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679248867), but real SAF-provider failure/truncation, OS-level process-death recovery, and Xiaomi Pad 5 acceptance remain **NOT TESTED**.
 - Unlimited full document history with advanced revision comparisons (bounded pre-edit and native post-save checkpoints are a partial implementation).
 - AI proofreading, rewriting, summarization and translation (optional, with explicit opt-in).
 - PDF annotations and conversions beyond any native Collabora capabilities, citations/bibliography automation and advanced reference styling.
@@ -42,7 +42,7 @@
 - Repository is now PUBLIC; standard GitHub runners run successfully again. Native CI concurrency now preserves ongoing builds, and full test evidence is written to job summaries while Actions artifact storage is exhausted.
 
 ## Current factual state
-Source overlay and integration tests, including Java version-recovery checks, rich DOCX compatibility and JavaScript Focus Mode tests; **not a finished application**. A previously started native build uses an older source SHA, so its result cannot verify newer features. Collabora source is pulled at build time. An APK cannot be described as built until the native workflow actually succeeds. Internal CI runs are allowed; the user's preference is to receive one completed build, not every intermediate artifact.
+Source overlay and integration tests, including Java version-recovery checks, rich DOCX compatibility and JavaScript Focus Mode tests; **not a finished application**. A diagnostic ARM64 APK was built and structurally verified in native run [#40643360016](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40643360016) from product-source SHA 710691adb757c9580e5574307f39091e6d68aad4; APK SHA-256 25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736. The existing APK then passed the scoped Writer edit/native-save/cold-reopen test in translated ARM64-on-x86_64 emulator run [#40679248867](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679248867). This does not establish native ARM64 CPU execution, real SAF-provider failure handling, OS-level process-death recovery, print/PDF, or Xiaomi Pad 5 acceptance. Collabora source is pinned/pulled at build time. Internal diagnostic builds are allowed when justified; user-facing delivery remains gated by the full matrix below.
 
 ## SAF provider read-only hardening (requires Android runtime acceptance)
 
