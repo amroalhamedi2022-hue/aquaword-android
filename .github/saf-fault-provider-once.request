@@ -1,0 +1,1 @@
+One-shot runtime request: verify AquaWord rejects a silently truncated SAF write and preserves the edited DOCX in private recovery history. Reuse the pinned diagnostic APK; build only the isolated QA provider APK. No product APK rebuild, no release, no main changes.
