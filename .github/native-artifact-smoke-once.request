@@ -22,3 +22,24 @@ Safety and scope:
 - No real user-selected SAF/cloud provider, process-death recovery outside this QA trampoline, printing/PDF acceptance, or final-release approval is implied.
 - This is the single authorized runtime follow-up to the successful materially changed native build. If it fails or evidence upload is unavailable, record exact failure and stop; do not rerun automatically.
 - No additional APK build, paid runner/API, release, auto-merge, or main change is authorized.
+
+
+Fresh one-shot authorization — 2026-10-28 11:17 UTC (corrected runtime harness; NO APK rebuild)
+
+Reason for this new attempt: the previous translated-emulator run #40648882995 stopped before edit/save because the harness applied portrait-locked geometry while asserting a 16:10 landscape viewport. The harness was subsequently corrected in the feature branch to lock landscape before applying 2560x1600, reapply landscape only once if needed, tap the actual Edit FAB, and require native EDITMODE-on evidence before issuing the QA edit. This materially changes the test harness and makes a single rerun useful; it does not authorize another native build.
+
+Exact test question: using only the existing, still-unexpired APK artifact below, can the corrected free API 35 x86_64 emulator harness install and launch the translated ARM64 app, open the rich Arabic/English DOCX, enter actual Writer edit mode, persist the QA sentinel through the native SAVE callback, and preserve valid edited DOCX bytes after force-stop and cold reopen?
+
+Why source tests are insufficient: JVM history/SAF tests and harness source contracts cannot prove that the live Android UI reaches edit mode, native SAVE executes, bytes persist, and a fresh process can reopen them.
+
+Artifact pin:
+- Build run: https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40643360016
+- Artifact ID: 12797042192
+- Built source SHA: 710691adb757c9580e5574307f39091e6d68aad4
+- APK SHA-256: 25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736
+- Artifact archive digest: sha256:eeb5a28f349a590d19e29aa806abc1bf75ed5fa9d34cb8c69733bf368c9879ca
+- Known expiry: 2026-10-29T06:32:39Z. Recheck availability before download.
+
+Scope: reuse the existing APK only; no APK/EXE build, no physical-device claim. A pass means translated ARM64 on x86_64 only, not native ARM64 CPU or Xiaomi Pad 5. Real user-selected SAF providers, OS-level process-death recovery, print/PDF and full UI acceptance remain separate gates.
+
+Stop rule: this is one fresh, bounded runtime attempt after the harness correction. If it fails or evidence upload is unavailable, record exact failure and stop; do not automatically rerun. Free public GitHub-hosted runner only. No paid API/runner, release, auto-merge, or main modification.
