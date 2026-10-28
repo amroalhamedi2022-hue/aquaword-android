@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import io
 import json
+import subprocess
 import time
 import zipfile
 from pathlib import Path
@@ -114,6 +115,80 @@ def latest_recovery_with_sentinel(evidence: Path):
     return name, payload
 
 
+
+def read_logcat_with_retry(evidence: Path, attempts: int = 3, retry_delay: float = 2.0) -> str:
+    """Read emulator logcat with bounded ADB recovery and a durable failure receipt.
+
+    The SAF test is meaningful only when its native failure markers are present.
+    A transient ADB transport failure must not discard the run's evidence, and
+    reconnecting successfully must never substitute for those marker checks.
+    """
+    records = []
+    for attempt in range(1, max(1, attempts) + 1):
+        command = ["adb", "logcat", "-d", "-v", "time"]
+        try:
+            result = subprocess.run(
+                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, timeout=20, check=False,
+            )
+            output = result.stdout or ""
+            if result.returncode == 0:
+                if records:
+                    (evidence / "saf-fault-adb-retry.json").write_text(
+                        json.dumps({
+                            "result": "RECOVERED",
+                            "successful_attempt": attempt,
+                            "attempts": records,
+                            "logcat_sha256": hashlib.sha256(output.encode("utf-8")).hexdigest(),
+                        }, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                return output
+            records.append({
+                "attempt": attempt,
+                "command": "adb logcat -d -v time",
+                "returncode": result.returncode,
+                "output_tail": output[-2000:],
+            })
+        except (OSError, subprocess.SubprocessError) as failure:
+            records.append({
+                "attempt": attempt,
+                "command": "adb logcat -d -v time",
+                "error": type(failure).__name__,
+                "detail": str(failure)[:2000],
+            })
+
+        if attempt < max(1, attempts):
+            try:
+                wait = subprocess.run(
+                    ["adb", "wait-for-device"], stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, text=True, timeout=15, check=False,
+                )
+                records.append({
+                    "attempt": attempt,
+                    "command": "adb wait-for-device",
+                    "returncode": wait.returncode,
+                    "output_tail": (wait.stdout or "")[-1000:],
+                })
+            except (OSError, subprocess.SubprocessError) as failure:
+                records.append({
+                    "attempt": attempt,
+                    "command": "adb wait-for-device",
+                    "error": type(failure).__name__,
+                    "detail": str(failure)[:1000],
+                })
+            if retry_delay:
+                time.sleep(retry_delay)
+
+    (evidence / "saf-fault-adb-retry.json").write_text(
+        json.dumps({"result": "FAIL", "attempts": records}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    raise RuntimeError(
+        "Unable to collect Android logcat after bounded ADB retries; "
+        "see saf-fault-adb-retry.json. Runtime acceptance remains NOT PASS."
+    )
+
 def run(evidence: Path, timeout: int):
     evidence.mkdir(parents=True, exist_ok=True)
     original = adb("exec-out", "run-as", PROVIDER_PKG, "cat", "files/qa.docx", binary=True)
@@ -185,7 +260,7 @@ def run(evidence: Path, timeout: int):
     deadline = time.monotonic() + timeout
     latest_log = ""
     while time.monotonic() < deadline:
-        latest_log = adb("logcat", "-d", "-v", "time").decode("utf-8", errors="replace")
+        latest_log = read_logcat_with_retry(evidence)
         if "QA_PROVIDER_TRUNCATED_WRITE_COMPLETE" in latest_log and \
                 "AquaWord SAVE not acknowledged" in latest_log:
             break
