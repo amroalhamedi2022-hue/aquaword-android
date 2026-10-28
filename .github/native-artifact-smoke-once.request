@@ -1,4 +1,4 @@
-One-shot request (2026-10-28, shell-corrected attempt): test the already-built ARM64 diagnostic APK; do not rebuild.
+One-shot request (2026-10-28, Edit-mode-aware runtime attempt): reuse the existing ARM64 diagnostic APK; do not rebuild.
 
 Artifact run: 40613885226
 Artifact ID: 12785090689
@@ -6,9 +6,11 @@ Artifact name: aquaword-native-diagnostic-df65aa2d92881f34160eadbbfcc0a96dd5f859
 Build source SHA: df65aa2d92881f34160eadbbfcc0a96dd5f859ab
 Expected APK SHA-256: 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc
 
-Attempt 1, run 40626355489: failed before app install because QEMU2 cannot boot an ARM64 guest on the x86_64 host.
-Attempt 2, run 40631390483: API 35 x86_64 emulator booted, but the action's inline script used Bash-only "set -o pipefail" while executed by /usr/bin/sh. No app test ran.
+Previous attempts:
+- Run 40626355489: ARM64 guest unsupported on x86_64 QEMU host; app never installed.
+- Run 40631390483: emulator booted, but action inline script used Bash-only pipefail under /usr/bin/sh; app never installed.
+- Run 40631716803: API 35 x86_64 emulator and native bridge worked; app installed, real Writer Activity/document layer/Focus Mode/16:10 viewport passed. Edit/save assertion failed because Writer remained in Viewing mode (EDITMODE off); no cold-reopen assertion ran.
 
-Corrected test question: with the POSIX-compatible inline wrapper, can the API 35 Google APIs x86_64 emulator verify libndk_translation.so, install this existing ARM64 APK, open the generated Arabic/English DOCX in Writer, perform edit/save/cold-reopen with exact-byte checks, and survive the simulated 16:10 viewport?
+Current test question: with the corrected harness, does tapping the visible Edit FAB produce native edit-mode evidence, then does a real UNO text insertion survive native save, produce changed DOCX bytes with all existing Arabic/table/image content intact, and survive force-stop/cold-reopen?
 
-A pass means translated ARM64 runtime on x86_64, NOT native ARM64 CPU/device acceptance. It does not prove Xiaomi Pad 5 performance, real user-selected SAF providers, print/PDF, or current-source fixes because the APK predates them. No new APK build is authorized.
+The harness records and checks the viewport, taps Edit, requires "EDITMODE on" or "setviewreadonly value=false" in native logs before issuing UNO, then validates actual DOCX bytes and cold reopen. A pass means translated ARM64 runtime on x86_64, NOT native ARM64 CPU or Xiaomi Pad 5 acceptance. Real user-selected SAF providers and print/PDF remain untested. No new APK build is authorized.
