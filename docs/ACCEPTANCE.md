@@ -463,3 +463,12 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - This diagnostic is compile/package/artifact-integrity only. Install/launch, real SAF failure/recovery, Arabic/English Writer roundtrip, print/PDF runtime and Xiaomi Pad 5 visual/performance remain **NOT TESTED**.
 - No automatic retry is authorized after this run's outcome is known. PR #7 remains Draft/open; no merge or `main` changes.
 - Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** because this runtime exposes no Google Docs/Drive write connector; no sync success is claimed.
+
+
+## 2026-10-28 — ARM64 native diagnostic outcome (M-NATIVE-01 remains OPEN)
+
+- **PASS:** native Collabora/LibreOffice ARM64 engine build, Android source integration, Gradle APK packaging, package-ID check, APK ZIP integrity, and Android v2 debug-signature verification on [run #40613885226](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226), source/authorization SHA `df65aa2d92881f34160eadbbfcc0a96dd5f859ab`.
+- **Diagnostic artifact only:** [artifact #12785090689](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226/artifacts/12785090689); APK SHA-256 `6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc`; ARM64 native library SHA-256 `ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2`; artifact ZIP SHA-256 `1520e5bf3bffd6d0af55ddbe2ecbc9d6ca88f575af7167cd138c3051c3bd7937`. Artifact retention is short-lived (approximately until 2026-10-29 01:24 UTC).
+- **NOT TESTED:** emulator installation/launch was skipped by the diagnostic workflow; no real Android device test, SAF provider failure/fallback, Arabic/English DOCX save-close-reopen, process-death recovery, print/PDF runtime, or Xiaomi Pad 5 acceptance is claimed.
+- **Decision:** no automatic retry and no final-release claim. The compile/package question is answered; next useful evidence is installation and real Writer/SAF roundtrip, not another identical build.
+- **Google Drive AquaWord — HANDOFF:** FAILED / NOT AVAILABLE; no Docs/Drive write connector is exposed in this runtime, so no successful sync is claimed.
