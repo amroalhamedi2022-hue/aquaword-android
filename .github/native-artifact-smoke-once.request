@@ -1,4 +1,4 @@
-One-shot request (2026-10-28): run the already-built ARM64 diagnostic APK through the Android API 30 ARM64 emulator smoke. This is NOT a rebuild.
+One-shot request (2026-10-28, corrected host strategy): test the already-built ARM64 diagnostic APK; do not rebuild.
 
 Artifact run: 40613885226
 Artifact ID: 12785090689
@@ -6,6 +6,8 @@ Artifact name: aquaword-native-diagnostic-df65aa2d92881f34160eadbbfcc0a96dd5f859
 Build source SHA: df65aa2d92881f34160eadbbfcc0a96dd5f859ab
 Expected APK SHA-256: 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc
 
-Test question: does this existing ARM64 package install and launch on an ARM64 Android emulator, open a real generated Arabic DOCX in native Writer, save a real edit, survive force-stop/cold reopen with exact bytes, and remain alive under a simulated 16:10 landscape viewport? Source/JVM tests cannot answer these runtime questions.
+Previous attempt: run 40626355489 failed before app installation because QEMU2 cannot boot an ARM64 guest on the x86_64 host. This was a runner/guest architecture mismatch; no application runtime assertion ran.
 
-Limitations: this artifact predates the latest documentation and test-only commits; runtime evidence is baseline-only for the native save/reopen path. It does not certify a physical Xiaomi Pad 5, arbitrary user SAF providers, print/PDF, or the current source's full release acceptance.
+Corrected test question: on a free x86_64 Ubuntu runner, can the API 35 Google APIs x86_64 emulator verify its libndk_translation.so bridge, install the existing ARM64 APK, open real Arabic/English DOCX in Writer, perform edit/save/cold-reopen with exact-byte checks, and survive a simulated 16:10 viewport? Source/JVM tests cannot answer these runtime questions.
+
+The run must label its result translated ARM64 runtime, NOT native ARM64 CPU acceptance. It does not prove Xiaomi Pad 5 performance, real user-selected SAF providers, print/PDF, or current-source fixes because the APK predates them. No new APK build is authorized by this request.
