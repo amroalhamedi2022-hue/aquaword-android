@@ -518,3 +518,13 @@ This entry supersedes the earlier 2026-10-28 text above that said the diagnostic
 - **NOT TESTED:** مزود SAF حقيقي يرفض `wt` ويقبل `rwt`، تثبيت وتشغيل APK على Android، تحرير/حفظ/إغلاق/إعادة فتح DOCX عربي/إنجليزي داخل Writer على الجهاز، موت العملية والاستعادة على الجهاز، الطباعة/PDF من التطبيق، والقبول البصري/الأداء على Xiaomi Pad 5.
 - **Handoff Drive:** مزامنة `AquaWord — HANDOFF` = **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive في بيئة هذه الجولة، ولم يتم تحديث المستند المحدد. لا ندّعي نجاح المزامنة.
 - `M-NATIVE-01` يبقى **OPEN**، وPR #7 يبقى Draft مفتوحًا وغير مدمج؛ لا تغيير على `main`.
+
+
+## 2026-10-28 — Android ARM64 runtime smoke بدأ (النتيجة لم تصدر بعد)
+
+- **Run:** [`40626355489`](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40626355489) — **IN PROGRESS** عند آخر تحقق؛ خطوة ARM64 emulator boot/runtime smoke نشطة.
+- **لم يُنشأ build جديد.** يجري تنزيل وفحص الحزمة التشخيصية الموجودة ثم محاولة تثبيتها وتشغيل Writer داخل Android API 30 ARM64 emulator، وفتح DOCX عربي فعلي مولّد، وتنفيذ edit/save/cold-reopen والتحقق من بقاء البايتات بعد إنهاء العملية، مع اختبار viewport أفقي 16:10.
+- **مصدر الحزمة القديمة:** `df65aa2d92881f34160eadbbfcc0a96dd5f859ab`; Artifact run [#40613885226](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226), artifact [#12785090689](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226/artifacts/12785090689), APK SHA-256 `6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc`, expiry `2026-10-29T01:24:38Z`.
+- **لم يصدر PASS/FAIL للـruntime بعد.** حتى لو نجح، فهو baseline لا يثبت كل إصلاحات الفرع الحالي؛ الحزمة أقدم من تحديثات الاختبار/الوثائق الأخيرة.
+- **الحدود المتبقية:** جهاز Xiaomi Pad 5 الحقيقي، مزودات SAF الحقيقية، الطباعة/PDF، وكل قبول الإصدار النهائي تبقى بوابات منفصلة.
+- **Google Drive Handoff:** المزامنة ما زالت **FAILED / NOT AVAILABLE** لأن موصل كتابة Google Docs/Drive غير متاح في بيئة التشغيل؛ المستند المحدد لم يُحدّث.
