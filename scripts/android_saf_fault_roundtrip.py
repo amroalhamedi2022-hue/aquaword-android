@@ -76,7 +76,7 @@ def configure_landscape_viewport(evidence: Path):
             if valid:
                 (evidence / "fault-provider-viewport-result.json").write_text(
                     json.dumps({"result": "PASS", "attempts": records},
-                               indent=2) + "\\n", encoding="utf-8")
+                               indent=2) + "\n", encoding="utf-8")
                 return
         except Exception as failure:
             records.append({"attempt": attempt, "result": "capture-failed",
@@ -87,7 +87,7 @@ def configure_landscape_viewport(evidence: Path):
             adb("shell", "wm", "density", "320")
     (evidence / "fault-provider-viewport-result.json").write_text(
         json.dumps({"result": "FAIL", "attempts": records},
-                   indent=2) + "\\n", encoding="utf-8")
+                   indent=2) + "\n", encoding="utf-8")
     raise RuntimeError(
         "Rendered Android viewport did not reach a nonblank 16:10 landscape frame; "
         "see fault-provider-viewport-result.json"
@@ -193,8 +193,19 @@ def run(evidence: Path, timeout: int):
     (evidence / "saf-fault-logcat.txt").write_text(latest_log, encoding="utf-8")
     if "QA_PROVIDER_TRUNCATED_WRITE_COMPLETE" not in latest_log:
         raise AssertionError("Fault provider did not complete its deliberate truncated write")
-    if "AquaWord SAVE not acknowledged" not in latest_log:
-        raise AssertionError("AquaWord did not reject the truncated provider readback")
+    # The native callback logs the failed readback path (not the
+    # separate "not written" branch) because the provider accepted the pipe
+    # but persisted a truncated document. Both markers must be present.
+    failure_markers = (
+        "AquaWord post-save recovery or writeback failed",
+        "SAF provider readback checksum/size mismatch",
+    )
+    missing_markers = [marker for marker in failure_markers if marker not in latest_log]
+    if missing_markers:
+        raise AssertionError(
+            "AquaWord did not reject the truncated provider readback; missing log evidence: "
+            + repr(missing_markers)
+        )
 
     adb("shell", "am", "force-stop", PKG)
     time.sleep(2)

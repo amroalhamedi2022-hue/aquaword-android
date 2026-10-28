@@ -34,12 +34,14 @@ class SafFaultProviderContractTests(unittest.TestCase):
 
     def test_runtime_requires_failed_save_and_valid_private_recovery_bytes(self):
         source = HARNESS.read_text(encoding="utf-8")
-        self.assertIn("AquaWord SAVE not acknowledged", source)
+        self.assertIn("AquaWord post-save recovery or writeback failed", source)
+        self.assertIn("SAF provider readback checksum/size mismatch", source)
         self.assertIn("provider-truncated.docx", source)
         self.assertIn("latest_recovery_with_sentinel", source)
         self.assertIn("recovered-edited-document.docx", source)
         self.assertIn('"save_acknowledged": False', source)
         self.assertIn("zipfile.is_zipfile(io.BytesIO(truncated))", source)
+        self.assertIn('indent=2) + "\\n"', source)
 
     def test_rotation_command_is_best_effort_and_rendered_viewport_is_verified(self):
         source = HARNESS.read_text(encoding="utf-8")
