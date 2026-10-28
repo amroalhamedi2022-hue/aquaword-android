@@ -14,7 +14,7 @@ SOURCE = (ROOT / "scripts" / "android_edit_roundtrip.py").read_text(encoding="ut
 class AndroidEditRoundtripContractTests(unittest.TestCase):
     def test_real_mobile_edit_button_is_clicked_before_any_uno_mutation(self):
         click_expression = SOURCE.split('CLICK_EDIT_EXPRESSION = r"""', 1)[1].split('"""', 1)[0]
-        edit_expression = SOURCE.split('EDIT_EXPRESSION = r"""', 1)[1].split('"""', 1)[0]
+        edit_expression = SOURCE.split('\nEDIT_EXPRESSION = r"""', 1)[1].split('"""', 1)[0]
 
         self.assertIn("document.getElementById('mobile-edit-button')", click_expression)
         self.assertIn("button.click()", click_expression)
