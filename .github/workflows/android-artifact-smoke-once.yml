@@ -22,11 +22,11 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      ARTIFACT_RUN_ID: '40613885226'
-      ARTIFACT_ID: '12785090689'
-      ARTIFACT_NAME: aquaword-native-diagnostic-df65aa2d92881f34160eadbbfcc0a96dd5f859ab
-      EXPECTED_SOURCE_SHA: df65aa2d92881f34160eadbbfcc0a96dd5f859ab
-      EXPECTED_APK_SHA256: 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc
+      ARTIFACT_RUN_ID: '40643360016'
+      ARTIFACT_ID: '12797042192'
+      ARTIFACT_NAME: aquaword-native-diagnostic-710691adb757c9580e5574307f39091e6d68aad4
+      EXPECTED_SOURCE_SHA: 710691adb757c9580e5574307f39091e6d68aad4
+      EXPECTED_APK_SHA256: 25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736
     steps:
       - name: Checkout test harness at the current feature branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -61,7 +61,7 @@ jobs:
             echo "- Build source SHA: $run_sha"
             echo "- APK SHA-256: $actual_sha"
             echo "- Purpose: test ARM64 install/launch and native Writer edit-save-cold-reopen on an ARM64 Android emulator."
-            echo '- Limitation: this APK predates the latest recovery/staging source fixes; runtime evidence is baseline-only and does not certify current branch source.'
+            echo '- Source provenance: built from feature-branch SHA `710691adb757c9580e5574307f39091e6d68aad4`. The three commits between that build and the runtime harness head are documentation-only (verified by compare API). Runtime evidence tests the current product-source checkpoint but remains translated-emulator evidence, not physical-device acceptance.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate the synthetic Arabic/English DOCX fixture
