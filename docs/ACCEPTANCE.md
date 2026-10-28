@@ -514,3 +514,14 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **Next:** one more targeted run uses the same existing APK and API 35 bridge-capable emulator; no app build is repeated. The runtime script will verify `libndk_translation.so` and record the mode before install. If the bridge is missing, it will fail closed without attempting to launch an ARM64-only package.
 - **Limits:** no app install/launch/edit/save/cold-reopen was exercised in this failed run. Native ARM64 hardware, physical Xiaomi Pad 5, user-selected SAF providers and print/PDF remain NOT TESTED.
 - **Handoff:** Google Drive write connector remains unavailable; no successful sync is claimed.
+
+
+## 2026-10-28 — Runtime reached real Writer; edit/save assertion exposed read-only test setup
+
+- **Run:** [#40631716803](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40631716803) — **FAIL at the edit/save assertion**, after the emulator booted, verified `libndk_translation.so`, installed the existing APK, launched the document browser, opened the real Arabic DOCX in `LOActivity`, confirmed the Writer document layer, toggled Focus Mode, and passed the simulated 2560×1600 (16:10) viewport checks.
+- **Observed failure:** `android_edit_roundtrip.py` issued the UNO command but the saved DOCX did not contain the sentinel. The captured native log shows `setviewreadonly value=true` and `EDITMODE off`; the app was still in its normal Viewing mode. Therefore this run does **not** prove a product save-path failure: the harness attempted editing before activating the visible Edit FAB. No cold-reopen pass was reached.
+- **Evidence artifact:** [#12791333866](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40631716803/artifacts/12791333866), SHA-256 `c13e750cb827633d571549df1e8238d0db69dc73d2d63010642919cc84f2429e`, 29 evidence files. It contains screenshots, live WebView state, app logcat, ABI/native-bridge properties and the exact failure. One-day retention; download before expiry if evidence is needed.
+- **Harness fix:** `android_edit_roundtrip.py` now taps the actual Edit FAB after the 16:10 viewport is applied, captures a post-tap screenshot/logcat, and refuses to issue UNO edits unless the native log explicitly reports `EDITMODE on` or `setviewreadonly value=false`. Added a source regression test. This prevents a read-only UI state from masquerading as a save-path regression.
+- **Build decision:** no APK rebuild. The same verified diagnostic APK remains baseline-only and predates current recovery source changes.
+- **Next:** one targeted runtime rerun after the test-harness fix. A pass must include persisted sentinel, changed DOCX SHA, cold-process reopen and the existing content checks; a UI-only pass is insufficient.
+- **Handoff:** Google Drive `AquaWord — HANDOFF` sync remains FAILED / NOT AVAILABLE; no Docs/Drive write connector is exposed.

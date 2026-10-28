@@ -1200,6 +1200,11 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('libndk_translation.so',smoke)
         self.assertIn('translated-arm64-on-x86_64-emulator',smoke)
         self.assertIn('runtime-mode.txt',smoke)
+        roundtrip=(ROOT/'scripts/android_edit_roundtrip.py').read_text(encoding='utf-8')
+        self.assertIn('def enter_edit_mode(directory: Path)',roundtrip)
+        self.assertIn('postMobileMessage: EDITMODE on',roundtrip)
+        self.assertIn('setviewreadonly value=false',roundtrip)
+        self.assertIn('enter_edit_mode(directory)',roundtrip)
 
 if __name__=='__main__':
     unittest.main()

@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import io
 import json
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -91,6 +92,45 @@ def evaluate_on_real_editor(port: int) -> dict:
     raise RuntimeError("Unable to send real Writer UNO edit/save commands")
 
 
+def enter_edit_mode(directory: Path) -> None:
+    """Tap the real Writer Edit FAB and require an explicit edit-mode transition.
+
+    The QA flow intentionally opens a document in Viewing mode first. Issuing
+    UNO commands while read-only can look successful at the CDP layer but does
+    not mutate the DOCX, so never treat the command receipt as edit acceptance.
+    The viewport has already been set to the 16:10 tablet geometry by the
+    parent smoke script; keep a portrait fallback for diagnostic reruns.
+    """
+    size_output = call("shell", "wm", "size").decode("utf-8", errors="replace")
+    dimensions = re.findall(r"(\\d+)x(\\d+)", size_output)
+    if not dimensions:
+        raise RuntimeError("Cannot determine current Android viewport for Edit FAB")
+    width, height = map(int, dimensions[-1])
+    if width > height:
+        x, y = round(width * 0.965), round(height * 0.905)
+    else:
+        x, y = round(width * 0.888), round(height * 0.921)
+
+    # Keep this evidence isolated to the explicit tap; the earlier smoke
+    # script already saved the pre-edit editor logcat.
+    call("logcat", "-c")
+    call("shell", "input", "tap", str(x), str(y))
+    time.sleep(3)
+    (directory / "edit-mode-screen.png").write_bytes(
+        call("exec-out", "screencap", "-p", binary=True))
+    logs = call("logcat", "-d", "-v", "time").decode("utf-8", errors="replace")
+    (directory / "edit-mode-logcat.txt").write_text(logs, encoding="utf-8")
+    # Collabora's native bridge logs both signals on the real transition.
+    markers = ("postMobileMessage: EDITMODE on", "setviewreadonly value=false")
+    if not any(marker in logs for marker in markers):
+        raise RuntimeError(
+            f"Writer did not enter edit mode after tapping ({x},{y}) on {width}x{height}; "
+            "no EDITMODE on / setviewreadonly=false evidence")
+    (directory / "edit-mode-confirmation.txt").write_text(
+        f"PASS: edit mode confirmed by native log after tap ({x},{y}) on {width}x{height}.\\n",
+        encoding="utf-8")
+
+
 def run(directory: Path, timeout: int) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     # Keep proof that the marker did NOT already exist in the original file.
@@ -103,6 +143,7 @@ def run(directory: Path, timeout: int) -> None:
     pid = call("shell", "pidof", PKG).decode().split()[0]
     port=9223
     call("forward", f"tcp:{port}", f"localabstract:webview_devtools_remote_{pid}")
+    enter_edit_mode(directory)
     try:
         issued = evaluate_on_real_editor(port)
     finally:
