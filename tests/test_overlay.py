@@ -1185,5 +1185,19 @@ class AquaWordIntegrationTests(unittest.TestCase):
         for snippet in ['subprocess.run(', 'requests.get(', 'os.system(']:
             self.assertNotIn(snippet,code)
 
+    def test_runtime_smoke_uses_supported_host_and_verifies_arm64_translation(self):
+        workflow=(ROOT/'.github/workflows/android-artifact-smoke-once.yml').read_text(encoding='utf-8')
+        smoke=(ROOT/'scripts/run_android_smoke.sh').read_text(encoding='utf-8')
+        self.assertIn('runs-on: ubuntu-24.04',workflow)
+        self.assertIn('Enable KVM for the x86_64 Android emulator',workflow)
+        self.assertIn('api-level: 35',workflow)
+        self.assertIn('arch: x86_64',workflow)
+        self.assertIn('disable-linux-hw-accel: false',workflow)
+        self.assertNotIn('arch: arm64-v8a',workflow)
+        self.assertIn('ro.dalvik.vm.native.bridge',smoke)
+        self.assertIn('libndk_translation.so',smoke)
+        self.assertIn('translated-arm64-on-x86_64-emulator',smoke)
+        self.assertIn('runtime-mode.txt',smoke)
+
 if __name__=='__main__':
     unittest.main()

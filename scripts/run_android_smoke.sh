@@ -13,13 +13,24 @@ mkdir -p "$ARTIFACTS"
 adb wait-for-device
 adb shell getprop ro.build.version.release | tee "$ARTIFACTS/android-version.txt"
 adb shell getprop ro.build.version.sdk | tr -d '\r' | tee "$ARTIFACTS/android-api-level.txt"
+adb shell getprop ro.product.cpu.abi | tr -d '\r' | tee "$ARTIFACTS/android-primary-abi.txt"
 adb shell getprop ro.product.cpu.abilist | tr -d '\r' | tee "$ARTIFACTS/android-abis.txt"
-# Do not assume x86_64 emulators can load an ARM64-only LibreOffice engine.
-# Google API images may advertise native ARM translation; check, don't guess.
-if ! grep -Eq '(^|,)arm64-v8a(,|$)' "$ARTIFACTS/android-abis.txt"; then
-  echo "Emulator does not advertise arm64-v8a; native ARM64 APK cannot be tested" >&2
+adb shell getprop ro.dalvik.vm.native.bridge | tr -d '\r' | tee "$ARTIFACTS/android-native-bridge.txt"
+# Accept a true ARM64 device or an x86_64 image with a verified Google bridge.
+# A translated run is integration evidence, not native ARM64 hardware acceptance.
+primary_abi="$(cat "$ARTIFACTS/android-primary-abi.txt")"
+bridge="$(cat "$ARTIFACTS/android-native-bridge.txt")"
+if [ "$primary_abi" = "arm64-v8a" ]; then
+  runtime_mode="native-arm64-device-or-host"
+elif grep -Eq '(^|,)arm64-v8a(,|$)' "$ARTIFACTS/android-abis.txt" &&
+     [ "$bridge" = "libndk_translation.so" ] &&
+     adb shell "test -r /system/lib64/$bridge"; then
+  runtime_mode="translated-arm64-on-x86_64-emulator"
+else
+  echo "No native ARM64 runtime or verified libndk_translation bridge; refusing to install ARM64-only APK" >&2
   exit 1
 fi
+printf '%s\n' "$runtime_mode" | tee "$ARTIFACTS/runtime-mode.txt"
 adb shell getprop sys.boot_completed | tr -d '\r' | grep -qx 1 || {
   echo "Android device has not completed boot" >&2
   exit 1
@@ -202,8 +213,12 @@ if change < 3.0:
     raise AssertionError("Browser and editor screenshots are suspiciously identical")
 print(f"Visible Android UI difference: {change:.1f} average RGB units")
 PY
-printf '\nPASS: Real AquaWord Writer opened on phone/tablet; Focus Mode worked; UNO edit persisted to DOCX and reopened in Android.\n' | tee "$ARTIFACTS/smoke-result.txt"
-printf 'NOT PROVEN: general interactive tools, PDF workflows, full visual match, long-term stability, real Xiaomi Pad 5 behavior, or arbitrary user document compatibility.\n' >> "$ARTIFACTS/smoke-result.txt"
+runtime_mode="$(cat "$ARTIFACTS/runtime-mode.txt")"
+printf '\nPASS: Real AquaWord Writer opened in Android runtime; Focus Mode worked; UNO edit persisted to DOCX and cold-reopened. Runtime mode: %s.\n' "$runtime_mode" | tee "$ARTIFACTS/smoke-result.txt"
+if [ "$runtime_mode" = "translated-arm64-on-x86_64-emulator" ]; then
+  printf 'LIMIT: ARM64 native code ran through Google libndk_translation on x86_64; this is not native ARM64 CPU or Xiaomi Pad 5 acceptance.\n' >> "$ARTIFACTS/smoke-result.txt"
+fi
+printf 'NOT PROVEN: general interactive tools, PDF workflows, full visual match, long-term stability, physical Xiaomi Pad 5 behavior, real user-selected SAF providers, or arbitrary user document compatibility.\n' >> "$ARTIFACTS/smoke-result.txt"
 
 # Report only the actual features exercised on Android; untested rows stay NOT_VERIFIED.
 # Every receipt references checksummed files, never just a developer's assertion.
@@ -228,7 +243,9 @@ def proof(requirement, files, method, observed):
       "result":"PASS",
       "tester":"GitHub Actions Android runtime harness (automated; NOT a human reviewer)",
       "device_class":"emulator",
-      "device":"Android API " + (root/"android-api-level.txt").read_text().strip() + " emulator; Android release " + (root/"android-version.txt").read_text().strip() + "; advertised ABIs: " + (root/"android-abis.txt").read_text().strip(),
+      "device":"Android API " + (root/"android-api-level.txt").read_text().strip() + " emulator; Android release " + (root/"android-version.txt").read_text().strip() + "; primary ABI: " + (root/"android-primary-abi.txt").read_text().strip() + "; advertised ABIs: " + (root/"android-abis.txt").read_text().strip(),
+      "runtime_mode":(root/"runtime-mode.txt").read_text().strip(),
+      "native_bridge":(root/"android-native-bridge.txt").read_text().strip(),
       "method":method,
       "observed":observed,
       "time_utc":now,
@@ -238,7 +255,7 @@ def proof(requirement, files, method, observed):
 receipts=[
     proof("APP-01",
           ("install.log","installed-package.txt","browser-screen.png",
-           "browser-activity.txt","editor-webview-state.json","smoke-result.txt"),
+           "browser-activity.txt","editor-webview-state.json","runtime-mode.txt","android-primary-abi.txt","android-native-bridge.txt","smoke-result.txt"),
           "ADB install + Activity foreground + live WebView Writer document",
           "Installed and opened a real AquaWord Writer document on Android emulator"),
     proof("UI-03",

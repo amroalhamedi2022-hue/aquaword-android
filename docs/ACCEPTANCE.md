@@ -495,3 +495,13 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 - **لم يصدر PASS/FAIL للـruntime بعد.** حتى لو نجح، فهو baseline لا يثبت كل إصلاحات الفرع الحالي؛ الحزمة أقدم من تحديثات الاختبار/الوثائق الأخيرة.
 - **الحدود المتبقية:** جهاز Xiaomi Pad 5 الحقيقي، مزودات SAF الحقيقية، الطباعة/PDF، وكل قبول الإصدار النهائي تبقى بوابات منفصلة.
 - **Google Drive Handoff:** المزامنة ما زالت **FAILED / NOT AVAILABLE** لأن موصل كتابة Google Docs/Drive غير متاح في بيئة التشغيل؛ المستند المحدد لم يُحدّث.
+
+
+## 2026-10-28 — Android runtime attempt: host-architecture failure and corrected strategy
+
+- **Run:** [#40626355489](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40626355489) — **FAIL before app installation**. APK download/SHA validation and Arabic/English DOCX fixture generation passed. QEMU reported: `Avd's CPU Architecture 'arm64' is not supported by the QEMU2 emulator on x86_64 host`; no Android device booted, so no app-level runtime assertion ran. This is a runner/guest architecture mismatch, not evidence of an AquaWord defect.
+- **Harness correction:** use the free public-repository `ubuntu-24.04` x86_64 runner with KVM enabled and API 35 `google_apis/x86_64`. The official API 35 image properties declare `ro.dalvik.vm.native.bridge=libndk_translation.so` and `ro.dalvik.vm.isa.arm64=x86_64`; the smoke checks the advertised ARM64 ABI and readable bridge library before installing the ARM64-only APK. Official image properties: https://android.googlesource.com/platform/prebuilts/android-emulator-build/system-images/+/refs/heads/main/generic/system-images/android-35/google_apis/x86_64/build.prop
+- **Interpretation:** a pass means ARM64 native-code translation on an x86_64 emulator. It may validate Android install/launch, real Writer Activity, edit/save/cold-reopen and UI lifecycle, but does **not** prove native ARM64 CPU execution, Xiaomi Pad 5 performance, real user-selected SAF providers, or print/PDF.
+- **Build decision:** no new APK was built. Existing diagnostic APK verified at source `df65aa2d92881f34160eadbbfcc0a96dd5f859ab`, SHA-256 `6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc`, artifact ID `12785090689` from run `40613885226`. It predates current source fixes and remains baseline-only.
+- **Next:** one corrected runtime attempt is triggered by the workflow change. If boot/translation fails, retain exact logs and leave runtime acceptance NOT TESTED.
+- **Google Drive Handoff:** FAILED / NOT AVAILABLE; no Docs/Drive write connector is exposed, and the specified Drive document was not updated.
