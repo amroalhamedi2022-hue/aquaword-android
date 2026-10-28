@@ -75,8 +75,10 @@ def run(evidence: Path, timeout: int):
     if "Status: ok" not in launch:
         raise RuntimeError("Android did not start native Writer for the fault-provider URI: " + launch)
 
+    time.sleep(35)
     deadline = time.monotonic() + 100
     pid = ""
+    activities = ""
     while time.monotonic() < deadline:
         try:
             pid = adb("shell", "pidof", PKG).decode().strip().split()[0]
