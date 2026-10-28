@@ -42,7 +42,12 @@ class AndroidEditRoundtripContractTests(unittest.TestCase):
     def test_roundtrip_remains_byte_and_content_verified(self):
         self.assertIn("hashlib.sha256(payload).hexdigest() == original_checksum", SOURCE)
         self.assertIn("validate_document(payload, require_saved_text=SENTINEL)", SOURCE)
-        self.assertIn("cold-reopened-document.docx", (ROOT / "scripts" / "run_android_smoke.sh").read_text(encoding="utf-8"))
+        self.assertIn('directory/"edit-mode-screen.png"', SOURCE)
+        self.assertIn('directory/"edit-mode-logcat.txt"', SOURCE)
+        smoke = (ROOT / "scripts" / "run_android_smoke.sh").read_text(encoding="utf-8")
+        self.assertIn("cold-reopened-document.docx", smoke)
+        self.assertIn('"edit-mode-screen.png"', smoke)
+        self.assertIn('"edit-mode-logcat.txt"', smoke)
 
 
 if __name__ == "__main__":
