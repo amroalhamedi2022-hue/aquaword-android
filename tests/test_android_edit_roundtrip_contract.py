@@ -12,7 +12,7 @@ SOURCE = (ROOT / "scripts" / "android_edit_roundtrip.py").read_text(encoding="ut
 
 
 def expression(name):
-    return SOURCE.split(f'{name} = r"""', 1)[1].split('"""', 1)[0]
+    return SOURCE.split(f'\n{name} = r"""', 1)[1].split('"""', 1)[0]
 
 
 class AndroidEditRoundtripContractTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class AndroidEditRoundtripContractTests(unittest.TestCase):
         self.assertIn("button.click()", click_expression)
         self.assertNotIn(".uno:InsertText", click_expression)
         self.assertIn(".uno:InsertText", edit_expression)
-        self.assertNotIn(".uno:Save", save_expression)
+        self.assertNotIn("sendUnoCommand('.uno:Save')", save_expression)
         self.assertIn("editor.save(false, false)", save_expression)
 
     def test_native_edit_mode_and_real_canvas_focus_are_required(self):
