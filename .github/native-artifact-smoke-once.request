@@ -1,4 +1,4 @@
-One-shot request (2026-10-28, corrected host strategy): test the already-built ARM64 diagnostic APK; do not rebuild.
+One-shot request (2026-10-28, shell-corrected attempt): test the already-built ARM64 diagnostic APK; do not rebuild.
 
 Artifact run: 40613885226
 Artifact ID: 12785090689
@@ -6,8 +6,9 @@ Artifact name: aquaword-native-diagnostic-df65aa2d92881f34160eadbbfcc0a96dd5f859
 Build source SHA: df65aa2d92881f34160eadbbfcc0a96dd5f859ab
 Expected APK SHA-256: 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc
 
-Previous attempt: run 40626355489 failed before app installation because QEMU2 cannot boot an ARM64 guest on the x86_64 host. This was a runner/guest architecture mismatch; no application runtime assertion ran.
+Attempt 1, run 40626355489: failed before app install because QEMU2 cannot boot an ARM64 guest on the x86_64 host.
+Attempt 2, run 40631390483: API 35 x86_64 emulator booted, but the action's inline script used Bash-only "set -o pipefail" while executed by /usr/bin/sh. No app test ran.
 
-Corrected test question: on a free x86_64 Ubuntu runner, can the API 35 Google APIs x86_64 emulator verify its libndk_translation.so bridge, install the existing ARM64 APK, open real Arabic/English DOCX in Writer, perform edit/save/cold-reopen with exact-byte checks, and survive a simulated 16:10 viewport? Source/JVM tests cannot answer these runtime questions.
+Corrected test question: with the POSIX-compatible inline wrapper, can the API 35 Google APIs x86_64 emulator verify libndk_translation.so, install this existing ARM64 APK, open the generated Arabic/English DOCX in Writer, perform edit/save/cold-reopen with exact-byte checks, and survive the simulated 16:10 viewport?
 
-The run must label its result translated ARM64 runtime, NOT native ARM64 CPU acceptance. It does not prove Xiaomi Pad 5 performance, real user-selected SAF providers, print/PDF, or current-source fixes because the APK predates them. No new APK build is authorized by this request.
+A pass means translated ARM64 runtime on x86_64, NOT native ARM64 CPU/device acceptance. It does not prove Xiaomi Pad 5 performance, real user-selected SAF providers, print/PDF, or current-source fixes because the APK predates them. No new APK build is authorized.
