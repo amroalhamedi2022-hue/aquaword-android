@@ -494,3 +494,14 @@ This entry supersedes earlier dated statements in this file that described `andr
 - **Retry policy:** one new authorization for this materially changed source integration; if it fails or completes, do not automatically rerun it.
 - **Remaining gates:** Android install/launch; real SAF provider rejection/truncation and recovery; native Writer Arabic/English edit-save-cold-reopen; process-death restore; PDF/print; Xiaomi Pad 5 UI/performance; final independent recheck and release signature.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE** because no Docs/Drive write connector is exposed in this runtime. The specified Google Doc has not been updated.
+
+
+## 2026-10-28 — Superseding result for native diagnostic #40613885226
+
+This entry supersedes the earlier 2026-10-28 text above that said the diagnostic was still in progress.
+
+- Run [#40613885226](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226) completed **PASS** at authorization/source SHA `df65aa2d92881f34160eadbbfcc0a96dd5f859ab`.
+- Native ARM64 engine, Android integration, Gradle packaging, package ID, APK ZIP structure, and v2 debug signature checks passed. APK SHA-256: `6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc`; native `liblo-native-code.so` SHA-256: `ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2`; artifact ZIP SHA-256: `1520e5bf3bffd6d0af55ddbe2ecbc9d6ca88f575af7167cd138c3051c3bd7937`. [Artifact #12785090689](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226/artifacts/12785090689) is temporary and expires around 2026-10-29 01:24 UTC.
+- The emulator/install/launch step was **SKIPPED** by workflow design. Real Android runtime, SAF provider behavior, Arabic/English DOCX roundtrip, process-death restore, print/PDF, and Xiaomi Pad 5 acceptance remain **NOT TESTED**.
+- Build purpose answered: compile/package/ABI/signature integrity. No automatic retry or identical rebuild is justified. A future build needs a material source change or a specific runtime test not answerable from the existing artifact.
+- Google Drive AquaWord Handoff remains **FAILED / NOT AVAILABLE** because the runtime has no Docs/Drive write connector. PR #7 remains Draft/open; no merge and no `main` changes.
