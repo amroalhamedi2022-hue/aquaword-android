@@ -793,3 +793,15 @@ The harness correction at [commit 71004846c4d669d7a310911548db176aecefdf22](http
 - Integration Tests [#40649863270 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40649863270).
 
 These runs validate source/test contracts only. The one-shot translated runtime [#40648882995](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40648882995) remains **FAIL before edit/save** due to the former portrait/16:10 harness mismatch; it is not evidence of a production SAVE defect. The runtime authorization is consumed and must not be retried automatically. Current-source Writer edit/save/hash/cold-reopen and all real-device/SAF/PDF gates remain **NOT TESTED**. Google Drive AquaWord Handoff remains **FAILED / NOT AVAILABLE**.
+
+
+### 2026-10-28 — latest exact-head CI recheck
+
+- Verified branch/source checkpoint: `c9265339fe60296b9896fd4fa88e13fabb4126a9`.
+- **PASS — Fast Source + SAF Contract:** [run #40650174080](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40650174080).
+- **PASS — Recovery Core (JVM-only):** [run #40650174171](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40650174171).
+- **PASS — Integration Tests:** [run #40650174115](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40650174115). All three runs completed successfully against the exact `c9265339` head; these are source/contract and JVM/integration checks, not Android Writer runtime proof.
+- The corrected landscape harness is source-validated at [commit 71004846c4d669d7a310911548db176aecefdf22](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/71004846c4d669d7a310911548db176aecefdf22). The single authorized translated-runtime run [#40648882995](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40648882995) remains **FAIL before edit/save** on the earlier harness. The request explicitly forbids automatic retry after failure; no runtime retry or APK rebuild was started.
+- **NOT TESTED:** current-source Writer edit/save/DOCX SHA/cold-reopen; real SAF provider failure/truncation and recovery; process-death recovery; PDF export/print; physical Xiaomi Pad 5 visuals/performance.
+- **Handoff sync:** Google Drive `AquaWord — HANDOFF` remains **FAILED / NOT AVAILABLE** because no Google Docs/Drive write connector is exposed. The named document was not updated.
+- **Resume:** keep M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip **OPEN**, PR #7 **Draft**, and `main` untouched. Continue source review while waiting for a newly authorized runtime attempt; do not treat these green checks as runtime acceptance.
