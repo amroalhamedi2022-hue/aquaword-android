@@ -64,3 +64,20 @@ Why source tests are insufficient: the current JVM tests exercise the helper and
 Scope/limits: compile/package and APK integrity only; no emulator certification, no install/launch, no real Android SAF provider, no native Writer Arabic/English edit-save-cold-reopen, no print/PDF runtime proof, and no Xiaomi Pad 5 visual/performance acceptance. Free GitHub-hosted resources only. This is one new diagnostic attempt for a materially changed source integration. If it fails, record the exact failure and do not automatically retry.
 
 Trigger safety: this authorization requires the exact commit message AquaWordNativeDiagnosticRetryOnce and a change to this marker path on fix/saf-save-failure-recovery-20261023. It does not authorize another run after this attempt's outcome is known. No main modification, release, or auto-merge.
+
+
+Fresh authorization — 2026-10-28 (M-NATIVE-01 current-source Writer save roundtrip)
+
+Purpose: one free GitHub-hosted native ARM64 build of the current feature branch, followed only if the APK is produced and verified by one translated-ARM64 emulator roundtrip using that exact APK. This supersedes the older “no new APK build authorized” note in the previous artifact-only request; it does not authorize a final release or repeated builds.
+
+Test question: do the current AquaWord native save/checkpoint/writeback changes compile and package, and does the exact current-source APK allow the real Android Writer flow to insert the QA sentinel, persist a changed valid Arabic/table/image DOCX, and retain identical bytes after force-stop/cold-reopen?
+
+Why source tests are insufficient: JVM SAF/history tests and desktop LibreOffice DOCX round-trips cannot prove the actual pinned Collabora Android callback, WebView edit mode, native SAVE broadcast, content:// FileProvider writeback, or APK ABI/resource/manifest integration. The 2026-10-28 baseline runtime run #40634663305 proved the existing diagnostic APK installs and the Edit button emits native edit-mode-on, but its save roundtrip failed with “Sentinel not present in saved DOCX”; that APK was built from stale source SHA df65aa2d92881f34160eadbbfcc0a96dd5f859ab and lacks the latest save changes.
+
+Exact current-source preflight: source/test head before this authorization is 500b3d11d124ca101b5ca7c29951c72578c40352; Fast Source + SAF Contract, Recovery Core and Integration Tests PASS on that head. The build itself will be pinned by the exact commit SHA produced by this marker update.
+
+Build scope: run the existing pinned Collabora/LibreOffice ARM64 native workflow, Gradle packaging, real AArch64 ELF/ABI/package ID checks, signature verification and APK SHA-256/artifact retention. Cache reuse is allowed only after the existing ELF validator confirms the actual ARM64 library. No paid runner/API, no main modification, no merge/auto-merge, no user documents or secrets in artifacts. If native build fails, record exact logs and stop; do not rebuild automatically.
+
+Runtime follow-up scope: after successful build only, update the one-shot runtime workflow to use the exact new artifact ID/run ID/APK SHA, then install that APK on the existing free API 35 x86_64 emulator with verified libndk_translation, require actual Edit-mode acknowledgement, verify changed DOCX bytes/content, force-stop and cold-reopen, and retain checksummed synthetic evidence. A translated emulator is NOT native ARM64 hardware or Xiaomi Pad 5 acceptance. Real user SAF providers, print/PDF and target-device UI remain separate gates. Do not start another runtime attempt automatically if this follow-up fails.
+
+Trigger safety: this exact marker change plus commit message AquaWordNativeDiagnosticRetryOnce authorizes exactly one native build for this materially changed source. This build authorization is consumed by that attempt; no further native build retry is authorized without a new explicit decision.
