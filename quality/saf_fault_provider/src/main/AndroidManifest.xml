@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:allowBackup="false"
+        android:label="AquaWord SAF QA Provider"
+        android:supportsRtl="true">
+        <!-- QA-only exported provider: installed only by the dedicated CI test app. -->
+        <provider
+            android:name=".TruncatingContentProvider"
+            android:authorities="com.aquaword.saffaultprovider.documents"
+            android:exported="true"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

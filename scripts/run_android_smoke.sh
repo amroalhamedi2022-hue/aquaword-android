@@ -12,13 +12,25 @@ MIME="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 mkdir -p "$ARTIFACTS"
 adb wait-for-device
 adb shell getprop ro.build.version.release | tee "$ARTIFACTS/android-version.txt"
+adb shell getprop ro.build.version.sdk | tr -d '\r' | tee "$ARTIFACTS/android-api-level.txt"
+adb shell getprop ro.product.cpu.abi | tr -d '\r' | tee "$ARTIFACTS/android-primary-abi.txt"
 adb shell getprop ro.product.cpu.abilist | tr -d '\r' | tee "$ARTIFACTS/android-abis.txt"
-# Do not assume x86_64 emulators can load an ARM64-only LibreOffice engine.
-# Google API images may advertise native ARM translation; check, don't guess.
-if ! grep -Eq '(^|,)arm64-v8a(,|$)' "$ARTIFACTS/android-abis.txt"; then
-  echo "Emulator does not advertise arm64-v8a; native ARM64 APK cannot be tested" >&2
+adb shell getprop ro.dalvik.vm.native.bridge | tr -d '\r' | tee "$ARTIFACTS/android-native-bridge.txt"
+# Accept a true ARM64 device or an x86_64 image with a verified Google bridge.
+# A translated run is integration evidence, not native ARM64 hardware acceptance.
+primary_abi="$(cat "$ARTIFACTS/android-primary-abi.txt")"
+bridge="$(cat "$ARTIFACTS/android-native-bridge.txt")"
+if [ "$primary_abi" = "arm64-v8a" ]; then
+  runtime_mode="native-arm64-device-or-host"
+elif grep -Eq '(^|,)arm64-v8a(,|$)' "$ARTIFACTS/android-abis.txt" &&
+     [ "$bridge" = "libndk_translation.so" ] &&
+     adb shell "test -r /system/lib64/$bridge"; then
+  runtime_mode="translated-arm64-on-x86_64-emulator"
+else
+  echo "No native ARM64 runtime or verified libndk_translation bridge; refusing to install ARM64-only APK" >&2
   exit 1
 fi
+printf '%s\n' "$runtime_mode" | tee "$ARTIFACTS/runtime-mode.txt"
 adb shell getprop sys.boot_completed | tr -d '\r' | grep -qx 1 || {
   echo "Android device has not completed boot" >&2
   exit 1
@@ -111,17 +123,33 @@ test -s "$ARTIFACTS/editor-webview-state.json"
 # Second independent live runtime check: approximate Xiaomi Pad 5 landscape
 # geometry using the SAME running Android app. This is a simulated viewport,
 # NOT a claim to have tested a physical Pad 5.
+# Rotate first: locking rotation 0 on a portrait-native emulator kept the
+# screenshot at 1600x2560 even after a 2560x1600 wm-size override.
+adb shell cmd window set-user-rotation lock 1 || true
 adb shell wm size 2560x1600
 adb shell wm density 320
-adb shell cmd window set-user-rotation lock 0 || true
-sleep 15
-adb exec-out screencap -p > "$ARTIFACTS/editor-tablet-16x10.png"
-if ! python3 quality/check_screen.py "$ARTIFACTS/editor-tablet-16x10.png" --aspect 1.6; then
-  adb shell wm size 1600x2560
-  adb shell cmd window set-user-rotation lock 1 || true
-  sleep 15
+adb shell wm size > "$ARTIFACTS/tablet-wm-size.txt"
+adb shell settings get system user_rotation > "$ARTIFACTS/tablet-user-rotation.txt" || true
+adb shell dumpsys display > "$ARTIFACTS/tablet-display-state.txt"
+sleep 20
+tablet_viewport_pass=0
+for attempt in 1 2; do
   adb exec-out screencap -p > "$ARTIFACTS/editor-tablet-16x10.png"
-  python3 quality/check_screen.py "$ARTIFACTS/editor-tablet-16x10.png" --aspect 1.6
+  if python3 quality/check_screen.py "$ARTIFACTS/editor-tablet-16x10.png" --aspect 1.6; then
+    tablet_viewport_pass=1
+    printf 'PASS on capture attempt %s\\n' "$attempt" > "$ARTIFACTS/tablet-viewport-result.txt"
+    break
+  fi
+  if [ "$attempt" -eq 1 ]; then
+    echo "Landscape frame not ready; reapplying landscape-only override for one capture retry."
+    adb shell cmd window set-user-rotation lock 1 || true
+    adb shell wm size 2560x1600
+    sleep 10
+  fi
+done
+if [ "$tablet_viewport_pass" -ne 1 ]; then
+  echo "Landscape viewport did not produce a valid 16:10 frame; see tablet display diagnostics." >&2
+  exit 1
 fi
 adb shell pidof "$PKG" >/dev/null || {
   echo "AquaWord crashed during 16:10 landscape transition" >&2
@@ -136,6 +164,8 @@ test -s "$ARTIFACTS/editor-tablet-webview-state.json"
 # Perform an actual edit in the native Writer engine and require the saved
 # app-owned DOCX bytes to contain it. A successful UNO command alone does NOT pass.
 python3 scripts/android_edit_roundtrip.py --evidence-dir "$ARTIFACTS" --timeout 75
+test -s "$ARTIFACTS/edit-mode-state.json"
+test -s "$ARTIFACTS/edit-command.json"
 test -s "$ARTIFACTS/roundtrip-result.txt"
 
 # Force-stop the app so reopening is a fresh Android process, not
@@ -201,8 +231,12 @@ if change < 3.0:
     raise AssertionError("Browser and editor screenshots are suspiciously identical")
 print(f"Visible Android UI difference: {change:.1f} average RGB units")
 PY
-printf '\nPASS: Real AquaWord Writer opened on phone/tablet; Focus Mode worked; UNO edit persisted to DOCX and reopened in Android.\n' | tee "$ARTIFACTS/smoke-result.txt"
-printf 'NOT PROVEN: general interactive tools, PDF workflows, full visual match, long-term stability, real Xiaomi Pad 5 behavior, or arbitrary user document compatibility.\n' >> "$ARTIFACTS/smoke-result.txt"
+runtime_mode="$(cat "$ARTIFACTS/runtime-mode.txt")"
+printf '\nPASS: Real AquaWord Writer opened in Android runtime; Focus Mode worked; UNO edit persisted to DOCX and cold-reopened. Runtime mode: %s.\n' "$runtime_mode" | tee "$ARTIFACTS/smoke-result.txt"
+if [ "$runtime_mode" = "translated-arm64-on-x86_64-emulator" ]; then
+  printf 'LIMIT: ARM64 native code ran through Google libndk_translation on x86_64; this is not native ARM64 CPU or Xiaomi Pad 5 acceptance.\n' >> "$ARTIFACTS/smoke-result.txt"
+fi
+printf 'NOT PROVEN: general interactive tools, PDF workflows, full visual match, long-term stability, physical Xiaomi Pad 5 behavior, real user-selected SAF providers, or arbitrary user document compatibility.\n' >> "$ARTIFACTS/smoke-result.txt"
 
 # Report only the actual features exercised on Android; untested rows stay NOT_VERIFIED.
 # Every receipt references checksummed files, never just a developer's assertion.
@@ -227,7 +261,9 @@ def proof(requirement, files, method, observed):
       "result":"PASS",
       "tester":"GitHub Actions Android runtime harness (automated; NOT a human reviewer)",
       "device_class":"emulator",
-      "device":"Android API 35 emulator; advertised ABIs: " + (root/"android-abis.txt").read_text().strip(),
+      "device":"Android API " + (root/"android-api-level.txt").read_text().strip() + " emulator; Android release " + (root/"android-version.txt").read_text().strip() + "; primary ABI: " + (root/"android-primary-abi.txt").read_text().strip() + "; advertised ABIs: " + (root/"android-abis.txt").read_text().strip(),
+      "runtime_mode":(root/"runtime-mode.txt").read_text().strip(),
+      "native_bridge":(root/"android-native-bridge.txt").read_text().strip(),
       "method":method,
       "observed":observed,
       "time_utc":now,
@@ -237,7 +273,7 @@ def proof(requirement, files, method, observed):
 receipts=[
     proof("APP-01",
           ("install.log","installed-package.txt","browser-screen.png",
-           "browser-activity.txt","editor-webview-state.json","smoke-result.txt"),
+           "browser-activity.txt","editor-webview-state.json","runtime-mode.txt","android-primary-abi.txt","android-native-bridge.txt","smoke-result.txt"),
           "ADB install + Activity foreground + live WebView Writer document",
           "Installed and opened a real AquaWord Writer document on Android emulator"),
     proof("UI-03",
@@ -245,7 +281,7 @@ receipts=[
           "Chrome DevTools queried live Android WebView and clicked Focus Mode twice",
           "Focus Mode entered and exited; editor page remained visible"),
     proof("FILE-03",
-          ("edit-command.json","roundtrip-result.txt","original-docx-sha256.txt","roundtrip-hash.txt",
+          ("edit-command.json","edit-mode-screen.png","edit-mode-logcat.txt","edit-mode-state.json","edit-mode-confirmation.txt","roundtrip-result.txt","original-docx-sha256.txt","roundtrip-hash.txt",
            "reopened-writer-state.json","cold-reopened-document.docx","smoke-result.txt"),
           "UNO InsertText + native Save + read actual DOCX bytes + reopen",
           "Inserted QA text survived save to app-owned DOCX and Android reopen")

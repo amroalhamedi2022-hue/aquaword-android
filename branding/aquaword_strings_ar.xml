@@ -12,4 +12,5 @@
     <string name="aquaword_new_file_failed">تعذّر إنشاء المستند، ولم يتم فتح ملف غير مكتمل.</string>
     <string name="aquaword_snapshot_preedit">قبل التحرير</string>
     <string name="aquaword_snapshot_saved">نسخة محفوظة</string>
+    <string name="aquaword_snapshot_recovered">نسخة مستعادة بعد انقطاع الحفظ</string>
 </resources>

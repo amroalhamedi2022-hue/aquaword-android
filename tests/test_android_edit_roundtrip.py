@@ -1,5 +1,6 @@
 """Test Android edit/save gate accepts only an actual editable DOCX package."""
 import importlib.util
+import re
 from io import BytesIO
 from pathlib import Path
 import unittest
@@ -47,8 +48,16 @@ class AndroidEditRoundTripTests(unittest.TestCase):
     def test_qa_calls_actual_uno_commands(self):
         self.assertIn(".uno:GoToEndOfDoc", RT.EXPRESSION)
         self.assertIn(".uno:InsertText", RT.EXPRESSION)
-        self.assertIn(".uno:Save", RT.EXPRESSION)
         self.assertIn(RT.SENTINEL, RT.EXPRESSION)
+        self.assertIn("editor.save(false, false)", RT.SAVE_EXPRESSION)
+        # The explanatory comment may name .uno:Save; forbid an actual UNO save dispatch,
+        # which bypasses the Android wrapper callback that this roundtrip must verify.
+        self.assertIsNone(
+            re.search(
+                r"""(?:sendUnoCommand|executeUnoCommand)\s*\(\s*['"]\.uno:Save['"]""",
+                RT.SAVE_EXPRESSION,
+            )
+        )
 
 
 if __name__=="__main__":

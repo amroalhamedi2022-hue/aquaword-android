@@ -74,78 +74,176 @@ def patch_focus_styles(path: Path) -> bool:
 
 
 def patch_native_save_checkpoints(path: Path) -> bool:
-    """Back up the *actually saved* native document after the Writer SAVE event.
+    """Commit a durable saved revision before SAF writeback, off the UI thread.
 
-    The source identity and properties format are shared with the file-browser
-    pre-edit safety copies, so a single History UI can restore either version.
-    Opens the temp document stream before scheduling a worker to tolerate
-    Activity shutdown; never blocks the main thread for the extra backup.
+    A single worker serializes saves. It writes the exact committed snapshot
+    bytes, not a mutable Writer temp path, to the selected document provider.
     """
     body = require(path).read_text(encoding='utf-8')
     marker = 'AQUAWORD_NATIVE_SAVE_CHECKPOINT'
     if marker in body:
-        if body.count('captureNativeSaveCheckpoint();') != 1:
+        if body.count('captureNativeSaveCheckpoint(messageAndParam.clone());') != 1:
             raise PatchError('Partial native save checkpoint integration')
         return False
     save_anchor = '''            case "SAVE":
                 copyTempBackToIntent();
                 sendBroadcast(messageAndParam[0], messageAndParam[1]);'''
     field_anchor = '    private boolean documentLoaded = false;'
-    if body.count(save_anchor) != 1 or body.count(field_anchor) != 1:
-        raise PatchError('Upstream native SAVE callback or LOActivity field anchor changed')
+    destroy_anchor = '''    protected void onDestroy() {
+        mAquaWordSaveHandler.removeCallbacks(mAquaWordSaveTick);'''
+    if (body.count(save_anchor) != 1 or body.count(field_anchor) != 1 or
+            body.count(destroy_anchor) != 1):
+        raise PatchError('Upstream native SAVE callback/lifecycle anchor changed')
     method = '''    // AQUAWORD_NATIVE_SAVE_CHECKPOINT:
-    // Store a recoverable revision after native Writer signals SAVE.
-    // The previously captured pre-edit snapshot remains untouched.
-    private void captureNativeSaveCheckpoint() {
-        if (!isDocEditable || mTempFile == null || !mTempFile.isFile())
-            return;
+    // Serialize saves to preserve their order. The queue is Activity-owned;
+    // shutdown on destroy drains already-accepted saves without cancelling.
+    // AQUAWORD_BOUNDED_SAVE_QUEUE: cloud SAF writes can stall indefinitely.
+    // An unbounded queue would retain an open Writer file descriptor for
+    // every subsequent autosave, eventually exhausting process resources.
+    // Reject excess saves safely; the rejection handler closes their streams.
+    private static final int AQUAWORD_MAX_PENDING_SAVES = 8;
+    private final java.util.concurrent.ThreadPoolExecutor mAquaWordSaveExecutor =
+            new java.util.concurrent.ThreadPoolExecutor(
+                    1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS,
+                    new java.util.concurrent.ArrayBlockingQueue<Runnable>(
+                            AQUAWORD_MAX_PENDING_SAVES),
+                    r -> new Thread(r, "AquaWordNativeSaveCheckpoint"),
+                    new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+
+    private void captureNativeSaveCheckpoint(final String[] saveMessage) {
         final android.net.Uri original = getIntent().getData();
-        if (original == null)
+        // AQUAWORD_DIRECT_FILE_SAVE: pinned Collabora opens file:// Writer
+        // documents directly, with mTempFile == null. Writer has already
+        // written the original at SAVE; there is no SAF copy-back to perform.
+        // Do not silently drop the SAVE notification for these documents.
+        final boolean directWriterFile = original != null && mTempFile == null &&
+                ContentResolver.SCHEME_FILE.equals(original.getScheme());
+        final java.io.File writerOutput = directWriterFile && original.getPath() != null ?
+                new java.io.File(original.getPath()) : mTempFile;
+        if (!isDocEditable || writerOutput == null || !writerOutput.isFile() ||
+                writerOutput.length() <= 0L || original == null) {
+            Log.e(TAG, "AquaWord cannot save: missing editable Writer source");
             return;
-        final String sourceIdentity = original.toString();
-        // SAF document ids are not always filenames (e.g. cloud providers).
-        // Prefer the provider's actual display name for the recovery list.
-        String candidateName = original.getLastPathSegment() == null ?
-                "Document.docx" : original.getLastPathSegment();
-        try (android.database.Cursor cursor = getContentResolver().query(
-                original, new String[] { android.provider.OpenableColumns.DISPLAY_NAME },
-                null, null, null)) {
-            if (cursor != null && cursor.moveToFirst()) {
-                final int column = cursor.getColumnIndex(
-                        android.provider.OpenableColumns.DISPLAY_NAME);
-                if (column >= 0 && cursor.getString(column) != null)
-                    candidateName = cursor.getString(column);
-            }
-        } catch (Exception queryFailure) {
-            Log.w(TAG, "Using fallback document name for recovery checkpoint", queryFailure);
         }
-        final String name = candidateName;
+        // Freeze the resolved local destination for this SAVE: later Activity
+        // changes must not redirect an already queued writeback.
+        final java.io.File resolvedAtSave = mResolvedFile;
+        final String sourceIdentity = original.toString();
+        final String fallbackName = original.getLastPathSegment() == null ?
+                "Document.docx" : original.getLastPathSegment();
         final java.io.InputStream saved;
         try {
-            // Hold an FD before Activity teardown; backup work is asynchronous.
-            saved = new java.io.FileInputStream(mTempFile);
+            // Open before returning from Writer's SAVE callback. If Writer
+            // replaces its temp path, this descriptor still refers to the
+            // saved version rather than the next revision.
+            saved = new java.io.FileInputStream(writerOutput);
         } catch (java.io.IOException failure) {
             Log.e(TAG, "Cannot open saved Writer document for recovery", failure);
             return;
         }
-        new Thread(() -> {
-            try (java.io.InputStream stream = saved) {
-                AquaWordHistory.capture(getFilesDir(), stream, name, sourceIdentity, "saved");
-            } catch (Exception failure) {
-                Log.e(TAG, "AquaWord post-save recovery checkpoint failed", failure);
-            }
-        }, "AquaWordNativeSaveCheckpoint").start();
+        try {
+            mAquaWordSaveExecutor.execute(() -> {
+                // A direct file:// save is already on disk. If history
+                // capture fails before source verification starts, preserve
+                // Writer's native success notification. A mismatched source
+                // checksum must NOT be mistaken for a history-only failure.
+                boolean writerReadbackStarted = false;
+                // AQUAWORD_LOCAL_RECOVERY_NAME: no provider metadata IPC on
+                // the SAVE callback or in the recovery-critical path.
+                try (java.io.InputStream stream = saved) {
+                    String name = AquaWordHistory.preferredDisplayName(
+                            getFilesDir(), sourceIdentity, fallbackName);
+                    // AQUAWORD_DURABLE_SAVE_BARRIER: capture fsyncs the
+                    // app-private bytes and metadata before returning. If
+                    // capture fails, do NOT open/truncate the SAF destination.
+                    AquaWordHistory.Snapshot checkpoint = AquaWordHistory.capture(
+                            getFilesDir(), stream, name, sourceIdentity, "saved");
+                    if (checkpoint == null || checkpoint.sizeBytes <= 0L)
+                        throw new java.io.IOException("Empty native recovery checkpoint");
+                    // AQUAWORD_WRITEBACK_LEASE: protect the snapshot while
+                    // SAF performs potentially slow writes and readback.
+                    try (AquaWordHistory.WritebackLease lease =
+                                 AquaWordHistory.holdForWriteback(checkpoint)) {
+                    // AQUAWORD_WRITER_SOURCE_STABILITY: the FileInputStream
+                    // opened on SAVE is not an immutable snapshot if Writer
+                    // overwrites the same inode before the worker runs.
+                    // Refuse stale/torn checkpoints BEFORE truncating SAF.
+                    // This read is performed on the save worker, never UI.
+                    writerReadbackStarted = true;
+                    try (java.io.InputStream writerReadback =
+                                 new java.io.FileInputStream(writerOutput)) {
+                        AquaWordHistory.verifyProviderWriteback(checkpoint, writerReadback);
+                    }
+                    // Write the immutable verified revision, not mTempFile:
+                    // subsequent Writer saves must not change the payload.
+                    boolean written = directWriterFile ||
+                            copyTempBackToIntent(checkpoint.file, original, resolvedAtSave);
+                    // AQUAWORD_SAF_READBACK_BARRIER: a provider can silently
+                    // truncate/corrupt bytes while accepting all writes.
+                    // AQUAWORD_RESOLVED_FILE_READBACK: the local resolved-file
+                    // path needs the same SHA-256 gate before SAVE broadcast.
+                    // Keep the checkpoint on any failed/stale readback.
+                    if (written && !directWriterFile) {
+                        if (resolvedAtSave != null) {
+                            try (InputStream localReadback =
+                                         new FileInputStream(resolvedAtSave)) {
+                                AquaWordHistory.verifyProviderWriteback(checkpoint, localReadback);
+                            }
+                        } else {
+                            try (InputStream providerReadback =
+                                         getContentResolver().openInputStream(original)) {
+                                AquaWordHistory.verifyProviderWriteback(checkpoint, providerReadback);
+                            }
+                        }
+                    }
+                    if (written) {
+                        // file:// was already persisted by native Writer;
+                        // resolved local copies use their own file write path.
+                        sendBroadcast(saveMessage[0], saveMessage[1]);
+                    } else {
+                        Log.e(TAG, "AquaWord SAVE not acknowledged because the original document was not written");
+                    }
+                    } // release recovery lease after provider writeback
+                } catch (Exception failure) {
+                    if (directWriterFile && writerOutput.isFile() && writerOutput.length() > 0L) {
+                        // Only failures BEFORE source-readback can be treated
+                        // as best-effort history failures. If the Writer
+                        // bytes differ from the checkpoint, do not broadcast
+                        // a false success for the mismatched revision.
+                        if (!writerReadbackStarted) {
+                            Log.w(TAG, "Native file saved by Writer, but recovery checkpoint failed", failure);
+                            sendBroadcast(saveMessage[0], saveMessage[1]);
+                            return;
+                        }
+                    }
+                    Log.e(TAG, "AquaWord post-save recovery or writeback failed", failure);
+                    runOnUiThread(() -> {
+                        if (!isFinishing() && !isDestroyed())
+                            Toast.makeText(this, R.string.failed_to_save_file, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException shutdown) {
+            try { saved.close(); } catch (java.io.IOException ignored) { }
+            Log.e(TAG, "AquaWord SAVE rejected: checkpoint queue full or Activity destroyed", shutdown);
+            // Never silently lose a SAVE request when a stalled provider
+            // saturates the bounded queue. The original SAF file is untouched.
+            runOnUiThread(() -> {
+                if (!isFinishing() && !isDestroyed())
+                    Toast.makeText(this, R.string.failed_to_save_file, Toast.LENGTH_LONG).show();
+            });
+        }
     }
 
 '''
     body = body.replace(field_anchor, method + field_anchor, 1)
     body = body.replace(save_anchor, '''            case "SAVE":
-                if (copyTempBackToIntent()) {
-                    captureNativeSaveCheckpoint();
-                    sendBroadcast(messageAndParam[0], messageAndParam[1]);
-                } else {
-                    Log.e(TAG, "AquaWord SAVE not acknowledged because the original document was not written");
-                }''', 1)
+                // AQUAWORD_RECOVER_FAILED_SAF_SAVE: queue recovery + SAF
+                // writeback as one ordered background transaction. A SAVE
+                // broadcast is sent only after both steps succeed.
+                captureNativeSaveCheckpoint(messageAndParam.clone());''', 1)
+    body = body.replace(destroy_anchor, destroy_anchor +
+            '\n        mAquaWordSaveExecutor.shutdown();', 1)
     return store(path, body)
 
 
@@ -186,7 +284,32 @@ def patch_native_saf_saveback(path: Path) -> bool:
             'reportSaveToFileFailed();' not in direct or
             'MediaScannerConnection.scanFile' not in direct):
         raise PatchError('Upstream direct-file save semantics drifted')
-    direct = direct.replace('private void copyTempBackToFile()', 'private boolean copyTempBackToFile()', 1)
+    direct = direct.replace('private void copyTempBackToFile()', 'private boolean copyTempBackToFile(java.io.File sourceFile, java.io.File resolvedFile)', 1)
+    direct = direct.replace('new FileInputStream(mTempFile)', 'new FileInputStream(sourceFile)')
+    # A predictable sibling ".<name>.part" can collide with a user's own file
+    # and would be truncated before the save is known to be successful. Create
+    # an exclusively allocated, unique staging file in the same directory.
+    staging_declaration = '        File newContent = new File(resolvedFile.getParentFile(), "." + resolvedFile.getName() + ".part");'
+    if direct.count(staging_declaration) != 1:
+        raise PatchError('Upstream local save staging declaration changed')
+    direct = direct.replace(staging_declaration, '        File newContent = null;', 1)
+    try_anchor = "        try {" + chr(10) + "            long bytes = 0;"
+    if direct.count(try_anchor) != 1:
+        raise PatchError('Upstream local save try/byte-count anchor changed')
+    direct = direct.replace(
+        try_anchor,
+        "        try {" + chr(10) +
+        '            newContent = File.createTempFile(".aquaword-", ".part", resolvedFile.getParentFile());' + chr(10) +
+        '            long bytes = 0;', 1)
+    # A failed createTempFile leaves newContent null; cleanup must not mask the
+    # original write error with a NullPointerException.
+    cleanup_anchor = '            newContent.delete();' + chr(10)
+    cleanup_replacement = (
+        '            if (newContent != null && newContent.exists() && !newContent.delete())' + chr(10) +
+        '                Log.w(TAG, "Unable to remove failed local save staging file: " + newContent);' + chr(10)
+    )
+    direct = direct.replace(cleanup_anchor, cleanup_replacement)
+    direct = direct.replace('        final File resolvedFile = mResolvedFile;\n', '', 1)
     direct = direct.replace('            return;', '            return false;')
     # Successful copy and rename is the only path allowed to acknowledge SAVE.
     direct = direct.replace('            MediaScannerConnection.scanFile(this, new String[]{resolvedFile.getAbsolutePath()}, null, null);',
@@ -196,27 +319,26 @@ def patch_native_saf_saveback(path: Path) -> bool:
     if ('return true;' not in direct or direct.count('return false;') < 3):
         raise PatchError('Could not make direct-file save report its completion state')
     replacement = '''    // AQUAWORD_NATIVE_SAF_SAVE_BACK: never silently report incomplete writes.
-    private boolean copyTempBackToIntent() {
-        if (!isDocEditable || mTempFile == null ||
-                getIntent().getData() == null ||
-                !ContentResolver.SCHEME_CONTENT.equals(getIntent().getData().getScheme()))
+    private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination, java.io.File resolvedAtSave) {
+        if (!isDocEditable || sourceFile == null || !sourceFile.isFile() ||
+                destination == null ||
+                !ContentResolver.SCHEME_CONTENT.equals(destination.getScheme()))
             return false;
-        if (mResolvedFile != null) {
-            return copyTempBackToFile();
+        if (resolvedAtSave != null) {
+            return copyTempBackToFile(sourceFile, resolvedAtSave);
         }
-        final Uri destination = getIntent().getData();
-        try (InputStream input = new FileInputStream(mTempFile)) {
-            if (mTempFile.length() <= 0L)
+        try (InputStream input = new FileInputStream(sourceFile)) {
+            if (sourceFile.length() <= 0L)
                 throw new IOException("Refusing to replace document with empty Writer temp file");
-            OutputStream opened;
-            try {
-                opened = getContentResolver().openOutputStream(destination, "wt");
-            } catch (FileNotFoundException noTruncateMode) {
-                Log.w(TAG, "Provider did not support wt; trying default output mode", noTruncateMode);
-                opened = getContentResolver().openOutputStream(destination);
-            }
-            if (opened == null)
-                throw new IOException("Document provider returned no writable stream");
+            // Android ContentResolver.openOutputStream(uri) is equivalent to
+            // mode "w", which is NOT guaranteed to truncate existing content.
+            // A shorter edited DOCX could retain stale trailing ZIP bytes.
+            // Never silently fall back to ambiguous "w" on an existing file.
+            // Try only explicitly truncating modes, otherwise fail the SAVE
+            // and leave the post-edit recovery snapshot available.
+            // Shared and JVM-tested mode negotiation; never fall back to ambiguous "w".
+            OutputStream opened = AquaWordSafOutput.openTruncating(
+                    mode -> getContentResolver().openOutputStream(destination, mode));
             long bytes = 0L;
             try (OutputStream output = opened) {
                 byte[] buffer = new byte[64 * 1024];
@@ -230,7 +352,7 @@ def patch_native_saf_saveback(path: Path) -> bool:
                 output.flush();
             }
             // Stream closed successfully before any success log.
-            if (bytes != mTempFile.length())
+            if (bytes != sourceFile.length())
                 throw new IOException("SAF copy size differs from native saved document");
             Log.i(TAG, "AquaWord safely copied " + bytes + " bytes to the document provider");
             return true;
@@ -250,6 +372,159 @@ def patch_native_saf_saveback(path: Path) -> bool:
     a = with_file_patch.index(start)
     b = with_file_patch.index(end, a)
     return store(path, with_file_patch[:a] + replacement + with_file_patch[b:])
+
+
+
+def patch_native_export_writeback(path: Path) -> bool:
+    """Make Collabora's exportfile SAF copy asynchronous and readback-verified.
+
+    The pinned upstream REQUEST_EXPORT_FILE handler copies on the UI thread,
+    deletes its only temporary PDF even on failure, and does not verify what
+    a provider actually stored. Reuse the bounded native SAVE executor; keep
+    the export source on failure so a failed copy cannot be reported as saved.
+    """
+    body = require(path).read_text(encoding='utf-8')
+    marker = 'AQUAWORD_VERIFIED_ASYNC_EXPORT'
+    if marker in body:
+        if body.count(marker) != 1 or 'exportSource.delete()' not in body:
+            raise PatchError('Partial AquaWord export integration')
+        return False
+    start = '            case REQUEST_EXPORT_FILE: {'
+    end = '            case REQUEST_SAVEAS_PDF:'
+    if body.count(start) != 1:
+        raise PatchError('Pinned upstream export handler anchor changed')
+    a = body.index(start)
+    b = body.find(end, a + len(start))
+    if b < 0:
+        raise PatchError('Pinned upstream export handler tail changed')
+    previous = body[a:b]
+    if ('srcFile.delete();' not in previous or
+            'openOutputStream(intent.getData(), "wt")' not in previous or
+            'mPendingExportSourcePath = null;' not in previous):
+        raise PatchError('Pinned upstream export semantics changed')
+    replacement = '''            case REQUEST_EXPORT_FILE: {
+                // AQUAWORD_VERIFIED_ASYNC_EXPORT: no large PDF copies on the UI
+                // thread; a failed/truncated provider must never silently
+                // consume the only native export source.
+                final String pendingExport = mPendingExportSourcePath;
+                mPendingExportSourcePath = null;
+                if (resultCode != RESULT_OK || intent == null ||
+                        intent.getData() == null || pendingExport == null)
+                    return;
+                final File exportSource = new File(pendingExport);
+                final Uri exportTarget = intent.getData();
+                if (!exportSource.isFile() || exportSource.length() <= 0L) {
+                    Toast.makeText(this, R.string.aquaword_export_missing,
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+                try {
+                    // Shares the bounded, serialized SAVE worker so stalled
+                    // providers cannot create an unlimited export thread pool.
+                    mAquaWordSaveExecutor.execute(() -> {
+                        boolean verified = false;
+                        try {
+                            java.security.MessageDigest expected =
+                                    java.security.MessageDigest.getInstance("SHA-256");
+                            long written = 0L;
+                            // AQUAWORD_PDF_TRAILER_PREFLIGHT: reject incomplete
+                             // native PDFs before opening/truncating SAF.
+                             // This is screening, not full PDF parsing.
+                             AquaWordPdfPreflight.requirePlausiblePdf(exportSource);
+                             // AQUAWORD_PDF_SIGNATURE_AND_TRUNCATION: validate
+                            // native output before opening (and potentially
+                            // truncating) a user's SAF destination. Android's
+                            // default "w" mode is NOT guaranteed to truncate.
+                            try (java.io.BufferedInputStream source =
+                                         new java.io.BufferedInputStream(new FileInputStream(exportSource))) {
+                                source.mark(5);
+                                byte[] signature = new byte[5];
+                                new java.io.DataInputStream(source).readFully(signature);
+                                source.reset();
+                                if (signature[0] != '%' || signature[1] != 'P' ||
+                                        signature[2] != 'D' || signature[3] != 'F' ||
+                                        signature[4] != '-')
+                                    throw new IOException("Native export is not a PDF");
+                                OutputStream destination = AquaWordSafOutput.openTruncating(
+                                        mode -> getContentResolver().openOutputStream(exportTarget, mode));
+                                try (OutputStream output = destination) {
+                                    byte[] bytes = new byte[64 * 1024];
+                                    int n;
+                                    int noProgress = 0;
+                                    while ((n = source.read(bytes)) != -1) {
+                                        if (n == 0) {
+                                            if (++noProgress >= 8)
+                                                throw new IOException("Export source stalled");
+                                            continue;
+                                        }
+                                        noProgress = 0;
+                                        written += n;
+                                        expected.update(bytes, 0, n);
+                                        output.write(bytes, 0, n);
+                                    }
+                                    output.flush();
+                                }
+                            }
+                            if (written <= 0L)
+                                throw new IOException("Refusing empty PDF export");
+                            java.security.MessageDigest observed =
+                                    java.security.MessageDigest.getInstance("SHA-256");
+                            long readBytes = 0L;
+                            try (InputStream readback =
+                                         getContentResolver().openInputStream(exportTarget)) {
+                                if (readback == null)
+                                    throw new IOException("Export provider readback unavailable");
+                                byte[] bytes = new byte[64 * 1024];
+                                int n;
+                                int noProgress = 0;
+                                while ((n = readback.read(bytes)) != -1) {
+                                    if (n == 0) {
+                                        if (++noProgress >= 8)
+                                            throw new IOException("Export readback stalled");
+                                        continue;
+                                    }
+                                    noProgress = 0;
+                                    readBytes += n;
+                                    if (readBytes > written)
+                                        throw new IOException("Export provider appended data");
+                                    observed.update(bytes, 0, n);
+                                }
+                            }
+                            if (readBytes != written ||
+                                    !java.util.Arrays.equals(expected.digest(), observed.digest()))
+                                throw new IOException("Export provider checksum/size mismatch");
+                            verified = true;
+                        } catch (Exception exportFailure) {
+                            Log.e(TAG, "AquaWord PDF export not verified; source retained", exportFailure);
+                            runOnUiThread(() -> {
+                                if (!isFinishing() && !isDestroyed())
+                                    Toast.makeText(this, R.string.aquaword_export_unverified,
+                                            Toast.LENGTH_LONG).show();
+                            });
+                        }
+                        if (verified && !exportSource.delete())
+                            Log.w(TAG, "Verified export source cleanup deferred: " + exportSource);
+                        if (verified) {
+                            // AQUAWORD_EXPORT_VERIFIED_FEEDBACK: only report
+                            // success after provider SHA-256 readback matches.
+                            runOnUiThread(() -> {
+                                if (!isFinishing() && !isDestroyed())
+                                    Toast.makeText(this, R.string.aquaword_export_verified,
+                                            Toast.LENGTH_SHORT).show();
+                            });
+                        }
+                    });
+                } catch (java.util.concurrent.RejectedExecutionException rejected) {
+                    // Do not discard the native export when the bounded queue
+                    // is full or this Activity is shutting down.
+                    Log.e(TAG, "AquaWord export queue full; source retained", rejected);
+                    Toast.makeText(this, R.string.aquaword_export_busy,
+                            Toast.LENGTH_LONG).show();
+                }
+                return;
+            }
+'''
+    return store(path, body[:a] + replacement + body[b:])
 
 
 def patch_periodic_native_autosave(path: Path) -> bool:
@@ -388,7 +663,10 @@ def patch_history_menu(path: Path) -> bool:
 
 def patch_history_strings(path: Path) -> bool:
     content = require(path).read_text(encoding='utf-8')
-    if 'name="aquaword_safety_copies"' in content: return False
+    if 'name="aquaword_safety_copies"' in content:
+        if 'name="aquaword_snapshot_recovered"' not in content:
+            raise PatchError('Partial AquaWord history strings: recovered-snapshot label missing')
+        return False
     if content.count('</resources>') != 1: raise PatchError('Upstream strings.xml unexpected format')
     additions = '''    <!-- AquaWord local pre-edit recovery -->
     <string name="aquaword_safety_copies">Safety copies</string>
@@ -403,6 +681,7 @@ def patch_history_strings(path: Path) -> bool:
     <string name="aquaword_new_file_failed">Could not create the document. The file was not opened.</string>
     <string name="aquaword_snapshot_preedit">Before editing</string>
     <string name="aquaword_snapshot_saved">Saved revision</string>
+    <string name="aquaword_snapshot_recovered">Recovered after interrupted save</string>
 '''
     return store(path, content.replace('</resources>', additions + '</resources>'))
 
@@ -431,17 +710,34 @@ def patch_history_activity(path: Path) -> bool:
 
         Intent i = getIntentToEdit(uri);
         startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);'''
-    replacement = '''        addDocumentToRecents(uri);
-
+    replacement = '''        // A canceled or failed safety-copy attempt must not enter Recents.
         final Intent i = getIntentToEdit(uri);
-        final String name = RecentFilesAdapter.getUriFilename(this, uri);
+        // Provider metadata can block on cloud/network IPC: resolve it on the worker.
+        // AQUAWORD_CANCELABLE_PREEDIT: a cloud provider can stall indefinitely.
+        // Back dismisses the waiting dialog without opening an unprotected
+        // document when the worker eventually completes.
+        final java.util.concurrent.atomic.AtomicBoolean cancelled =
+                new java.util.concurrent.atomic.AtomicBoolean(false);
         final AlertDialog progress = new AlertDialog.Builder(this)
                 .setTitle(R.string.aquaword_safety_copies)
                 .setMessage(R.string.aquaword_creating_safety_copy)
-                .setCancelable(false).create();
+                .setCancelable(true).create();
+        progress.setCanceledOnTouchOutside(false);
+        progress.setOnCancelListener(dialog -> cancelled.set(true));
         progress.show();
         new Thread(() -> {
             String problem = null;
+            // AQUAWORD_ASYNC_PREEDIT_METADATA: no cloud-backed query on UI.
+            String name = uri.getLastPathSegment();
+            if (name == null || name.trim().isEmpty())
+                name = "Untitled Document";
+            try {
+                final String providerName = RecentFilesAdapter.getUriFilename(this, uri);
+                if (providerName != null && !providerName.trim().isEmpty())
+                    name = providerName;
+            } catch (Exception metadataFailure) {
+                Log.w(LOGTAG, "Using URI-derived name for safety copy", metadataFailure);
+            }
             try (InputStream data = getContentResolver().openInputStream(uri)) {
                 AquaWordHistory.capture(getFilesDir(), data, name, uri.toString());
             } catch (Exception failure) {
@@ -450,15 +746,21 @@ def patch_history_activity(path: Path) -> bool:
             final String message = problem;
             runOnUiThread(() -> {
                 progress.dismiss();
-                if (isFinishing() || isDestroyed()) return;
+                if (cancelled.get() || isFinishing() || isDestroyed()) return;
                 if (message == null) {
+                    // AQUAWORD_RECENTS_AFTER_OPEN: only record an actual launch.
                     startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
+                    addDocumentToRecents(uri);
                 } else {
                     new AlertDialog.Builder(this)
                         .setTitle(R.string.aquaword_copy_failed)
                         .setMessage(getString(R.string.aquaword_copy_failed_body) + "\\\\n" + message)
                         .setPositiveButton(R.string.aquaword_open_anyway,
-                            (dialog, which) -> startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE))
+                            (dialog, which) -> {
+                                if (cancelled.get() || isFinishing() || isDestroyed()) return;
+                                startActivityForResult(i, LO_ACTIVITY_REQUEST_CODE);
+                                addDocumentToRecents(uri);
+                            })
                         .setNegativeButton(android.R.string.cancel, null)
                         .show();
                 }
@@ -480,49 +782,62 @@ def patch_history_activity(path: Path) -> bool:
     if content.count(before) != 1: raise PatchError('Upstream insertion anchor changed')
     methods = '''    /** Lists app-private pre-edit safety copies; restore always creates a new file. */
     private void showAquaWordHistory() {
-        final List<AquaWordHistory.Snapshot> snapshots;
-        try {
-            snapshots = AquaWordHistory.list(getFilesDir());
-        } catch (IOException failure) {
-            Toast.makeText(this, R.string.aquaword_restore_failure, Toast.LENGTH_LONG).show();
-            return;
-        }
-        if (snapshots.isEmpty()) {
-            Toast.makeText(this, R.string.aquaword_no_copies, Toast.LENGTH_LONG).show();
-            return;
-        }
-        final String[] names = new String[snapshots.size()];
-        final java.text.DateFormat timeFormat = java.text.DateFormat.getDateTimeInstance();
-        for (int n = 0; n < snapshots.size(); ++n) {
-            AquaWordHistory.Snapshot snapshot = snapshots.get(n);
-            names[n] = getString("saved".equals(snapshot.kind) ?
-                R.string.aquaword_snapshot_saved : R.string.aquaword_snapshot_preedit)
-                + " · " + snapshot.displayName + " — " +
-                timeFormat.format(new java.util.Date(snapshot.createdMillis));
-        }
-        new AlertDialog.Builder(this)
-            .setTitle(R.string.aquaword_choose_snapshot)
-            .setItems(names, (dialog, which) -> {
-                pendingAquaWordRestore = snapshots.get(which);
-                Intent destination = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                destination.addCategory(Intent.CATEGORY_OPENABLE);
-                final String lowerName = pendingAquaWordRestore.displayName.toLowerCase(java.util.Locale.ROOT);
-                if (lowerName.endsWith(".docx")) {
-                    destination.setType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-                } else if (lowerName.endsWith(".odt")) {
-                    destination.setType("application/vnd.oasis.opendocument.text");
-                } else if (lowerName.endsWith(".rtf")) {
-                    destination.setType("application/rtf");
-                } else if (lowerName.endsWith(".txt")) {
-                    destination.setType("text/plain");
-                } else {
-                    destination.setType("application/octet-stream");
+        // AQUAWORD_ASYNC_HISTORY_LIST: a concurrent large snapshot capture
+        // holds AquaWordHistory's lock. Never wait for it on the UI thread.
+        new Thread(() -> {
+            final List<AquaWordHistory.Snapshot> snapshots;
+            try {
+                snapshots = AquaWordHistory.list(getFilesDir());
+            } catch (IOException failure) {
+                Log.e(LOGTAG, "AquaWord history listing failed", failure);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed())
+                        Toast.makeText(this, R.string.aquaword_restore_failure, Toast.LENGTH_LONG).show();
+                });
+                return;
+            }
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (snapshots.isEmpty()) {
+                    Toast.makeText(this, R.string.aquaword_no_copies, Toast.LENGTH_LONG).show();
+                    return;
                 }
-                destination.putExtra(Intent.EXTRA_TITLE, pendingAquaWordRestore.displayName);
-                startActivityForResult(destination, AQUAWORD_RESTORE_REQUEST_CODE);
-            })
-            .setNegativeButton(android.R.string.cancel, null)
-            .show();
+                final String[] names = new String[snapshots.size()];
+                final java.text.DateFormat timeFormat = java.text.DateFormat.getDateTimeInstance();
+                for (int n = 0; n < snapshots.size(); ++n) {
+                    AquaWordHistory.Snapshot snapshot = snapshots.get(n);
+                    int label = "saved".equals(snapshot.kind) ?
+                        R.string.aquaword_snapshot_saved :
+                        ("recovered".equals(snapshot.kind) ?
+                            R.string.aquaword_snapshot_recovered : R.string.aquaword_snapshot_preedit);
+                    names[n] = getString(label) + " · " + snapshot.displayName + " — " +
+                        timeFormat.format(new java.util.Date(snapshot.createdMillis));
+                }
+                new AlertDialog.Builder(this)
+                    .setTitle(R.string.aquaword_choose_snapshot)
+                    .setItems(names, (dialog, which) -> {
+                        pendingAquaWordRestore = snapshots.get(which);
+                        Intent destination = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        destination.addCategory(Intent.CATEGORY_OPENABLE);
+                        final String lowerName = pendingAquaWordRestore.displayName.toLowerCase(java.util.Locale.ROOT);
+                        if (lowerName.endsWith(".docx")) {
+                            destination.setType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                        } else if (lowerName.endsWith(".odt")) {
+                            destination.setType("application/vnd.oasis.opendocument.text");
+                        } else if (lowerName.endsWith(".rtf")) {
+                            destination.setType("application/rtf");
+                        } else if (lowerName.endsWith(".txt")) {
+                            destination.setType("text/plain");
+                        } else {
+                            destination.setType("application/octet-stream");
+                        }
+                        destination.putExtra(Intent.EXTRA_TITLE, pendingAquaWordRestore.displayName);
+                        startActivityForResult(destination, AQUAWORD_RESTORE_REQUEST_CODE);
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            });
+        }, "AquaWordHistoryList").start();
     }
 
 '''
@@ -539,8 +854,31 @@ def patch_history_activity(path: Path) -> bool:
                 persistDocumentPermission(target, data);
                 new Thread(() -> {
                     boolean success;
-                    try (OutputStream output = getContentResolver().openOutputStream(target, "w")) {
-                        AquaWordHistory.restore(item, output);
+                    try {
+                        // AQUAWORD_SAFE_HISTORY_RESTORE: ACTION_CREATE_DOCUMENT
+                        // can return an existing URI. Plain "w" may not truncate,
+                        // leaving trailing bytes from an older DOCX/ZIP.
+                        // AQUAWORD_RESTORE_PREFLIGHT: wt/rwt can truncate as
+                        // soon as the provider opens. Reject a corrupt/missing
+                        // snapshot BEFORE touching the selected destination.
+                        AquaWordHistory.verifyForRestore(item);
+                        // Stage and checksum the complete recovery copy before
+                        // invoking openOutputStream: SAF providers may truncate
+                        // immediately when "wt"/"rwt" is requested.
+                        AquaWordHistory.restoreToDestination(item, () -> {
+                            return org.libreoffice.androidlib.AquaWordSafOutput.openTruncating(
+                                    mode -> getContentResolver().openOutputStream(target, mode));
+                        });
+                        // AQUAWORD_RESTORE_READBACK_BARRIER: a provider can
+                        // accept and close every write yet silently persist
+                        // truncated or stale bytes. Never launch Writer or
+                        // report restore success until readback matches the
+                        // private, SHA-256-validated snapshot.
+                        try (InputStream readback = getContentResolver().openInputStream(target)) {
+                            AquaWordHistory.verifyProviderWriteback(item, readback);
+                        }
+                        // Readback proves immediate provider-visible bytes,
+                        // not eventual remote cloud synchronization.
                         success = true;
                     } catch (Exception failure) {
                         Log.e(LOGTAG, "AquaWord safety copy restore failed", failure);
@@ -601,18 +939,58 @@ def patch_async_new_document_creation(path: Path) -> bool:
             // Other legacy document formats retain their native upstream assets.
             try (InputStream template = getAssets().open(
                     "docx".equalsIgnoreCase(extension) ? "aquaword/blank.docx" :
-                    "templates/untitled." + extension);
-                 OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
-                if (output == null)
-                    throw new IOException("No writable document URI");
-                byte[] buffer = new byte[64 * 1024];
-                int bytesRead;
-                while ((bytesRead = template.read(buffer)) != -1) {
-                    if (bytesRead > 0)
-                        output.write(buffer, 0, bytesRead);
+                    "templates/untitled." + extension)) {
+                // A provider may return an existing URI; negotiate only explicit
+                // truncating modes through the shared, JVM-tested helper.
+                OutputStream opened = org.libreoffice.androidlib.AquaWordSafOutput.openTruncating(
+                        mode -> getContentResolver().openOutputStream(uri, mode));
+                // AQUAWORD_NEW_DOC_READBACK: reject corrupted provider output.
+                final java.security.MessageDigest expectedDigest =
+                        java.security.MessageDigest.getInstance("SHA-256");
+                long written = 0L;
+                try (OutputStream output = opened) {
+                    byte[] buffer = new byte[64 * 1024];
+                    int bytesRead;
+                    while ((bytesRead = template.read(buffer)) != -1) {
+                        if (bytesRead > 0) {
+                            output.write(buffer, 0, bytesRead);
+                            expectedDigest.update(buffer, 0, bytesRead);
+                            written += bytesRead;
+                        }
+                    }
+                    output.flush();
                 }
-                output.flush();
-                // Successful close of both streams is required before opening.
+                // Never launch Writer on an empty/incomplete template stream.
+                if (written <= 0L)
+                    throw new IOException("Empty document template");
+                // Read back after closing output: some providers silently
+                // truncate, append, or corrupt the written DOCX bytes.
+                final java.security.MessageDigest actualDigest =
+                        java.security.MessageDigest.getInstance("SHA-256");
+                long verified = 0L;
+                int noProgressReads = 0;
+                try (InputStream readback = getContentResolver().openInputStream(uri)) {
+                    if (readback == null)
+                        throw new IOException("Document provider returned no readable stream");
+                    byte[] verifyBuffer = new byte[64 * 1024];
+                    int count;
+                    while ((count = readback.read(verifyBuffer)) != -1) {
+                        if (count == 0) {
+                            if (++noProgressReads >= 8)
+                                throw new IOException("New document readback made no progress");
+                            continue;
+                        }
+                        noProgressReads = 0;
+                        verified += count;
+                        if (verified > written)
+                            throw new IOException("New document provider returned extra bytes");
+                        actualDigest.update(verifyBuffer, 0, count);
+                    }
+                }
+                if (verified != written ||
+                        !java.util.Arrays.equals(expectedDigest.digest(), actualDigest.digest()))
+                    throw new IOException("New document failed SHA-256 readback verification");
+                // Byte-for-byte verification precedes native Writer launch.
             } catch (Exception error) {
                 failed = true;
                 Log.e(LOGTAG, "AquaWord document creation failed", error);
@@ -745,7 +1123,9 @@ def copy_debug_qa_file_provider(repo: Path) -> int:
         (source_dir / 'aquaword_qa_file_paths.xml',
          repo / 'android/app/src/debug/res/xml/aquaword_qa_file_paths.xml'),
         (source_dir / 'QaOpenDocumentActivity.java',
-         repo / 'android/app/src/debug/java/org/libreoffice/androidapp/qa/QaOpenDocumentActivity.java')
+         repo / 'android/app/src/debug/java/org/libreoffice/androidapp/qa/QaOpenDocumentActivity.java'),
+        (source_dir / 'QaFixtureFileProvider.java',
+         repo / 'android/app/src/debug/java/org/libreoffice/androidapp/qa/QaFixtureFileProvider.java')
     ]
     for src, dst in pairs:
         require(src)
@@ -759,6 +1139,39 @@ def copy_debug_qa_file_provider(repo: Path) -> int:
             changed += 1
     return changed
 
+def copy_native_export_strings(repo: Path) -> int:
+    """Install PDF export feedback in the native library resource namespace.
+
+    LOActivity belongs to :lib; app-only string definitions cannot satisfy
+    references in that module at Java compile time.
+    """
+    changed = 0
+    for qualifier, filename in (
+            ('values', 'native_export_strings.xml'),
+            ('values-ar', 'native_export_strings_ar.xml')):
+        src = require(ROOT/'branding'/filename)
+        target = repo/'android/lib/src/main/res'/qualifier/'aquaword_export.xml'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.is_file():
+            if target.read_bytes() != src.read_bytes():
+                raise PatchError(f'Conflicting native PDF export resources: {target}')
+            continue
+        shutil.copyfile(src, target)
+        changed += 1
+    return changed
+
+
+def copy_pdf_preflight_source(repo: Path) -> bool:
+    src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordPdfPreflight.java')
+    target = repo/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordPdfPreflight.java'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file():
+        if target.read_bytes() == src.read_bytes(): return False
+        raise PatchError('Conflicting pre-existing AquaWordPdfPreflight.java in upstream')
+    shutil.copyfile(src, target)
+    return True
+
+
 def copy_history_source(repo: Path) -> bool:
     src = require(ROOT/'history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java')
     target = repo/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordHistory.java'
@@ -766,6 +1179,17 @@ def copy_history_source(repo: Path) -> bool:
     if target.is_file():
         if target.read_bytes() == src.read_bytes(): return False
         raise PatchError('Conflicting pre-existing AquaWordHistory.java in upstream')
+    shutil.copyfile(src, target)
+    return True
+
+
+def copy_saf_output_source(repo: Path) -> bool:
+    src = require(ROOT/'history/src/org/libreoffice/androidlib/AquaWordSafOutput.java')
+    target = repo/'android/lib/src/main/java/org/libreoffice/androidlib/AquaWordSafOutput.java'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file():
+        if target.read_bytes() == src.read_bytes(): return False
+        raise PatchError('Conflicting pre-existing AquaWordSafOutput.java in upstream')
     shutil.copyfile(src, target)
     return True
 
@@ -820,7 +1244,11 @@ def source(repo: Path) -> None:
     print('Lifecycle-aware native autosave:', patch_periodic_native_autosave(targets[11]))
     print('Native post-save recovery checkpoints:', patch_native_save_checkpoints(targets[11]))
     print('SAF native saveback error detection:', patch_native_saf_saveback(targets[11]))
+    print('Verified asynchronous native PDF export:', patch_native_export_writeback(targets[11]))
     print('History storage class:', copy_history_source(repo))
+    print('SAF truncation mode helper:', copy_saf_output_source(repo))
+    print('Native PDF preflight class:', copy_pdf_preflight_source(repo))
+    print('Native PDF export locale resources:', copy_native_export_strings(repo))
     print('Arabic recovery resources:', copy_arabic_recovery_strings(repo))
     print('Debug-only real ContentProvider test route:', copy_debug_qa_file_provider(repo))
     print('Icons copied:', copy_icons(repo))

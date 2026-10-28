@@ -1,0 +1,87 @@
+# M-NATIVE-01 — one-shot ARM64 diagnostic authorization (2026-10-25)
+
+Test question: Can the pinned Collabora/LibreOffice native engine, the AquaWord
+source overlay and Android Gradle packaging produce a structurally verified
+arm64-v8a debug APK at this exact feature-branch commit?
+
+Why source tests are insufficient: JVM snapshot/SAF simulations and desktop
+DOCX round-trips cannot prove native C++ toolchain integration, ABI packaging,
+Gradle resource/manifest linking or the actual Collabora Android build.
+
+Scope: compile/package/ABI and SHA-256 checks only. No Android emulator
+certification, device run, final release, auto-merge or main modification.
+The runner may take hours and may fail due to disk/toolchain limits.
+Only free GitHub-hosted runner resources are permitted.
+
+Trigger safety: android-native.yml only accepts a push that changes this marker
+on fix/saf-save-failure-recovery-20261023 AND has the exact commit message
+AquaWordNativeDiagnosticRetryOnce. Ordinary pushes or marker edits with any other
+message must not trigger a native build. This file authorizes only the retry
+explicitly documented below; do not repeat it after the artifact outcome is known.
+
+Acceptance reporting: record exact commit SHA, native workflow run URL,
+PASS/FAIL/PENDING, APK architecture/manifest and SHA-256 only if actually
+produced. Real Writer Arabic/English DOCX edit/save/reopen, Android SAF and
+Xiaomi Pad 5 remain NOT TESTED until independent runtime evidence exists.
+
+Retry note (2026-10-25): initial push workflow run 40206331263 was SKIPPED (GitHub event did not satisfy the added-path job condition). Replaced that condition with an exact request commit-message guard; source tests were repaired and rechecked. This marker update is the only authorized retry. No native engine compilation was verified in the skipped run.
+
+Retry #2 authorization (2026-10-25, after source CI PASS): native run 40206631720 failed because restored engine workdir/instdir gbuild stamps lacked engine/android/jniLibs/arm64-v8a/liblo-native-code.so. Source/tests now invalidate the exact stale gbuild stamps, validate ELF AArch64/ET_DYN/SHA-256, and include jniLibs in the next cache key. Fast Source 40215454654 PASS; Integration 40215454659 PASS at code SHA 35c49242c5f22af506487040fba9e663f157ce10. This second diagnostic asks whether rebuilding the missing real native library fixes Gradle's missing-input failure and whether an APK can be structurally verified. Source tests cannot exercise the Android NDK linker or Gradle packaging. If native linking fails, stop before Gradle and report the precise error; do not fabricate an APK or claim device acceptance. This exact-marker push is the sole retry authorized here; subsequent pushes must not trigger a build.
+
+
+Retry #3 authorization (2026-10-25; artifact-delivery question only): source Fast Source CI passed on SHA 6e23edad5f1d2dec71249da4e985cc08e873363c after the workflow/test fix. The prior native run 40215579687 checked out 7304b193355a4d0a6c45673de970c5f08e7f9890 and successfully compiled/pacakged/verified an ARM64 APK, but retaining it failed with HTTP 403 from the draft-Release API. The workflow now attempts a one-day Actions artifact with a SHA-pinned official MIT action and reports an empty/failed upload explicitly. This single retry tests whether a downloadable artifact can be retained; the previous LibreOffice build cache was saved, and the native workflow runs its source/integration preflight before reusing/building. Android emulator/device acceptance remains NOT TESTED. If upload fails due quota/permissions, stop and report it; do not trigger another native retry.
+
+
+Execution note for the already-authorized artifact-route retry (2026-10-25): The only prior successful native run, #40215579687, checked out source SHA 7304b193 and has zero retained Actions artifacts. It predates the current workflow change that adds the SHA-pinned one-day Actions artifact upload. Current source/integration CI passed at PR head 0e3d620b61975c2d37b3b774cbf32044b69c22b0, and the previous native job is complete. This exact-marker commit now exercises that changed retention route once. Stop after its artifact outcome; no further native retry is authorized by this request.
+
+
+Fresh authorization — 2026-10-27 (M-NATIVE-01 current-source integration check)
+
+Purpose: run one free GitHub-hosted diagnostic compile/package of the current AquaWord feature branch using the pinned Collabora/LibreOffice ARM64 engine and current AquaWord overlay.
+
+Test question: does the current branch produce a structurally verified arm64-v8a APK with the expected package/manifest and real AArch64 native library, with APK integrity and SHA-256 evidence?
+
+Why source tests are insufficient: JVM history tests, source-contract checks and desktop DOCX fixtures do not execute the Android NDK/native linker, resource/manifest merge, Gradle packaging or final APK verification. The previous diagnostic artifact was built from an older source checkpoint and is not proof for the current branch.
+
+Scope/limits: compile/package and artifact-integrity evidence only. No emulator certification, no Android device install/launch, no real Writer Arabic/English round-trip, no SAF provider failure/recovery proof, no printing/PDF runtime proof and no Xiaomi Pad 5 visual/performance acceptance. Free hosted runner only. This is one new diagnostic attempt; do not automatically retry if it fails.
+
+Trigger authorization: this fresh 2026-10-27 authorization supersedes the previous one-shot stop for the earlier artifact-retention attempt. The request commit must change this marker and use the exact commit message AquaWordNativeDiagnosticRetryOnce. Report the actual run, checked-out SHA, logs, artifact URL/SHA-256 if produced, and all remaining NOT TESTED gates. Never claim a device test from a compile-only result.
+
+
+Execution request — 2026-10-27: source/integration preflight is green on the current PR head. Trigger this one authorized free ARM64 diagnostic now to answer the native linker/Gradle packaging and artifact-retention question for the exact current source. This is the sole execution of the fresh authorization above; if it fails, do not retry automatically. Compile/package evidence only; device acceptance remains NOT TESTED.
+
+
+Execution request confirmation — 2026-10-27: invoking the single authorized current-source diagnostic after green exact-head Fast Source, Recovery Core and Integration runs. No retry is authorized if this run fails.
+
+Fresh authorization — 2026-10-28 (M-NATIVE-01 helper-to-native integration)
+
+Purpose: perform one new free ARM64 native diagnostic after the source change that introduced the shared AquaWordSafOutput Java helper and wired it into five native document-output paths (DOCX save, PDF export, recovery restore, blank document creation, and template creation).
+
+Exact test question: does the current feature-branch source, including AquaWordSafOutput.java and all generated call sites, compile through the pinned Collabora/LibreOffice Android integration, Gradle manifest/resource processing, ARM64 packaging, APK verification, and short-lived artifact upload?
+
+Why source tests are insufficient: the current JVM tests exercise the helper and fake-provider fallback contract, and overlay/integration tests inspect generated call sites, but they do not execute the full native Android build, Gradle packaging, APK manifest/ABI validation, or real AArch64 native-library inclusion at this source revision.
+
+Scope/limits: compile/package and APK integrity only; no emulator certification, no install/launch, no real Android SAF provider, no native Writer Arabic/English edit-save-cold-reopen, no print/PDF runtime proof, and no Xiaomi Pad 5 visual/performance acceptance. Free GitHub-hosted resources only. This is one new diagnostic attempt for a materially changed source integration. If it fails, record the exact failure and do not automatically retry.
+
+Trigger safety: this authorization requires the exact commit message AquaWordNativeDiagnosticRetryOnce and a change to this marker path on fix/saf-save-failure-recovery-20261023. It does not authorize another run after this attempt's outcome is known. No main modification, release, or auto-merge.
+
+
+Fresh authorization — 2026-10-28 (M-NATIVE-01 current-source Writer save roundtrip)
+
+Purpose: one free GitHub-hosted native ARM64 build of the current feature branch, followed only if the APK is produced and verified by one translated-ARM64 emulator roundtrip using that exact APK. This supersedes the older “no new APK build authorized” note in the previous artifact-only request; it does not authorize a final release or repeated builds.
+
+Test question: do the current AquaWord native save/checkpoint/writeback changes compile and package, and does the exact current-source APK allow the real Android Writer flow to insert the QA sentinel, persist a changed valid Arabic/table/image DOCX, and retain identical bytes after force-stop/cold-reopen?
+
+Why source tests are insufficient: JVM SAF/history tests and desktop LibreOffice DOCX round-trips cannot prove the actual pinned Collabora Android callback, WebView edit mode, native SAVE broadcast, content:// FileProvider writeback, or APK ABI/resource/manifest integration. The 2026-10-28 baseline runtime run #40634663305 proved the existing diagnostic APK installs and the Edit button emits native edit-mode-on, but its save roundtrip failed with “Sentinel not present in saved DOCX”; that APK was built from stale source SHA df65aa2d92881f34160eadbbfcc0a96dd5f859ab and lacks the latest save changes.
+
+Exact current-source preflight: source/test head before this authorization is 500b3d11d124ca101b5ca7c29951c72578c40352; Fast Source + SAF Contract, Recovery Core and Integration Tests PASS on that head. The build itself will be pinned by the exact commit SHA produced by this marker update.
+
+Build scope: run the existing pinned Collabora/LibreOffice ARM64 native workflow, Gradle packaging, real AArch64 ELF/ABI/package ID checks, signature verification and APK SHA-256/artifact retention. Cache reuse is allowed only after the existing ELF validator confirms the actual ARM64 library. No paid runner/API, no main modification, no merge/auto-merge, no user documents or secrets in artifacts. If native build fails, record exact logs and stop; do not rebuild automatically.
+
+Runtime follow-up scope: after successful build only, update the one-shot runtime workflow to use the exact new artifact ID/run ID/APK SHA, then install that APK on the existing free API 35 x86_64 emulator with verified libndk_translation, require actual Edit-mode acknowledgement, verify changed DOCX bytes/content, force-stop and cold-reopen, and retain checksummed synthetic evidence. A translated emulator is NOT native ARM64 hardware or Xiaomi Pad 5 acceptance. Real user SAF providers, print/PDF and target-device UI remain separate gates. Do not start another runtime attempt automatically if this follow-up fails.
+
+Trigger safety: this exact marker change plus commit message AquaWordNativeDiagnosticRetryOnce authorizes exactly one native build for this materially changed source. This build authorization is consumed by that attempt; no further native build retry is authorized without a new explicit decision.
+
+Execution request — 2026-10-28 (consume the current-source M-NATIVE-01 authorization exactly once)
+
+The exact-head Fast Source + SAF Contract, Recovery Core and Integration checks passed on the pre-trigger source head. Run the one already-authorized free ARM64 native build now to answer the documented Collabora/Gradle/ABI/APK-integrity question for the current SAF helper and Writer save/checkpoint source. The prior runtime failure used a stale APK and is not a reason to rebuild repeatedly; this single current-source build is the explicitly authorized exception. If it fails, stop without retry. If it passes, retain the APK artifact and SHA-256, then make at most the already-authorized one-shot translated-emulator edit/save/cold-reopen attempt using that exact artifact. Physical Xiaomi Pad 5, real SAF providers, printing/PDF and release acceptance remain separate gates.

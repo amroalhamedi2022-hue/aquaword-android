@@ -107,8 +107,24 @@ jobs:
           mkdir -p build/history-classes
           javac -encoding UTF-8 -d build/history-classes \
             history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java \
-            history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java
+            history/src/org/libreoffice/androidlib/AquaWordSafOutput.java \
+            history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java \
+            history/test/org/libreoffice/androidlib/AquaWordHistoryCommitTest.java \
+            history/src/org/libreoffice/androidapp/ui/AquaWordPdfPreflight.java \
+            history/test/org/libreoffice/androidapp/ui/AquaWordPdfPreflightTest.java
           java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordHistoryTest
+          java -cp build/history-classes org.libreoffice.androidlib.AquaWordHistoryCommitTest
+          java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordPdfPreflightTest
+          # Real desktop LibreOffice PDFs, including Arabic/English templates:
+          # source compatibility only; NO Android APK is packaged.
+          mkdir -p build/pdf-preflight
+          timeout 90s soffice "-env:UserInstallation=file:///tmp/aquaword-pdf-preflight-${GITHUB_RUN_ID}" \
+            --headless --convert-to pdf --outdir build/pdf-preflight \
+            templates/generated/research_ar.docx templates/generated/research_en.docx
+          test -s build/pdf-preflight/research_ar.pdf
+          test -s build/pdf-preflight/research_en.pdf
+          java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordPdfPreflightTest \
+            build/pdf-preflight/research_ar.pdf build/pdf-preflight/research_en.pdf
       # Show acceptance report in the run itself; the account's
       # Actions artifact storage is full, so avoid upload-artifact entirely.
       - name: Attach acceptance matrix to GitHub run summary

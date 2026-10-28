@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="aquaword_export_missing">PDF export source is missing or empty.</string>
+    <string name="aquaword_export_unverified">PDF export could not be verified. The temporary copy was kept.</string>
+    <string name="aquaword_export_busy">PDF export is busy. Please try again.</string>
+    <string name="aquaword_export_verified">PDF exported successfully.</string>
+</resources>

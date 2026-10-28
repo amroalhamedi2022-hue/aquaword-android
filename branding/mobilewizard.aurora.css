@@ -1,19 +1,46 @@
 /* AQUAWORD_AURORA_BEGIN
-   Native mobile drawers; keep document canvas unchanged. */
+   Native mobile drawers; keep the Writer document canvas unchanged.
+   Use readable opaque fallbacks; translucency belongs to the chrome only. */
 #mobile-wizard, .mobile-wizard, #mobile-wizard-content {
-	--aquaword-panel-accent: #11a4bf;
+	--aquaword-panel-accent: #0b7189;
 	--aquaword-ink: #16384d;
 }
 #mobile-wizard .ui-header, .mobile-wizard .ui-header {
 	background: linear-gradient(115deg, #e9f8fc, #d7f4f5);
-	border-bottom: 1px solid rgba(10, 129, 153, .13);
+	color: #16384d;
+	border-bottom: 1px solid rgba(10, 129, 153, .22);
+	box-shadow: 0 2px 10px rgba(7, 57, 89, .08);
+}
+#mobile-wizard .ui-header button, .mobile-wizard .ui-header button {
+	min-width: 44px;
+	min-height: 44px;
+	color: inherit;
+	touch-action: manipulation;
 }
 #mobile-wizard button:focus-visible, .mobile-wizard button:focus-visible {
 	outline: 2px solid #008b9a;
 	outline-offset: 2px;
 }
+html[data-theme='dark'] #mobile-wizard,
+html[data-theme='dark'] .mobile-wizard,
+html[data-theme='dark'] #mobile-wizard-content {
+	--aquaword-panel-accent: #89e5ef;
+	--aquaword-ink: #eafaff;
+}
 html[data-theme='dark'] #mobile-wizard .ui-header,
 html[data-theme='dark'] .mobile-wizard .ui-header {
 	background: linear-gradient(110deg, #09273d, #144459);
+	color: #eafaff;
+	border-bottom-color: rgba(95, 205, 226, .28);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, .2);
+}
+html[data-theme='dark'] #mobile-wizard button:focus-visible,
+html[data-theme='dark'] .mobile-wizard button:focus-visible {
+	outline-color: #89e5ef;
+}
+@media (prefers-reduced-motion: reduce) {
+	#mobile-wizard .ui-header button, .mobile-wizard .ui-header button {
+		transition: none;
+	}
 }
 /* AQUAWORD_AURORA_END */

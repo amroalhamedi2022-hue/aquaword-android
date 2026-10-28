@@ -3,7 +3,7 @@
   <!-- QA-only content Uri fixture provider. Only packaged into debug APKs. -->
   <application>
     <provider
-        android:name="androidx.core.content.FileProvider"
+        android:name="org.libreoffice.androidapp.qa.QaFixtureFileProvider"
         android:authorities="${applicationId}.qa-documents"
         android:exported="false"
         android:grantUriPermissions="true">

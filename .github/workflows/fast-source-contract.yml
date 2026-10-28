@@ -82,7 +82,12 @@ jobs:
                            'persistDocumentPermission(target, data);'):
               assert required in source, required
           assert source.count('AQUAWORD_PENDING_SAF_RECOVERY') == 1
-          print('PASS: real pinned native Activity parses and SAF lifecycle guards exist')
+          native=Path('upstream-fixture/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java')
+          native_source=native.read_text(encoding='utf-8')
+          javalang.parse.parse(native_source)
+          assert native_source.count('AQUAWORD_VERIFIED_ASYNC_EXPORT') == 1
+          assert 'mAquaWordSaveExecutor.execute(() ->' in native_source
+          print('PASS: pinned native Activity and LOActivity parse; verified export source present')
           PY
           node --check upstream-fixture/browser/src/main.js
           # Use the exact Stylelint version/rules from the pinned upstream.

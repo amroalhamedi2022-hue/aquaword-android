@@ -1,7 +1,33 @@
 name: AquaWord Native Android (Internal CI)
 
 on:
+  # Purpose-bound, one-shot diagnostic on this feature branch only.
+  # Only an exact purpose-bound commit message and marker-path change may run.
+  push:
+    branches: [fix/saf-save-failure-recovery-20261023]
+    paths: ['.github/native-diagnostic-once.request']
   workflow_dispatch:
+    inputs:
+      final_ready:
+        description: 'Final source acceptance and independent recheck completed'
+        required: true
+        type: boolean
+        default: false
+      diagnostic_build:
+        description: 'Manual internal diagnostic build; not a release'
+        required: true
+        type: boolean
+        default: false
+      diagnostic_reason:
+        description: 'Specific integration question not answered by source tests'
+        required: false
+        type: string
+        default: ''
+      diagnostic_compile_only:
+        description: 'Build and verify APK only; skip unsupported emulator, keep unpublished QA draft'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -12,6 +38,7 @@ concurrency:
 
 jobs:
   native-debug:
+    if: ${{ (((inputs.final_ready == true && inputs.diagnostic_build != true) || (inputs.diagnostic_build == true && inputs.final_ready != true && inputs.diagnostic_reason != '')) && !(inputs.diagnostic_compile_only == true && inputs.diagnostic_build != true)) || (github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
     # One native build at a time; never cancel hours of native compilation on a push.
     # Heavy native builds are MANUAL only to avoid repeated hours-long runs on every workflow edit.
     runs-on: ubuntu-24.04
@@ -24,6 +51,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Enforce final approval or explicit diagnostic-only authorization
+        env:
+          FINAL_READY: ${{ inputs.final_ready }}
+          DIAGNOSTIC_BUILD: ${{ inputs.diagnostic_build }}
+          DIAGNOSTIC_COMPILE_ONLY: ${{ inputs.diagnostic_compile_only }}
+          DIAGNOSTIC_REASON: ${{ inputs.diagnostic_reason }}
+          RUN_EVENT: ${{ github.event_name }}
+          ONE_SHOT_REQUEST_MATCH: ${{ github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$FINAL_READY" = 'true' ] && [ "$DIAGNOSTIC_BUILD" != 'true' ] && [ "$DIAGNOSTIC_COMPILE_ONLY" != 'true' ]; then
+            bash scripts/check_final_ready.sh
+          elif [ "$RUN_EVENT" = 'push' ] && [ "$ONE_SHOT_REQUEST_MATCH" = 'true' ]; then
+            echo 'INTERNAL ONE-SHOT DIAGNOSTIC: Does pinned Collabora/LibreOffice ARM64 compile and package the current AquaWord overlay into a verifiable APK?' >> "$GITHUB_STEP_SUMMARY"
+            echo "Source SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+            echo 'Compile-only: yes. Android Writer/SAF device behavior remains NOT TESTED.' >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$DIAGNOSTIC_BUILD" = 'true' ] && [ "$FINAL_READY" != 'true' ] && [ -n "${DIAGNOSTIC_REASON//[[:space:]]/}" ]; then
+            echo "INTERNAL DIAGNOSTIC ONLY: $DIAGNOSTIC_REASON" >> "$GITHUB_STEP_SUMMARY"
+            echo "Source SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+            echo "Compile-only (no emulator certification): $DIAGNOSTIC_COMPILE_ONLY" >> "$GITHUB_STEP_SUMMARY"
+            echo 'NOT FINAL-READY; device and release acceptance remain NOT TESTED.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Missing explicit authorization' >&2
+            exit 1
+          fi
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -108,11 +161,16 @@ jobs:
           grep -q 'AQUAWORD_PERIODIC_NATIVE_AUTOSAVE' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           grep -q 'AQUAWORD_NATIVE_SAVE_CHECKPOINT' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           grep -q 'AQUAWORD_NATIVE_SAF_SAVE_BACK' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -q 'AQUAWORD_VERIFIED_ASYNC_EXPORT' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           # A native save must NEVER be acknowledged or snapshotted when the
           # actual Android document provider or resolved-file write fails.
-          grep -q 'private boolean copyTempBackToIntent()' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
-          grep -q 'private boolean copyTempBackToFile()' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
-          grep -q 'if (copyTempBackToIntent())' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          # These signatures must match the AquaWord serialized SAVE overlay,
+          # not the old upstream void methods removed by the patch.
+          # This preflight runs before any expensive native engine compilation.
+          grep -Fq 'private boolean copyTempBackToIntent(java.io.File sourceFile, Uri destination, java.io.File resolvedAtSave)' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -Fq 'private boolean copyTempBackToFile(java.io.File sourceFile, java.io.File resolvedFile)' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -Fq 'copyTempBackToIntent(checkpoint.file, original, resolvedAtSave)' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
+          grep -Fq 'AquaWordHistory.verifyProviderWriteback(checkpoint, providerReadback)' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           grep -q 'AquaWord SAVE not acknowledged' collabora/android/lib/src/main/java/org/libreoffice/androidlib/LOActivity.java
           git -C collabora diff --check
       - name: Check build interpreter dependencies before expensive compilation
@@ -156,7 +214,10 @@ jobs:
           path: |
             collabora/engine/workdir
             collabora/engine/instdir
-          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v1
+            collabora/engine/android/jniLibs
+          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v2
+          restore-keys: |
+            aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v1
       - name: Build or safely reuse LibreOffice native ARM64 engine
         shell: bash
         run: |
@@ -169,18 +230,23 @@ jobs:
           --with-distro=CPAndroidAarch64
           EOF
           ./autogen.sh
-          # Require real LibreOffice output files; a cache-hit flag alone
-          # must never become false evidence that the engine compiled.
+          # A previous cache stored workdir/instdir, including gbuild .done
+          # markers, but NOT engine/android/jniLibs. The resulting Gradle
+          # failure was a missing liblo-native-code.so, not a Java error.
+          # Invalidate the two exact gbuild stamps if the real ELF is absent.
+          python3 ../../scripts/native_engine_artifact.py prepare --engine-dir . --abi "$ABI"
           if [ "${{ steps.engine_cache.outputs.cache-hit }}" = "true" ] &&
              test -s instdir/program/setuprc &&
-             test -s workdir/LinkTarget/StaticLibrary/liblibpng.a; then
-            echo "Reusing compiled LO ARM64 engine after validating required outputs"
+             test -s workdir/LinkTarget/StaticLibrary/liblibpng.a &&
+             test -s "android/jniLibs/$ABI/liblo-native-code.so"; then
+            echo "Reusing complete LO ARM64 engine and native shared object"
           else
-            echo "No complete valid LO ARM64 build cache; compiling native engine"
+            echo "Compiling/linking missing LibreOffice ARM64 engine outputs"
             make -j2
           fi
           test -s instdir/program/setuprc
           test -s workdir/LinkTarget/StaticLibrary/liblibpng.a
+          python3 ../../scripts/native_engine_artifact.py verify --engine-dir . --abi "$ABI"
       - name: Cache successful LibreOffice engine for next internal build
         if: success() && steps.engine_cache.outputs.cache-hit != 'true'
         continue-on-error: true
@@ -189,7 +255,8 @@ jobs:
           path: |
             collabora/engine/workdir
             collabora/engine/instdir
-          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v1
+            collabora/engine/android/jniLibs
+          key: aqua-lo-arm64-ubuntu24-2333344185931274f9c49d6c12a408cefcef6844-ndk29.0.14206865-v2
       - name: Configure and compile Collabora Android app sources
         shell: bash
         run: |
@@ -205,6 +272,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Fail before Gradle/CMake if the engine cache is incomplete.
+          python3 scripts/native_engine_artifact.py verify --engine-dir collabora/engine --abi "$ABI"
           cd collabora/android
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:assembleDebug
@@ -231,8 +300,18 @@ jobs:
           find collabora/android -type f -name '*debug*.apk' -print > output/apk-paths.txt
           test -s output/apk-paths.txt
           AAPT="$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt"
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner"
+          test -x "$APKSIGNER"
           while IFS= read -r apk; do
             unzip -t "$apk" >/dev/null
+            # Require the pinned ARM64 LibreOffice engine (exact bytes or identical
+            # ELF loadable segments after Android Gradle debug-symbol stripping).
+            # Unrelated .so, altered executable bytes and wrong ABI must fail.
+            python3 scripts/verify_native_apk.py --apk "$apk" --engine-dir collabora/engine --abi "$ABI"
+            signature_report="output/$(basename "$apk").signature.txt"
+            "$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$signature_report"
+            # Parse real apksigner output with an executable, unit-tested validator.
+            python3 scripts/verify_apk_signature.py --report "$signature_report"
             "$AAPT" dump badging "$apk" | grep -q "package: name='com.aquaword.app.debug'"
             for template in research_en research_ar clinical_case study_notes blank; do
               unzip -p "$apk" "assets/aquaword/$template.docx" > "output/$template.package.docx"
@@ -244,8 +323,9 @@ jobs:
           done < output/apk-paths.txt
           (cd output && sha256sum -- *.apk > SHA256SUMS)
           cp upstream-version.txt output/
-      # The account's Actions artifact quota is full. Keep generated files on
-      # this runner for runtime verification, rather than a doomed artifact upload.
+      # Prefer a one-day downloadable artifact for compile-only diagnostics.
+      # If free artifact storage is exhausted, report that explicitly and never
+      # turn a successful native build into a false compiler failure.
       - name: Record real APK metadata and source provenance
         shell: bash
         run: |
@@ -255,8 +335,51 @@ jobs:
           echo "Pinned Collabora: \`$UPSTREAM_SHA\`" >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           cat output/SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
+          for report in output/*.signature.txt; do
+            test -s "$report"
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          done
           df -h . | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload compile-only native APK for short-lived download
+        id: diagnostic_apk_artifact
+        if: ${{ success() && (inputs.diagnostic_compile_only == true || (github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce')) }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        continue-on-error: true
+        with:
+          name: aquaword-native-diagnostic-${{ github.sha }}
+          path: |
+            output/AquaWord-*.apk
+            output/SHA256SUMS
+            output/*.signature.txt
+            output/upstream-version.txt
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - name: Report diagnostic artifact availability
+        if: ${{ always() && (inputs.diagnostic_compile_only == true || (github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce')) }}
+        env:
+          ARTIFACT_OUTCOME: ${{ steps.diagnostic_apk_artifact.outcome }}
+          ARTIFACT_URL: ${{ steps.diagnostic_apk_artifact.outputs.artifact-url }}
+          ARTIFACT_ID: ${{ steps.diagnostic_apk_artifact.outputs.artifact-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s output/SHA256SUMS ]; then
+            if [ "$ARTIFACT_OUTCOME" = "success" ] && [ -n "$ARTIFACT_URL" ]; then
+              {
+                echo '## Downloadable internal diagnostic APK (expires after 1 day)'
+                echo "$ARTIFACT_URL"
+                echo "Artifact ID: $ARTIFACT_ID"
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo '## APK built and structurally verified, but artifact upload failed (likely quota/permission). No downloadable artifact was retained.' >> "$GITHUB_STEP_SUMMARY"
+            fi
+            cat output/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## No structurally verified APK was produced; no download artifact exists.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Verify installation and Arabic DOCX on a real Android emulator
+        if: ${{ !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -283,16 +406,18 @@ jobs:
       # Only after real Android edit-save-reopen succeeds, store as UNPUBLISHED
       # draft Release to avoid exhausted Actions artifact storage.
       - name: Preserve emulator-verified APK in an unpublished QA draft
-        if: success()
+        id: verified_qa_draft
+        if: ${{ success() && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/publish_qa_draft.sh
-      # If compilation and package verification passed, but runtime QA fails
-      # (e.g. unsupported ARM64 translation), keep the bytes for internal
-      # device debugging without claiming Android acceptance.
+      # A compile-only diagnostic already attempted short-lived artifact upload.
+      # Do not make a second, known-permission-sensitive release API call there.
       - name: Retain valid compiled APK when emulator certification is blocked
-        if: failure()
+        id: unverified_qa_draft
+        if: ${{ failure() && hashFiles('output/SHA256SUMS') != '' && !(inputs.diagnostic_build == true && inputs.diagnostic_compile_only == true) && !(github.event_name == 'push' && github.event.head_commit.message == 'AquaWordNativeDiagnosticRetryOnce') }}
         continue-on-error: true
         shell: bash
         env:
@@ -303,6 +428,16 @@ jobs:
           else
             echo 'No verified build output; not preserving an APK.'
           fi
+      - name: Report QA draft persistence failure
+        if: ${{ steps.verified_qa_draft.outcome == 'failure' }}
+        shell: bash
+        run: echo 'APK/runtime checks completed, but the unpublished QA draft could not be persisted; no release or user delivery is claimed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Report unverified draft persistence failure
+        if: ${{ steps.unverified_qa_draft.outcome == 'failure' }}
+        shell: bash
+        run: echo 'The native APK was built but the unverified QA draft could not be persisted. Checksum evidence is in this run; no downloadable artifact is claimed.' >> "$GITHUB_STEP_SUMMARY"
+      # Compile-only diagnostic success retains checksummed APK as UNVERIFIED,
+      # never as an emulator-verified draft. No public release is created.
       # Publishing any internal draft is NOT a completed user-facing release.
       - name: Explain and preserve native build failure evidence in run summary
         if: failure()

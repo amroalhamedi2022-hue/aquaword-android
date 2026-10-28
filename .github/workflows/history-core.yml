@@ -1,0 +1,56 @@
+name: AquaWord Recovery Core (JVM-only)
+
+on:
+  push:
+    branches: [fix/saf-save-failure-recovery-20261023]
+    paths:
+      - 'history/**'
+      - '.github/workflows/history-core.yml'
+  pull_request:
+    paths:
+      - 'history/**'
+      - '.github/workflows/history-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aquaword-history-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  recovery-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify runner JDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          javac -version
+      - name: Compile offline recovery core and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/history-classes
+          javac -encoding UTF-8 -d build/history-classes \
+            history/src/org/libreoffice/androidapp/ui/AquaWordHistory.java \
+            history/src/org/libreoffice/androidlib/AquaWordSafOutput.java \
+            history/test/org/libreoffice/androidapp/ui/AquaWordHistoryTest.java \
+            history/test/org/libreoffice/androidlib/AquaWordHistoryCommitTest.java \
+            history/src/org/libreoffice/androidapp/ui/AquaWordPdfPreflight.java \
+            history/test/org/libreoffice/androidapp/ui/AquaWordPdfPreflightTest.java
+      - name: Run snapshot, restore and crash-window regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordHistoryTest
+          java -cp build/history-classes org.libreoffice.androidlib.AquaWordHistoryCommitTest
+      - name: Run PDF preflight core contracts without desktop conversion
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -cp build/history-classes org.libreoffice.androidapp.ui.AquaWordPdfPreflightTest

@@ -1,0 +1,179 @@
+name: AquaWord SAF silent-truncation recovery (one-shot)
+
+on:
+  push:
+    branches:
+      - fix/saf-save-failure-recovery-20261023
+    paths:
+      - .github/saf-fault-provider-once.request
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: aquaword-saf-fault-provider-once
+  cancel-in-progress: false
+
+jobs:
+  saf-fault-runtime:
+    if: ${{ github.event.head_commit.message == 'AquaWordSafProviderFaultOnce' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AQUAWORD_RUN_ID: '40643360016'
+      AQUAWORD_ARTIFACT_ID: '12797042192'
+      AQUAWORD_ARTIFACT_NAME: aquaword-native-diagnostic-710691adb757c9580e5574307f39091e6d68aad4
+      AQUAWORD_SOURCE_SHA: 710691adb757c9580e5574307f39091e6d68aad4
+      AQUAWORD_APK_SHA256: 25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736
+    steps:
+      - name: Checkout test harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify and reuse the existing AquaWord APK (no native rebuild)
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$AQUAWORD_RUN_ID" --jq '.head_sha')"
+          test "$run_sha" = "$AQUAWORD_SOURCE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$AQUAWORD_ARTIFACT_ID" > /tmp/artifact.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('/tmp/artifact.json').read_text())
+          assert not d['expired'], 'pinned AquaWord artifact has expired'
+          assert d['name'] == 'aquaword-native-diagnostic-710691adb757c9580e5574307f39091e6d68aad4'
+          assert d['digest'] == 'sha256:eeb5a28f349a590d19e29aa806abc1bf75ed5fa9d34cb8c69733bf368c9879ca'
+          print('Pinned diagnostic artifact is available; expires:', d['expires_at'])
+          PY
+          mkdir -p downloaded saf-fault-evidence
+          gh run download "$AQUAWORD_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$AQUAWORD_ARTIFACT_NAME" --dir downloaded
+          mapfile -t apks < <(find downloaded -type f -name '*.apk' -print)
+          test "${#apks[@]}" -eq 1
+          apk="${apks[0]}"
+          actual="$(sha256sum "$apk" | cut -d' ' -f1)"
+          test "$actual" = "$AQUAWORD_APK_SHA256"
+          grep -Fq "$AQUAWORD_APK_SHA256" "$(find downloaded -type f -name SHA256SUMS -print -quit)"
+          unzip -t "$apk" >/dev/null
+          echo "AQUAWORD_APK=$GITHUB_WORKSPACE/$apk" >> "$GITHUB_ENV"
+          echo "Existing AquaWord APK SHA-256: $actual" >> "$GITHUB_STEP_SUMMARY"
+          echo "No AquaWord/native engine rebuild performed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Java and build the isolated QA provider APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          test -n "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+          curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle-8.9-bin.zip
+          curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256 -o /tmp/gradle-8.9-bin.zip.sha256
+          expected="$(awk '{print $1}' /tmp/gradle-8.9-bin.zip.sha256)"
+          actual="$(sha256sum /tmp/gradle-8.9-bin.zip | cut -d' ' -f1)"
+          test "$expected" = "$actual"
+          unzip -q /tmp/gradle-8.9-bin.zip -d /tmp
+          GRADLE=/tmp/gradle-8.9/bin/gradle
+          "$GRADLE" --version
+          "$GRADLE" --no-daemon -p quality/saf_fault_provider assembleDebug
+          mapfile -t provider_apks < <(find quality/saf_fault_provider/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print)
+          test "${#provider_apks[@]}" -eq 1
+          provider_apk="${provider_apks[0]}"
+          test -s "$provider_apk"
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$apksigner" verify --verbose "$provider_apk"
+          sha256sum "$provider_apk" | tee saf-fault-evidence/provider-apk-sha256.txt
+          echo "SAF fault-provider APK built separately; it is not part of AquaWord." >> "$GITHUB_STEP_SUMMARY"
+          echo "PROVIDER_APK=$GITHUB_WORKSPACE/$provider_apk" >> "$GITHUB_ENV"
+
+      - name: Generate the mixed Arabic/English DOCX fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'Pillow==11.3.0' 'python-docx==1.2.0' 'websocket-client==1.8.0'
+          python3 scripts/generate_templates.py
+          python3 quality/build_rich_fixture.py
+          test -s quality/fixtures/qa_rich_arabic.docx
+
+      - name: Enable KVM for the free Android emulator
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm
+
+      - name: Inject silent provider truncation and verify recovery
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          disable-linux-hw-accel: false
+          script: |
+            set -eu
+            mkdir -p saf-fault-evidence
+            adb wait-for-device
+            adb shell getprop ro.build.version.release > saf-fault-evidence/android-version.txt
+            adb shell getprop ro.build.version.sdk > saf-fault-evidence/android-api-level.txt
+            adb shell getprop ro.product.cpu.abilist > saf-fault-evidence/android-abis.txt
+            adb shell getprop ro.dalvik.vm.native.bridge > saf-fault-evidence/android-native-bridge.txt
+            adb shell getprop ro.product.cpu.abilist | grep -Fq arm64-v8a
+            adb shell getprop ro.dalvik.vm.native.bridge | grep -Fq libndk_translation.so
+            adb install -r "$AQUAWORD_APK"
+            adb install -r "$PROVIDER_APK"
+            adb push quality/fixtures/qa_rich_arabic.docx /data/local/tmp/qa_rich_arabic.docx >/dev/null
+            adb shell run-as com.aquaword.saffaultprovider mkdir -p files
+            adb shell run-as com.aquaword.saffaultprovider cp /data/local/tmp/qa_rich_arabic.docx files/qa.docx
+            adb shell run-as com.aquaword.saffaultprovider ls -l files/qa.docx > saf-fault-evidence/provider-fixture.txt
+            python3 scripts/android_saf_fault_roundtrip.py --evidence-dir "$PWD/saf-fault-evidence" --timeout 90
+
+      - name: Record runtime result and limitations
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## AquaWord SAF silent-truncation runtime acceptance'
+            if test -s saf-fault-evidence/saf-fault-result.json; then
+              cat saf-fault-evidence/saf-fault-result.json
+            else
+              echo 'NOT PASS: the provider-failure scenario did not produce a passing receipt. Inspect partial evidence and the failed step.'
+            fi
+            echo
+            echo 'This test uses a debug APK on an API 35 x86_64 emulator with translated ARM64; it is not Xiaomi Pad 5 or native ARM64 hardware acceptance.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload provider-failure evidence (best effort)
+        id: evidence_upload
+        if: always() && hashFiles('saf-fault-evidence/**') != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: aquaword-saf-truncation-recovery-${{ github.sha }}
+          path: saf-fault-evidence/
+          if-no-files-found: warn
+          retention-days: 1
+          compression-level: 1
+
+      - name: Report evidence upload status
+        if: always()
+        shell: bash
+        env:
+          UPLOAD_OUTCOME: ${{ steps.evidence_upload.outcome }}
+        run: |
+          if [ "$UPLOAD_OUTCOME" = success ]; then
+            echo 'Runtime evidence uploaded with one-day retention.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Runtime evidence artifact upload unavailable; no retention success is claimed.' >> "$GITHUB_STEP_SUMMARY"
+          fi
