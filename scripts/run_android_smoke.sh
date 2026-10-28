@@ -148,6 +148,8 @@ test -s "$ARTIFACTS/editor-tablet-webview-state.json"
 # Perform an actual edit in the native Writer engine and require the saved
 # app-owned DOCX bytes to contain it. A successful UNO command alone does NOT pass.
 python3 scripts/android_edit_roundtrip.py --evidence-dir "$ARTIFACTS" --timeout 75
+test -s "$ARTIFACTS/edit-mode-state.json"
+test -s "$ARTIFACTS/edit-command.json"
 test -s "$ARTIFACTS/roundtrip-result.txt"
 
 # Force-stop the app so reopening is a fresh Android process, not
@@ -263,7 +265,7 @@ receipts=[
           "Chrome DevTools queried live Android WebView and clicked Focus Mode twice",
           "Focus Mode entered and exited; editor page remained visible"),
     proof("FILE-03",
-          ("edit-command.json","edit-mode-screen.png","edit-mode-logcat.txt","edit-mode-confirmation.txt","roundtrip-result.txt","original-docx-sha256.txt","roundtrip-hash.txt",
+          ("edit-command.json","edit-mode-screen.png","edit-mode-logcat.txt","edit-mode-state.json","edit-mode-confirmation.txt","roundtrip-result.txt","original-docx-sha256.txt","roundtrip-hash.txt",
            "reopened-writer-state.json","cold-reopened-document.docx","smoke-result.txt"),
           "UNO InsertText + native Save + read actual DOCX bytes + reopen",
           "Inserted QA text survived save to app-owned DOCX and Android reopen")
