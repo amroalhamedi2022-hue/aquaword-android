@@ -1,18 +1,24 @@
-One-shot request — 2026-10-28, edit-mode/viewport harness corrected (NO APK rebuild).
+One-shot runtime request — 2026-10-28 (consume current-source M-NATIVE-01 runtime follow-up once; NO APK rebuild).
 
-Existing diagnostic APK:
-- Native build run: 40613885226
-- Artifact ID: 12785090689
-- Source SHA: df65aa2d92881f34160eadbbfcc0a96dd5f859ab
-- Expected APK SHA-256: 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc
+Exact diagnostic APK:
+- Native build run: https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40643360016
+- Artifact ID: 12797042192
+- Artifact name: aquaword-native-diagnostic-710691adb757c9580e5574307f39091e6d68aad4
+- Built source SHA: 710691adb757c9580e5574307f39091e6d68aad4
+- APK SHA-256: 25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736
+- Native ELF SHA-256: ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2
+- Uploaded artifact archive digest: sha256:eeb5a28f349a590d19e29aa806abc1bf75ed5fa9d34cb8c69733bf368c9879ca
+- Artifact expires: 2026-10-29T06:32:39Z.
+- The only three commits after the APK source commit and before this request are documentation-only; verified via GitHub compare.
 
-Prior runtime attempts:
-- 40626355489: ARM64 guest unsupported on x86_64; no app boot.
-- 40631390483: shell mismatch; app script never started.
-- 40631716803: real Writer opened but edit/save was attempted in Viewing mode; no cold reopen.
-- The harness now fixes the viewport regex, taps #mobile-edit-button, verifies native edit mode before UNO, checks saved DOCX bytes and performs force-stop/cold-reopen.
+Test question: does this exact current-product-source ARM64 APK install and launch on the free API 35 x86_64 Google APIs emulator with verified libndk_translation, then let real Writer enter edit mode, insert the QA sentinel into the Arabic/English rich DOCX fixture, save through Collabora's native mobile SAVE callback, and preserve the edited valid DOCX bytes/content after force-stop and cold reopen?
 
-Test question: does the corrected harness now complete a real Writer edit-save-cold-reopen on the existing diagnostic APK?
-Why source tests are insufficient: only Android runtime can establish the visible Edit control transition and persisted bytes across a fresh process.
-Scope: translated ARM64 on the free x86_64 API 35 Google APIs emulator only. No native ARM64 CPU, physical Xiaomi Pad 5, real user SAF provider, print/PDF, or current-source build acceptance is implied.
-No APK build is authorized for this attempt.
+Why source tests are insufficient: JVM SAF/history simulations and desktop DOCX round-trips cannot prove Android WebView edit-mode transition, native LOActivity SAVE callback, debug FileProvider writeback, native bridge compatibility, or persisted bytes across a new Android process.
+
+Safety and scope:
+- Download only run 40643360016 / artifact 12797042192; verify the build run SHA, artifact name, APK SHA-256, SHA256SUMS, APK ZIP integrity before install.
+- Run the corrected one-shot harness from .github/workflows/android-artifact-smoke-once.yml and scripts/run_android_smoke.sh.
+- This is translated ARM64 on an x86_64 emulator, NOT native ARM64 hardware and NOT Xiaomi Pad 5 acceptance.
+- No real user-selected SAF/cloud provider, process-death recovery outside this QA trampoline, printing/PDF acceptance, or final-release approval is implied.
+- This is the single authorized runtime follow-up to the successful materially changed native build. If it fails or evidence upload is unavailable, record exact failure and stop; do not rerun automatically.
+- No additional APK build, paid runner/API, release, auto-merge, or main change is authorized.
