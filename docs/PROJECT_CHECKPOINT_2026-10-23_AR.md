@@ -696,3 +696,16 @@
 - **CI المصدر/التعافي/التكامل السابق:** PASS على الرأس `0160bed77339e2ef05fa4948e3adff3e1deb310f`; هذا ليس بديلًا عن اختبارات الجهاز. يجب فحص أي تشغيلات جديدة على رأسها الفعلي.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Docs/Drive في هذه البيئة، فلم يتم تحديث المستند المحدد.
 - **نقطة الاستئناف:** استعمل artifact التشخيصي لاختبار تثبيت/تشغيل حقيقي عند توفر بيئة Android؛ لا تعِد البناء لمجرد التكرار. أبقِ PR #7 Draft و`main` دون تغيير حتى اجتياز دورة Writer/SAF/الاسترداد والطباعة وXiaomi Pad 5.
+
+
+## 2026-10-28 — اختبار مباشر لعقد SAF output mode (M-NATIVE-01 ما زال مفتوحًا)
+
+- **Commit الاختبار:** [`463c41a0c2b3653a3887d8da51f0bd2ba12a76d2`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/463c41a0c2b3653a3887d8da51f0bd2ba12a76d2).
+- أضفت تغطية JVM مباشرة لـ `AquaWordSafOutput.openTruncating()` بدل الاعتماد على فحص المصدر وحده. الحالات تشمل رفض `wt` بواسطة `FileNotFoundException` و`UnsupportedOperationException` و`IllegalArgumentException`، وإرجاع `null`، وفشل `rwt`، وعدم إخفاء أخطاء I/O العادية أو `SecurityException`، ورفض المزود المفقود.
+- **CI على SHA الاختبار:** Recovery Core [#40625846290 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40625846290)، Fast Source + SAF Contract [#40625846297 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40625846297)، Integration [#40625846287 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40625846287). أظهر سجل JVM `PASS: SAF output mode fallback and failure propagation`.
+- تضمنت Integration تشغيل 133 اختبارًا في مجموعة overlay، وفحص توافق DOCX/PDF باستخدام **LibreOffice المكتبي** وقالبين عربي/إنجليزي، والتحقق من تطبيق التعديلات على مصدر Collabora المثبّت. هذا ليس اختبار Writer داخل Android ولا قبول جهاز فعلي.
+- **قرار البناء:** لم يُنشأ APK جديد؛ السؤال كان صحة عقد التفاوض البرمجي، وقد اختبره JVM مباشرة. إعادة بناء المحرك لا تضيف دليلًا أقوى لهذا التغيير الاختباري.
+- **PASS:** اختبار SAF mode negotiation على JVM، Recovery Core، Fast Source، Integration على المصدر المثبّت.
+- **NOT TESTED:** مزود SAF حقيقي يرفض `wt` ويقبل `rwt`، تثبيت وتشغيل APK على Android، تحرير/حفظ/إغلاق/إعادة فتح DOCX عربي/إنجليزي داخل Writer على الجهاز، موت العملية والاستعادة على الجهاز، الطباعة/PDF من التطبيق، والقبول البصري/الأداء على Xiaomi Pad 5.
+- **Handoff Drive:** مزامنة `AquaWord — HANDOFF` = **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive في بيئة هذه الجولة، ولم يتم تحديث المستند المحدد. لا ندّعي نجاح المزامنة.
+- `M-NATIVE-01` يبقى **OPEN**، وPR #7 يبقى Draft مفتوحًا وغير مدمج؛ لا تغيير على `main`.
