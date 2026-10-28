@@ -619,3 +619,14 @@ These runs validate source/test contracts only. The one-shot translated runtime 
 - **NOT TESTED:** current-source Writer edit/save/DOCX SHA/cold-reopen; real SAF provider failure/truncation and recovery; process-death recovery; PDF export/print; physical Xiaomi Pad 5 visuals/performance.
 - **Handoff sync:** Google Drive `AquaWord — HANDOFF` remains **FAILED / NOT AVAILABLE** because no Google Docs/Drive write connector is exposed. The named document was not updated.
 - **Resume:** keep M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip **OPEN**, PR #7 **Draft**, and `main` untouched. Continue source review while waiting for a newly authorized runtime attempt; do not treat these green checks as runtime acceptance.
+
+
+## 2026-10-28 11:17 UTC — corrected translated-runtime request (result not verifiable yet)
+
+- New bounded request commit: [80cc63d7388b1e8ab2e358c18f940d2e469e9a75](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/80cc63d7388b1e8ab2e358c18f940d2e469e9a75), exact message `AquaWordArtifactSmokeOnce`. This requests **reuse of the existing APK only**; no build occurred.
+- Reused APK provenance: [native build #40643360016](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40643360016), artifact `12797042192`, source SHA `710691adb757c9580e5574307f39091e6d68aad4`, APK SHA-256 `25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736`; artifact archive digest `sha256:eeb5a28f349a590d19e29aa806abc1bf75ed5fa9d34cb8c69733bf368c9879ca`; expiry `2026-10-29T06:32:39Z`.
+- Why useful: previous runtime [#40648882995](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40648882995) failed before edit/save due to the earlier viewport setup. The corrected harness locks landscape before setting the 16:10 dimensions, taps the real Edit FAB, and requires native edit-mode evidence before editing.
+- Request-commit CI: Fast Source [#40679256518 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679256518), Recovery Core [#40679256516 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679256516), Integration [#40679256600 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679256600).
+- **Runtime result remains NOT VERIFIED**: the available connector exposes PR-triggered workflow runs but not the push-triggered smoke run, so no run ID, app-level result, or evidence artifact can currently be verified. Do not claim success and do not automatically retry if this one-shot attempt fails.
+- Remaining M-NATIVE-01 gates: Writer Arabic/English edit-save-cold-reopen; real SAF reject/truncate behavior; process-death recovery; print/PDF; native ARM64 hardware/Xiaomi Pad 5 UI and performance.
+- Google Drive `AquaWord — HANDOFF` sync remains **FAILED / NOT AVAILABLE** because no Docs/Drive write connector is exposed; the named Drive document was not updated.
