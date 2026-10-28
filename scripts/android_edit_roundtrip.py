@@ -66,6 +66,9 @@ EDIT_EXPRESSION = r"""(() => {
     return JSON.stringify({target: true, issued: true, commands: ['GoToEndOfDoc', 'InsertText', 'Save']});
 })()"""
 
+# Backward-compatible name used by existing source contract tests.
+EXPRESSION = EDIT_EXPRESSION
+
 
 def check_document(payload: bytes) -> bool:
     """Read the produced DOCX package; don't accept a screenshot or file SHA alone."""
@@ -130,7 +133,8 @@ def native_edit_mode_confirmed(logcat: str) -> bool:
     if not states:
         return False
     latest = states[-1]
-    return "EDITMODE on" in latest or "setviewreadonly value=false" in latest
+    return ("postMobileMessage: EDITMODE on" in latest
+            or "setviewreadonly value=false" in latest)
 
 
 def wait_for_edit_mode(timeout_s: int) -> str:
@@ -153,6 +157,37 @@ def wait_for_edit_mode(timeout_s: int) -> str:
         "last mode messages: " + " | ".join(relevant[-8:])
     )
 
+def enter_edit_mode(directory: Path) -> None:
+    """Tap Collabora's real mobile edit button and require native confirmation."""
+    display = call("shell", "wm", "size").decode("utf-8", errors="replace")
+    sizes = re.findall(r"(\d+)x(\d+)", display)
+    if not sizes:
+        raise RuntimeError("Android runtime did not report a usable screen geometry")
+    width, height = (int(value) for value in sizes[-1])
+    if width < 480 or height < 640:
+        raise RuntimeError(f"Android runtime viewport is too small for Writer acceptance: {width}x{height}")
+    (directory/"edit-mode-screen-geometry.txt").write_text(
+        f"{width}x{height}\n{display}\n", encoding="utf-8")
+
+    # Startup emits EDITMODE off/read-only. Clear it so only the response to
+    # the actual user-equivalent click can satisfy the edit-mode gate.
+    call("logcat", "-c")
+    clicked = evaluate_on_real_editor(9223, CLICK_EDIT_EXPRESSION)
+    (directory/"edit-button-click.json").write_text(
+        json.dumps(clicked, indent=2)+"\n", encoding="utf-8")
+    if clicked.get("issued") is not True or clicked.get("editButtonClicked") is not True:
+        raise RuntimeError("Could not activate Collabora edit mode: " +
+                           json.dumps(clicked, ensure_ascii=False))
+    mode_log = wait_for_edit_mode(25)
+    mode_lines = [
+        line for line in mode_log.splitlines()
+        if "postMobileMessage:" in line
+        and ("EDITMODE" in line or "setviewreadonly" in line)
+    ]
+    (directory/"edit-mode-confirmation.txt").write_text(
+        "\n".join(mode_lines[-12:])+"\n", encoding="utf-8")
+
+
 def run(directory: Path, timeout: int) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     # Keep proof that the marker did NOT already exist in the original file.
@@ -165,25 +200,8 @@ def run(directory: Path, timeout: int) -> None:
     pid = call("shell", "pidof", PKG).decode().split()[0]
     port=9223
     call("forward", f"tcp:{port}", f"localabstract:webview_devtools_remote_{pid}")
-    enter_edit_mode(directory)
     try:
-        # Isolate the native edit-mode acknowledgement from startup's expected
-        # EDITMODE off/read-only messages, then click the actual mobile pencil.
-        call("logcat", "-c")
-        clicked = evaluate_on_real_editor(port, CLICK_EDIT_EXPRESSION)
-        (directory/"edit-button-click.json").write_text(
-            json.dumps(clicked, indent=2)+"\n", encoding="utf-8")
-        if clicked.get("issued") is not True or clicked.get("editButtonClicked") is not True:
-            raise RuntimeError("Could not activate Collabora edit mode: " +
-                               json.dumps(clicked, ensure_ascii=False))
-        mode_log = wait_for_edit_mode(min(timeout, 25))
-        mode_lines = [
-            line for line in mode_log.splitlines()
-            if "postMobileMessage:" in line
-            and ("EDITMODE" in line or "setviewreadonly" in line)
-        ]
-        (directory/"edit-mode-confirmation.txt").write_text(
-            "\n".join(mode_lines[-12:])+"\n", encoding="utf-8")
+        enter_edit_mode(directory)
         issued = evaluate_on_real_editor(port, EDIT_EXPRESSION)
         (directory/"edit-command.json").write_text(
             json.dumps(issued, indent=2)+"\n", encoding="utf-8")
