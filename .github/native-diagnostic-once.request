@@ -52,3 +52,15 @@ Execution request — 2026-10-27: source/integration preflight is green on the c
 
 
 Execution request confirmation — 2026-10-27: invoking the single authorized current-source diagnostic after green exact-head Fast Source, Recovery Core and Integration runs. No retry is authorized if this run fails.
+
+Fresh authorization — 2026-10-28 (M-NATIVE-01 helper-to-native integration)
+
+Purpose: perform one new free ARM64 native diagnostic after the source change that introduced the shared AquaWordSafOutput Java helper and wired it into five native document-output paths (DOCX save, PDF export, recovery restore, blank document creation, and template creation).
+
+Exact test question: does the current feature-branch source, including AquaWordSafOutput.java and all generated call sites, compile through the pinned Collabora/LibreOffice Android integration, Gradle manifest/resource processing, ARM64 packaging, APK verification, and short-lived artifact upload?
+
+Why source tests are insufficient: the current JVM tests exercise the helper and fake-provider fallback contract, and overlay/integration tests inspect generated call sites, but they do not execute the full native Android build, Gradle packaging, APK manifest/ABI validation, or real AArch64 native-library inclusion at this source revision.
+
+Scope/limits: compile/package and APK integrity only; no emulator certification, no install/launch, no real Android SAF provider, no native Writer Arabic/English edit-save-cold-reopen, no print/PDF runtime proof, and no Xiaomi Pad 5 visual/performance acceptance. Free GitHub-hosted resources only. This is one new diagnostic attempt for a materially changed source integration. If it fails, record the exact failure and do not automatically retry.
+
+Trigger safety: this authorization requires the exact commit message AquaWordNativeDiagnosticRetryOnce and a change to this marker path on fix/saf-save-failure-recovery-20261023. It does not authorize another run after this attempt's outcome is known. No main modification, release, or auto-merge.
