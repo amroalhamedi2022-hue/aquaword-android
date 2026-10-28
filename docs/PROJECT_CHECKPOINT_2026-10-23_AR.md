@@ -818,3 +818,18 @@ These runs validate source/test contracts only. The one-shot translated runtime 
 - Still **NOT TESTED**: real Writer edit/save/DOCX SHA/cold-reopen on this new attempt; real user-selected SAF providers; process-death recovery beyond the QA trampoline; PDF export/printing; native ARM64 hardware and Xiaomi Pad 5 visuals/performance.
 - **Google Drive Handoff sync: FAILED / NOT AVAILABLE.** No Google Docs/Drive write connector is exposed in this runtime; the named AquaWord handoff was not updated. No sync success is claimed.
 - Resume at M-NATIVE-01; keep PR #7 Draft and `main` untouched. No paid API/runner, release, auto-merge, or private user documents were used.
+
+
+## تحديث نقطة الاستئناف — 2026-10-28 (نتيجة Writer الفعلية)
+
+**M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip: OPEN.** نتيجة المحاكي تقدم حقيقي، لكنها لا تعني اكتمال AquaWord أو جاهزية الإصدار.
+
+- **اختبار التشغيل:** [GitHub Actions #40679248867 — SUCCESS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679248867). استُخدمت الحزمة التشخيصية الموجودة؛ لم يُبنَ APK جديد.
+- **بصمة APK:** 25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736، من البناء [#40643360016](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40643360016)، مصدر البناء 710691adb757c9580e5574307f39091e6d68aad4. لا توجد تغييرات في كود المنتج بعد هذا البناء حتى الرأس الذي تم فحصه؛ التغييرات اللاحقة تخص الاختبار/الوثائق.
+- **PASS على Android 15 / API 35 x86_64 مع libndk_translation.so:** تثبيت وتشغيل التطبيق، فتح Writer، الضغط على Edit ورصد EDITMODE on، إدخال علامة اختبار عبر UNO، تنفيذ الحفظ الأصلي، ثم force-stop وإعادة تشغيل التطبيق وفتح المستند المعدل.
+- **سلامة DOCX:** الملف المعاد فتحه صالح بنيويًا؛ يحتوي word/document.xml والعلامة AQUAWORD_ANDROID_SAVE_ROUNDTRIP_2026، مع بقاء جدول واحد وصورة/رسم واحد. بصمة الملف الأصلي 2a8ba01366cac1ce443883f3d627bcff37a626ab0b4a0ffcbd191d1a0642fe0d؛ وبصمة الملف بعد الحفظ وإعادة الفتح 20f56cc00578195fd6338383aa05e7159466106248b12139aad4dd58ccaa12bc. Focus Mode دخولًا وخروجًا: PASS.
+- **الأدلة:** [Artifact #12811409974](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679248867/artifacts/12811409974)، SHA-256 للأرشيف 3881ccb1609e1ea7b2f5845d0c76a83ea56ec55c61dabe908e00bc26b1b015bf، تنتهي صلاحيته 2026-10-29T11:25:09Z.
+- **تصنيف القبول:** APP-01 وFILE-03 = EMULATOR_ONLY؛ UI-03 Focus Mode = PASS على المحاكي. هذا تشغيل ARM64 مترجم عبر Google libndk_translation على x86_64، وليس CPU ARM64 أصليًا ولا اختبار Xiaomi Pad 5.
+- **NOT TESTED:** مزود SAF حقيقي يرفض/يقتطع الكتابة أو يتأخر، التعافي بعد موت العملية على مستوى النظام، الطباعة/PDF، التوافق مع مستندات أوسع، الأداء والأمان، والقبول البصري والأدائي على Xiaomi Pad 5. بوابة الإصدار ما زالت مغلقة.
+- **Google Drive Handoff:** المزامنة FAILED / NOT AVAILABLE لعدم وجود موصل كتابة Docs/Drive؛ لم يتم تحديث مستند Drive ولا ندّعي ذلك.
+- **الاستئناف:** PR #7 يبقى Draft وmain دون تعديل. لا تكرر اختبار التشغيل أحادي الاستخدام المستهلك. الاختبار التالي ذو القيمة هو مزود SAF آلي يرفض أو يقتطع الكتابة، ثم اختبار فعلي على Xiaomi Pad 5.

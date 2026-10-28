@@ -630,3 +630,16 @@ These runs validate source/test contracts only. The one-shot translated runtime 
 - **Runtime result remains NOT VERIFIED**: the available connector exposes PR-triggered workflow runs but not the push-triggered smoke run, so no run ID, app-level result, or evidence artifact can currently be verified. Do not claim success and do not automatically retry if this one-shot attempt fails.
 - Remaining M-NATIVE-01 gates: Writer Arabic/English edit-save-cold-reopen; real SAF reject/truncate behavior; process-death recovery; print/PDF; native ARM64 hardware/Xiaomi Pad 5 UI and performance.
 - Google Drive `AquaWord — HANDOFF` sync remains **FAILED / NOT AVAILABLE** because no Docs/Drive write connector is exposed; the named Drive document was not updated.
+
+
+## 2026-10-28 11:25 UTC — corrected translated-runtime result (supersedes pending status)
+
+The one-shot request at [commit 80cc63d7388b1e8ab2e358c18f940d2e469e9a75](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/80cc63d7388b1e8ab2e358c18f940d2e469e9a75) **ran and passed its scoped emulator roundtrip**: [GitHub Actions #40679248867](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679248867). This supersedes earlier notes saying the push-triggered result was not verifiable.
+
+- No build in the runtime workflow. Reused APK from native run #40643360016, source SHA 710691adb757c9580e5574307f39091e6d68aad4, APK SHA-256 25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736. No product source changed after that build through the checked branch head.
+- Android 15 / API 35 x86_64 with libndk_translation.so: APK SHA and ZIP integrity passed; install/launch passed; real Writer WebView/Edit mode observed; native SAVE persisted a UNO-inserted sentinel; after force-stop/cold restart, Writer reopened the edited DOCX.
+- Independently inspected output DOCX: valid ZIP structure, word/document.xml present, sentinel AQUAWORD_ANDROID_SAVE_ROUNDTRIP_2026 present, one table and one drawing/image retained. Original SHA-256 2a8ba01366cac1ce443883f3d627bcff37a626ab0b4a0ffcbd191d1a0642fe0d; cold-reopened SHA-256 20f56cc00578195fd6338383aa05e7159466106248b12139aad4dd58ccaa12bc. Focus Mode enter/exit passed.
+- Evidence artifact [#12811409974](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679248867/artifacts/12811409974), digest sha256:3881ccb1609e1ea7b2f5845d0c76a83ea56ec55c61dabe908e00bc26b1b015bf, expires 2026-10-29T11:25:09Z.
+- APP-01 and FILE-03 remain EMULATOR_ONLY; UI-03 Focus Mode passed on emulator. Real SAF provider failure/truncation, OS-level process-death recovery, print/PDF, broad DOCX compatibility, security/performance and Xiaomi Pad 5 acceptance remain NOT TESTED. Release gate remains blocked.
+- Google Drive Handoff write unavailable in this runtime; no Drive update is claimed. No APK/EXE build this round.
+- Resume M-NATIVE-01 OPEN / PR #7 Draft. Do not rerun this consumed one-shot workflow; next runtime gate is an instrumented provider rejecting/truncating writes, then physical-device acceptance.

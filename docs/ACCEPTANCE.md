@@ -597,3 +597,20 @@ This entry supersedes the immediately preceding note that no further runtime att
 - Remaining gates are unchanged: Writer edit/save/DOCX hash/cold reopen; real SAF failure/truncation and recovery; process-death recovery; PDF export/print; physical Xiaomi Pad 5 UI/performance.
 - Stop after this single newly authorized attempt if it fails or evidence upload is unavailable; no automatic retry. M-NATIVE-01 remains OPEN, PR #7 remains Draft, and `main` is untouched.
 - Google Drive `AquaWord — HANDOFF` sync remains **FAILED / NOT AVAILABLE** because this runtime exposes no Docs/Drive write connector. The named Drive document was not updated.
+
+
+### 2026-10-28 11:25 UTC — corrected translated-runtime smoke: RESULT VERIFIED
+
+Supersedes the prior “runtime NOT VERIFIED” note for request commit [80cc63d7388b1e8ab2e358c18f940d2e469e9a75](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/80cc63d7388b1e8ab2e358c18f940d2e469e9a75).
+
+- **Runtime:** [run #40679248867 — SUCCESS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679248867). Reused the existing diagnostic APK, verified expected SHA256SUMS and APK ZIP integrity, installed/launched on Android 15 / API 35 x86_64 with libndk_translation.so, and exercised the real Writer WebView.
+- **APK provenance:** native build [#40643360016](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40643360016), artifact 12797042192, source SHA 710691adb757c9580e5574307f39091e6d68aad4; APK SHA-256 **25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736**. Compare to branch head 14857647ce0a2c214da128e7c013fe8098d80ec1 shows only harness/tests/docs changes after the build, no product-source changes.
+- **Writer roundtrip:** actual Edit FAB tapped; native EDITMODE on observed; UNO InsertText issued; native map.save(false,false) invoked; edited DOCX persisted through onPause; after force-stop/cold restart Writer reopened the document and the QA sentinel remained.
+- **Independent artifact inspection:** cold-reopened DOCX is a valid ZIP/DOCX; word/document.xml exists; sentinel AQUAWORD_ANDROID_SAVE_ROUNDTRIP_2026 is present; one table and one drawing/image remain. Original fixture SHA-256 2a8ba01366cac1ce443883f3d627bcff37a626ab0b4a0ffcbd191d1a0642fe0d; cold-reopened DOCX SHA-256 20f56cc00578195fd6338383aa05e7159466106248b12139aad4dd58ccaa12bc.
+- **Focus Mode:** live-WebView enter/exit PASS; page remained visible.
+- **Evidence:** [artifact #12811409974](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40679248867/artifacts/12811409974), archive SHA-256 3881ccb1609e1ea7b2f5845d0c76a83ea56ec55c61dabe908e00bc26b1b015bf (matches GitHub digest), expires 2026-10-29T11:25:09Z. Synthetic fixture only; no user documents.
+- **Acceptance classification:** APP-01 and FILE-03 are EMULATOR_ONLY, not physical-device PASS; UI-03 Focus Mode is PASS on emulator. ARM64 ran through Google translation on x86_64, not native ARM64 hardware or Xiaomi Pad 5.
+- **NOT TESTED:** real SAF provider reject/truncate/slow/cloud behavior, OS-level process-death recovery beyond the QA trampoline, print/PDF, broad document compatibility, large-document performance/security, and physical Xiaomi Pad 5 visuals/performance. Release remains blocked.
+- **Build decision:** no APK/EXE build this round; reuse of the verified APK answered the runtime question, which source tests alone cannot prove.
+- **Google Drive AquaWord — HANDOFF: FAILED / NOT AVAILABLE.** No Docs/Drive write connector is exposed; the named Drive document was not updated. No sync success is claimed.
+- **Resume:** M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip remains OPEN; PR #7 remains Draft; main untouched. Next useful gate: instrumented SAF provider rejecting/truncating writes, then physical Xiaomi Pad 5 acceptance. Do not rerun the consumed one-shot workflow.
