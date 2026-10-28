@@ -52,9 +52,11 @@ class AndroidEditRoundTripTests(unittest.TestCase):
         self.assertIn("editor.save(false, false)", RT.SAVE_EXPRESSION)
         # The explanatory comment may name .uno:Save; forbid an actual UNO save dispatch,
         # which bypasses the Android wrapper callback that this roundtrip must verify.
-        self.assertNotRegex(
-            RT.SAVE_EXPRESSION,
-            r"(?:sendUnoCommand|executeUnoCommand)\s*\(\s*['"]\.uno:Save['"]",
+        self.assertIsNone(
+            re.search(
+                r"""(?:sendUnoCommand|executeUnoCommand)\s*\(\s*['"]\.uno:Save['"]""",
+                RT.SAVE_EXPRESSION,
+            )
         )
 
 
