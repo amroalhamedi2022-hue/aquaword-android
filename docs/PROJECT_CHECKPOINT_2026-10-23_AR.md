@@ -784,3 +784,12 @@
 - **Remaining gates:** real Writer edit/save/hash/cold-reopen; real SAF provider failures and recovery; process-death recovery; print/PDF; Xiaomi Pad 5 visual/performance acceptance; independent recheck and final APK gate.
 - **Drive Handoff sync:** FAILED / NOT AVAILABLE; no Docs/Drive write connector is exposed in this runtime.
 - **Next:** exact-head source/integration CI for the harness correction, then stop at the runtime gate pending a new explicit authorization. M-NATIVE-01 remains OPEN; PR #7 remains Draft; main untouched.
+
+### Follow-up — exact-head source CI after viewport-harness correction (2026-10-28)
+
+The harness correction at [commit 71004846c4d669d7a310911548db176aecefdf22](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/71004846c4d669d7a310911548db176aecefdf22) is now validated on the exact SHA:
+- Fast Source + SAF Contract [#40649863223 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40649863223).
+- Recovery Core [#40649863339 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40649863339).
+- Integration Tests [#40649863270 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40649863270).
+
+These runs validate source/test contracts only. The one-shot translated runtime [#40648882995](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40648882995) remains **FAIL before edit/save** due to the former portrait/16:10 harness mismatch; it is not evidence of a production SAVE defect. The runtime authorization is consumed and must not be retried automatically. Current-source Writer edit/save/hash/cold-reopen and all real-device/SAF/PDF gates remain **NOT TESTED**. Google Drive AquaWord Handoff remains **FAILED / NOT AVAILABLE**.

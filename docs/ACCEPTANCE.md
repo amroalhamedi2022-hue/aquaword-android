@@ -565,3 +565,12 @@ The older translated-emulator run [#40631716803](https://github.com/amroalhamedi
 - **NOT TESTED:** actual edit/save/saved DOCX byte hash/cold reopen on this current-source APK; real user SAF provider failure/truncation and recovery; process-death recovery; print/PDF; physical Xiaomi Pad 5 visual/performance acceptance.
 - **Google Drive AquaWord — HANDOFF sync: FAILED / NOT AVAILABLE.** No Google Docs/Drive write connector is exposed; the named Drive document was not updated.
 - **Resume:** run Fast Source + SAF Contract, Recovery Core and Integration against the harness correction; inspect those exact-SHA results. Then await a new explicit authorization before any further runtime attempt. Keep M-NATIVE-01 OPEN and PR #7 Draft; no merge/main change.
+
+### Follow-up — exact-head source CI after viewport-harness correction (2026-10-28)
+
+The harness correction at [commit 71004846c4d669d7a310911548db176aecefdf22](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/71004846c4d669d7a310911548db176aecefdf22) is now validated on the exact SHA:
+- Fast Source + SAF Contract [#40649863223 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40649863223).
+- Recovery Core [#40649863339 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40649863339).
+- Integration Tests [#40649863270 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40649863270).
+
+These runs validate source/test contracts only. The one-shot translated runtime [#40648882995](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40648882995) remains **FAIL before edit/save** due to the former portrait/16:10 harness mismatch; it is not evidence of a production SAVE defect. The runtime authorization is consumed and must not be retried automatically. Current-source Writer edit/save/hash/cold-reopen and all real-device/SAF/PDF gates remain **NOT TESTED**. Google Drive AquaWord Handoff remains **FAILED / NOT AVAILABLE**.
