@@ -123,17 +123,33 @@ test -s "$ARTIFACTS/editor-webview-state.json"
 # Second independent live runtime check: approximate Xiaomi Pad 5 landscape
 # geometry using the SAME running Android app. This is a simulated viewport,
 # NOT a claim to have tested a physical Pad 5.
+# Rotate first: locking rotation 0 on a portrait-native emulator kept the
+# screenshot at 1600x2560 even after a 2560x1600 wm-size override.
+adb shell cmd window set-user-rotation lock 1 || true
 adb shell wm size 2560x1600
 adb shell wm density 320
-adb shell cmd window set-user-rotation lock 0 || true
-sleep 15
-adb exec-out screencap -p > "$ARTIFACTS/editor-tablet-16x10.png"
-if ! python3 quality/check_screen.py "$ARTIFACTS/editor-tablet-16x10.png" --aspect 1.6; then
-  adb shell wm size 1600x2560
-  adb shell cmd window set-user-rotation lock 1 || true
-  sleep 15
+adb shell wm size > "$ARTIFACTS/tablet-wm-size.txt"
+adb shell settings get system user_rotation > "$ARTIFACTS/tablet-user-rotation.txt" || true
+adb shell dumpsys display > "$ARTIFACTS/tablet-display-state.txt"
+sleep 20
+tablet_viewport_pass=0
+for attempt in 1 2; do
   adb exec-out screencap -p > "$ARTIFACTS/editor-tablet-16x10.png"
-  python3 quality/check_screen.py "$ARTIFACTS/editor-tablet-16x10.png" --aspect 1.6
+  if python3 quality/check_screen.py "$ARTIFACTS/editor-tablet-16x10.png" --aspect 1.6; then
+    tablet_viewport_pass=1
+    printf 'PASS on capture attempt %s\\n' "$attempt" > "$ARTIFACTS/tablet-viewport-result.txt"
+    break
+  fi
+  if [ "$attempt" -eq 1 ]; then
+    echo "Landscape frame not ready; reapplying landscape-only override for one capture retry."
+    adb shell cmd window set-user-rotation lock 1 || true
+    adb shell wm size 2560x1600
+    sleep 10
+  fi
+done
+if [ "$tablet_viewport_pass" -ne 1 ]; then
+  echo "Landscape viewport did not produce a valid 16:10 frame; see tablet display diagnostics." >&2
+  exit 1
 fi
 adb shell pidof "$PKG" >/dev/null || {
   echo "AquaWord crashed during 16:10 landscape transition" >&2

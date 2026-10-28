@@ -1200,6 +1200,13 @@ class AquaWordIntegrationTests(unittest.TestCase):
         self.assertIn('libndk_translation.so',smoke)
         self.assertIn('translated-arm64-on-x86_64-emulator',smoke)
         self.assertIn('runtime-mode.txt',smoke)
+        self.assertLess(smoke.index('adb shell cmd window set-user-rotation lock 1'),
+                        smoke.index('adb shell wm size 2560x1600'))
+        self.assertIn('tablet_viewport_pass=0',smoke)
+        self.assertIn('for attempt in 1 2',smoke)
+        self.assertIn('tablet-display-state.txt',smoke)
+        self.assertNotIn('adb shell wm size 1600x2560',smoke)
+        self.assertNotIn('adb shell cmd window set-user-rotation lock 0',smoke)
         roundtrip=(ROOT/'scripts/android_edit_roundtrip.py').read_text(encoding='utf-8')
         self.assertIn('def enter_edit_mode(directory: Path)',roundtrip)
         self.assertIn('postMobileMessage: EDITMODE on',roundtrip)

@@ -588,3 +588,13 @@ This entry supersedes the earlier 2026-10-28 text above that said the diagnostic
 - A new one-shot request was committed at [`130cd2fdca4a61c22bcfe736aa133cb1aa8654db`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/130cd2fdca4a61c22bcfe736aa133cb1aa8654db) to reuse the existing diagnostic APK without rebuilding. The available GitHub connector exposes PR-triggered runs but not this push-triggered workflow's result, so runtime remains **NOT VERIFIED**; no app-level PASS is claimed.
 - Physical Xiaomi Pad 5, real SAF provider behavior, process-death recovery, print/PDF and current-source native/device acceptance remain **NOT TESTED**.
 - Google Drive `AquaWord — HANDOFF` sync remains **FAILED / NOT AVAILABLE**; the specified document was not updated.
+
+
+## 2026-10-28 — current-source runtime attempt and harness correction
+
+- Native diagnostic [#40643360016](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40643360016) **PASS** at source SHA `710691adb757c9580e5574307f39091e6d68aad4`; APK artifact [#12797042192](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40643360016/artifacts/12797042192), APK SHA-256 `25f19bd79d35af4157384718d7f1036de8b0e65bbab8b93a928c71a9a5bad736`. The artifact was retained for one day.
+- One-shot translated-emulator runtime [#40648882995](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40648882995) **FAIL before edit/save**: artifact verification, emulator bridge, install/launch, Arabic DOCX opening and live Writer WebView checks passed. The viewport harness locked portrait rotation and then set portrait dimensions while requiring 16:10. Evidence artifact [#12799430789](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40648882995/artifacts/12799430789), SHA-256 `1ae9c7dd1436e7fe9c9391972e957bed74f9b45fd487cbfa3fda03406a0fd76b`.
+- Corrected `scripts/run_android_smoke.sh` to lock landscape before setting `2560x1600`, retry only while preserving landscape settings, and retain display diagnostics. Added source-contract assertions in `tests/test_overlay.py`.
+- This runtime failure is a harness/orientation failure, not evidence of a product SAVE defect. Edit/save/hash/cold-reopen, real SAF providers, process-death recovery, print/PDF and physical Xiaomi Pad 5 remain **NOT TESTED**. The one-shot runtime authorization is consumed; no automatic rerun is permitted.
+- Google Drive `AquaWord — HANDOFF` sync: **FAILED / NOT AVAILABLE** because no Docs/Drive write connector is exposed. No sync success is claimed.
+- Resume: verify exact-head source CI for the harness fix; then await a new explicit runtime authorization. M-NATIVE-01 remains OPEN, PR #7 remains Draft, and `main` is unchanged.
