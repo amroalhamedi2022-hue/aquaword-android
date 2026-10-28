@@ -751,3 +751,16 @@
 
 ## 2026-10-28 — تدقيق أخير لـharness قبل إعادة التشغيل
 - اكتشفت مراجعة المصدر أن regex قراءة `wm size` يحتوي شرطة مائلة إضافية، وكان سيمنع تحليل أبعاد الشاشة قبل ضغط Edit. صُحّح إلى نمط يقرأ العرض والارتفاع، وأضيف اختبار مصدر يحرسه. أُضيفت صورة ما بعد الضغط والسجل وتأكيد edit mode إلى ملفات الأدلة التي تُحسب بصمتها. لم تُسجّل نتيجة runtime جديدة بعد هذا التصحيح.
+
+
+## 2026-10-28 — تثبيت عقد اختبار الحفظ الفعلي وتحديث بوابات M-NATIVE-01
+
+- **تصحيح اختبار المصدر:** الاختبار السابق كان يرفض أي ظهور للنص `.uno:Save` داخل تعبير الحفظ، فالتقط التعليق التوضيحي الذي يشرح لماذا لا نستخدمه، رغم عدم وجود استدعاء UNO مباشر. عُدّل الاختبار ليرفض استدعاء `sendUnoCommand/executeUnoCommand` الفعلي لحفظ UNO فقط، مع الإبقاء على مسار `editor.save(false, false)` الذي يمر عبر callback الأصلي في Android.
+- **Commit الاختبار النهائي:** [`a6a86d0c896b59d00f6b6bdc087e4f1352de1ff1`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/a6a86d0c896b59d00f6b6bdc087e4f1352de1ff1).
+- **Exact-head CI — PASS:** Fast Source + SAF Contract [#40640841563](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40640841563)، Recovery Core [#40640841603](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40640841603)، Integration [#40640841577](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40640841577). هذا يثبت الاختبارات المصدرية/التكاملية على الرأس الحالي، وليس تشغيل التطبيق على جهاز.
+- **الفشل السابق موثق:** على الرأس الأسبق، Fast Source [#40639749935](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40639749935) وIntegration [#40639749980](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40639749980) فشلا لأن assertion قديمًا فسّر تعليقًا نصيًا على أنه استدعاء حفظ مباشر. تم تصحيح عقد الاختبار بدل إضعاف مسار الحفظ الإنتاجي.
+- **حالة runtime:** آخر نتيجة تطبيقية مؤكدة ما زالت [#40631716803](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40631716803)، التي وصلت إلى Writer لكنها لم تثبت الحفظ لأن الواجهة ظلت Viewing (`EDITMODE off`). صُحّح harness في [`dd762a9d4aec0c31dc52ea02f42e8e089f788806`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/dd762a9d4aec0c31dc52ea02f42e8e089f788806) ليضغط Edit ويتطلب تأكيد وضع التحرير قبل UNO. أُرسل طلب محاولة one-shot جديد عبر [`130cd2fdca4a61c22bcfe736aa133cb1aa8654db`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/130cd2fdca4a61c22bcfe736aa133cb1aa8654db)، لكن أداة GitHub المتاحة هنا لا تعرض نتيجة تشغيل push-triggered لهذا workflow؛ لذلك **لا أسجل PASS جديدًا ولا أدّعي أن cold-reopen نجح**.
+- **Build decision:** لم يُبنَ APK جديد؛ سؤال الجولة كان عن عقد الاختبار والحفظ، بينما حزمة التشخيص الموجودة أقدم من إصلاحات المصدر الحالية. لا يجوز استخدامها لقبول المصدر الحالي دون اختبار ملائم.
+- **المتبقي:** runtime edit/save/byte-hash/cold-reopen غير مثبت بعد؛ مزود SAF حقيقي يرفض `wt` ويقبل `rwt`، موت العملية والاستعادة، الطباعة/PDF، والقبول على Xiaomi Pad 5 تبقى **NOT TESTED**.
+- **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يتوفر موصل كتابة Google Docs/Drive في بيئة التشغيل، ولم يُحدّث المستند المحدد.
+- M-NATIVE-01 يبقى **OPEN**، وPR #7 Draft مفتوح وغير مدمج؛ لا تغيير على `main`.

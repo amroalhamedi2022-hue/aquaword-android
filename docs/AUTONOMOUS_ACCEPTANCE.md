@@ -578,3 +578,13 @@ This entry supersedes the earlier 2026-10-28 text above that said the diagnostic
 
 ### Harness review correction before the next runtime attempt
 - Static review caught a doubled backslash in the viewport-size regex, which would have prevented parsing `wm size` output before tapping the Edit FAB. Corrected it to match decimal width/height values and added a source assertion for the regex. The smoke receipt now hashes the post-tap screenshot/log and explicit edit-mode confirmation. No runtime result is claimed for this correction until the next run.
+
+
+## 2026-10-28 — source-test correction; runtime result still unverified
+
+- The prior source-test failure was a false positive: the assertion rejected the string `.uno:Save` even when it appeared only in a comment explaining why direct UNO save must not be used. Commit [`a6a86d0c896b59d00f6b6bdc087e4f1352de1ff1`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/a6a86d0c896b59d00f6b6bdc087e4f1352de1ff1) now matches actual `sendUnoCommand/executeUnoCommand` calls only.
+- Exact-head CI: Fast Source [#40640841563 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40640841563), Recovery Core [#40640841603 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40640841603), Integration [#40640841577 PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40640841577).
+- Runtime harness correction [`dd762a9d4aec0c31dc52ea02f42e8e089f788806`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/dd762a9d4aec0c31dc52ea02f42e8e089f788806) clicks the real Edit FAB, confirms native edit mode before UNO, and verifies persisted DOCX bytes plus cold reopen. The prior run [#40631716803](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40631716803) did not reach save/cold-reopen acceptance because Writer was read-only.
+- A new one-shot request was committed at [`130cd2fdca4a61c22bcfe736aa133cb1aa8654db`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/130cd2fdca4a61c22bcfe736aa133cb1aa8654db) to reuse the existing diagnostic APK without rebuilding. The available GitHub connector exposes PR-triggered runs but not this push-triggered workflow's result, so runtime remains **NOT VERIFIED**; no app-level PASS is claimed.
+- Physical Xiaomi Pad 5, real SAF provider behavior, process-death recovery, print/PDF and current-source native/device acceptance remain **NOT TESTED**.
+- Google Drive `AquaWord — HANDOFF` sync remains **FAILED / NOT AVAILABLE**; the specified document was not updated.

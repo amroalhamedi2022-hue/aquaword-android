@@ -529,3 +529,19 @@ When SHA-256 checks and package/assets validation have passed but the Android em
 
 ### Harness review correction before the next runtime attempt
 - Static review caught a doubled backslash in the viewport-size regex, which would have prevented parsing `wm size` output before tapping the Edit FAB. Corrected it to match decimal width/height values and added a source assertion for the regex. The smoke receipt now hashes the post-tap screenshot/log and explicit edit-mode confirmation. No runtime result is claimed for this correction until the next run.
+
+
+## 2026-10-28 — exact-head source tests and runtime gate status
+
+| Gate | Result | Evidence / limitation |
+|---|---|---|
+| Fast Source + SAF Contract | PASS | [CI #40640841563](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40640841563) on test head `a6a86d0c896b59d00f6b6bdc087e4f1352de1ff1` |
+| Recovery Core (JVM-only) | PASS | [CI #40640841603](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40640841603) |
+| Integration Tests | PASS | [CI #40640841577](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40640841577) |
+| Android edit/save/cold-reopen on emulator | NOT VERIFIED after latest harness correction | Last confirmed app-level attempt [#40631716803](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40631716803) failed before save acceptance because Writer remained in Viewing mode. A later push-triggered one-shot request was committed, but its run result is not exposed by the available run lookup; no PASS is claimed. |
+| Real user-selected SAF provider, process-death recovery, print/PDF | NOT TESTED | Requires platform/runtime evidence |
+| Physical Xiaomi Pad 5 visual/performance acceptance | NOT TESTED | Emulator viewport is not device acceptance |
+
+The previous source-test failure [#40639749935](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40639749935) / integration failure [#40639749980](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40639749980) was caused by a broad assertion matching the explanatory comment containing `.uno:Save`. Test commit [`a6a86d0`](https://github.com/amroalhamedi2022-hue/aquaword-android/commit/a6a86d0c896b59d00f6b6bdc087e4f1352de1ff1) now checks for an actual direct UNO save dispatch; all three current source/integration workflows pass.
+
+M-NATIVE-01 remains **OPEN**. No new APK was built. Google Drive `AquaWord — HANDOFF` sync remains **FAILED / NOT AVAILABLE** because no Docs/Drive write connector is exposed in this runtime; the named document was not updated.
