@@ -70,22 +70,22 @@ jobs:
           java -version
           test -n "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
-          if ! command -v gradle >/dev/null 2>&1; then
-            curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle-8.9-bin.zip
-            curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256 -o /tmp/gradle-8.9-bin.zip.sha256
-            expected="$(tr -d '[:space:]' < /tmp/gradle-8.9-bin.zip.sha256)"
-            actual="$(sha256sum /tmp/gradle-8.9-bin.zip | cut -d' ' -f1)"
-            test "$expected" = "$actual"
-            unzip -q /tmp/gradle-8.9-bin.zip -d /tmp
-            GRADLE=/tmp/gradle-8.9/bin/gradle
-          else
-            GRADLE=gradle
-          fi
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+          curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle-8.9-bin.zip
+          curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256 -o /tmp/gradle-8.9-bin.zip.sha256
+          expected="$(awk '{print $1}' /tmp/gradle-8.9-bin.zip.sha256)"
+          actual="$(sha256sum /tmp/gradle-8.9-bin.zip | cut -d' ' -f1)"
+          test "$expected" = "$actual"
+          unzip -q /tmp/gradle-8.9-bin.zip -d /tmp
+          GRADLE=/tmp/gradle-8.9/bin/gradle
           "$GRADLE" --version
           "$GRADLE" --no-daemon -p quality/saf_fault_provider assembleDebug
-          provider_apk="quality/saf_fault_provider/build/outputs/apk/debug/saf_fault_provider-debug.apk"
+          mapfile -t provider_apks < <(find quality/saf_fault_provider/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print)
+          test "${#provider_apks[@]}" -eq 1
+          provider_apk="${provider_apks[0]}"
           test -s "$provider_apk"
           apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$apksigner" verify --verbose "$provider_apk"
