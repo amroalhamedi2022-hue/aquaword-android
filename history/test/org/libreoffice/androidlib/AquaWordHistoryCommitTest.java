@@ -4,10 +4,14 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
@@ -23,6 +27,8 @@ public final class AquaWordHistoryCommitTest {
             crashAfterDataCommit(new File(args[1]));
             throw new AssertionError("crash fixture returned without halting");
         }
+
+        testSafOutputModeNegotiation();
 
         File root = Files.createTempDirectory("aquaword-meta-commit-").toFile();
         try {
@@ -41,6 +47,91 @@ public final class AquaWordHistoryCommitTest {
         } finally {
             deleteRecursively(root);
         }
+    }
+
+    /** Direct JVM coverage for the shared SAF output-mode contract. */
+    private static void testSafOutputModeNegotiation() throws Exception {
+        for (int rejectedMode = 0; rejectedMode < 3; rejectedMode++) {
+            final int rejection = rejectedMode;
+            List<String> modes = new ArrayList<>();
+            ByteArrayOutputStream expected = new ByteArrayOutputStream();
+            OutputStream opened = AquaWordSafOutput.openTruncating(mode -> {
+                modes.add(mode);
+                if ("wt".equals(mode)) {
+                    if (rejection == 0) throw new FileNotFoundException("mode unsupported");
+                    if (rejection == 1) throw new UnsupportedOperationException("mode unsupported");
+                    throw new IllegalArgumentException("mode unsupported");
+                }
+                return expected;
+            });
+            check(opened == expected,
+                    "SAF output negotiation did not return the provider's fallback stream");
+            check(modes.equals(Arrays.asList("wt", "rwt")),
+                    "SAF output negotiation used unexpected modes: " + modes);
+            opened.close();
+        }
+
+        List<String> nullModes = new ArrayList<>();
+        OutputStream afterNull = AquaWordSafOutput.openTruncating(mode -> {
+            nullModes.add(mode);
+            return "wt".equals(mode) ? null : new ByteArrayOutputStream();
+        });
+        check(nullModes.equals(Arrays.asList("wt", "rwt")),
+                "null SAF stream did not trigger exactly one explicit fallback");
+        afterNull.close();
+
+        List<String> ioModes = new ArrayList<>();
+        IOException providerIo = new IOException("ordinary provider I/O failure");
+        boolean ioPropagated = false;
+        try {
+            AquaWordSafOutput.openTruncating(mode -> {
+                ioModes.add(mode);
+                throw providerIo;
+            });
+        } catch (IOException actual) {
+            ioPropagated = actual == providerIo;
+        }
+        check(ioPropagated, "ordinary SAF I/O failure was hidden by mode fallback");
+        check(ioModes.equals(Collections.singletonList("wt")),
+                "ordinary SAF I/O failure incorrectly attempted rwt fallback");
+
+        List<String> permissionModes = new ArrayList<>();
+        SecurityException permission = new SecurityException("permission denied");
+        boolean permissionPropagated = false;
+        try {
+            AquaWordSafOutput.openTruncating(mode -> {
+                permissionModes.add(mode);
+                throw permission;
+            });
+        } catch (SecurityException actual) {
+            permissionPropagated = actual == permission;
+        }
+        check(permissionPropagated, "SAF permission failure was hidden");
+        check(permissionModes.equals(Collections.singletonList("wt")),
+                "SAF permission failure incorrectly attempted rwt fallback");
+
+        List<String> emptyModes = new ArrayList<>();
+        boolean bothNullRejected = false;
+        try {
+            AquaWordSafOutput.openTruncating(mode -> {
+                emptyModes.add(mode);
+                return null;
+            });
+        } catch (IOException expected) {
+            bothNullRejected = expected.getMessage().contains("No truncating writable stream");
+        }
+        check(bothNullRejected, "two null SAF streams were not rejected");
+        check(emptyModes.equals(Arrays.asList("wt", "rwt")),
+                "null-stream failure did not stop after the two documented modes");
+
+        boolean nullOpenerRejected = false;
+        try {
+            AquaWordSafOutput.openTruncating(null);
+        } catch (IOException expected) {
+            nullOpenerRejected = expected.getMessage().contains("provider is unavailable");
+        }
+        check(nullOpenerRejected, "missing SAF output provider was not rejected");
+        System.out.println("PASS: SAF output mode fallback and failure propagation");
     }
 
     /**
