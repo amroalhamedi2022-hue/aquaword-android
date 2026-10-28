@@ -179,13 +179,18 @@ def enter_edit_mode(directory: Path) -> None:
         raise RuntimeError("Could not activate Collabora edit mode: " +
                            json.dumps(clicked, ensure_ascii=False))
     mode_log = wait_for_edit_mode(25)
+    # These are consumed by the receipt/audit stage; save both raw mode
+    # acknowledgement and a screenshot taken only after edit mode is confirmed.
+    (directory/"edit-mode-logcat.txt").write_text(mode_log+"\\n", encoding="utf-8")
+    (directory/"edit-mode-screen.png").write_bytes(
+        call("exec-out", "screencap", "-p", binary=True))
     mode_lines = [
         line for line in mode_log.splitlines()
         if "postMobileMessage:" in line
         and ("EDITMODE" in line or "setviewreadonly" in line)
     ]
     (directory/"edit-mode-confirmation.txt").write_text(
-        "\n".join(mode_lines[-12:])+"\n", encoding="utf-8")
+        "\\n".join(mode_lines[-12:])+"\\n", encoding="utf-8")
 
 
 def run(directory: Path, timeout: int) -> None:
