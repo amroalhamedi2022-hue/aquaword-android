@@ -14,6 +14,7 @@ import zipfile
 from pathlib import Path
 
 from docx import Document
+from PIL import Image, ImageStat
 import android_edit_roundtrip as editor
 
 PKG = "com.aquaword.app.debug"
@@ -26,6 +27,71 @@ SENTINEL = editor.SENTINEL
 
 def adb(*args, binary=False):
     return editor.call(*args, binary=binary)
+
+
+def configure_landscape_viewport(evidence: Path):
+    """Set a tablet-like viewport without treating an unsupported rotation API as fatal.
+
+    Android emulator images differ in whether cmd window exposes
+    set-user-rotation. The command is best-effort; the rendered pixels, not the
+    command's exit code, decide whether the 16:10 viewport is ready.
+    """
+    records = []
+
+    def best_effort_rotation():
+        try:
+            adb("shell", "cmd", "window", "set-user-rotation", "lock", "1")
+            records.append({"command": "set-user-rotation", "result": "accepted"})
+        except Exception as failure:
+            records.append({
+                "command": "set-user-rotation",
+                "result": "unsupported-or-failed",
+                "detail": str(failure),
+            })
+
+    best_effort_rotation()
+    adb("shell", "wm", "size", "2560x1600")
+    adb("shell", "wm", "density", "320")
+    for attempt in (1, 2):
+        try:
+            time.sleep(5)
+            frame = adb("exec-out", "screencap", "-p", binary=True)
+            frame_path = evidence / f"fault-provider-viewport-{attempt}.png"
+            frame_path.write_bytes(frame)
+            with Image.open(io.BytesIO(frame)) as image:
+                rgb = image.convert("RGB")
+                width, height = rgb.size
+                statistics = ImageStat.Stat(rgb.resize((100, 100)))
+                ratio = width / height if height else 0.0
+                valid = (
+                    width >= 480 and height >= 480
+                    and abs(ratio - 1.6) <= 0.035
+                    and max(statistics.var) >= 100
+                    and max(statistics.mean) >= 10
+                )
+            records.append({
+                "attempt": attempt, "width": width, "height": height,
+                "aspect_ratio": ratio, "rendered_pixels_valid": valid,
+            })
+            if valid:
+                (evidence / "fault-provider-viewport-result.json").write_text(
+                    json.dumps({"result": "PASS", "attempts": records},
+                               indent=2) + "\\n", encoding="utf-8")
+                return
+        except Exception as failure:
+            records.append({"attempt": attempt, "result": "capture-failed",
+                            "detail": str(failure)})
+        if attempt == 1:
+            best_effort_rotation()
+            adb("shell", "wm", "size", "2560x1600")
+            adb("shell", "wm", "density", "320")
+    (evidence / "fault-provider-viewport-result.json").write_text(
+        json.dumps({"result": "FAIL", "attempts": records},
+                   indent=2) + "\\n", encoding="utf-8")
+    raise RuntimeError(
+        "Rendered Android viewport did not reach a nonblank 16:10 landscape frame; "
+        "see fault-provider-viewport-result.json"
+    )
 
 
 def latest_recovery_with_sentinel(evidence: Path):
@@ -60,11 +126,9 @@ def run(evidence: Path, timeout: int):
     (evidence / "provider-original-sha256.txt").write_text(original_sha + "\n", encoding="utf-8")
     (evidence / "provider-original.docx").write_bytes(original)
 
-    # Approximate tablet landscape so the real mobile Edit control is visible.
-    adb("shell", "cmd", "window", "set-user-rotation", "lock", "1")
-    adb("shell", "wm", "size", "2560x1600")
-    adb("shell", "wm", "density", "320")
-    time.sleep(8)
+    # Approximate tablet landscape. Unsupported rotation APIs are best-effort;
+    # accept the viewport only after checking the actual rendered screenshot.
+    configure_landscape_viewport(evidence)
 
     launch = adb("shell", "am", "start", "-W",
                  "-n", f"{PKG}/org.libreoffice.androidlib.LOActivity",

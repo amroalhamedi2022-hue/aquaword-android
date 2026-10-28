@@ -41,6 +41,14 @@ class SafFaultProviderContractTests(unittest.TestCase):
         self.assertIn('"save_acknowledged": False', source)
         self.assertIn("zipfile.is_zipfile(io.BytesIO(truncated))", source)
 
+    def test_rotation_command_is_best_effort_and_rendered_viewport_is_verified(self):
+        source = HARNESS.read_text(encoding="utf-8")
+        self.assertIn("def configure_landscape_viewport(evidence: Path):", source)
+        self.assertIn('"result": "unsupported-or-failed"', source)
+        self.assertIn("abs(ratio - 1.6) <= 0.035", source)
+        self.assertIn("fault-provider-viewport-result.json", source)
+        self.assertIn("configure_landscape_viewport(evidence)", source)
+
     def test_one_shot_workflow_reuses_pinned_product_apk_and_builds_only_provider(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("github.event.head_commit.message == 'AquaWordSafProviderFaultOnce'", workflow)
