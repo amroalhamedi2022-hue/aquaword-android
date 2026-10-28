@@ -22,11 +22,11 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      ARTIFACT_RUN_ID: '40459738117'
-      ARTIFACT_ID: '12715085399'
-      ARTIFACT_NAME: aquaword-native-diagnostic-84b168b8dda1d1c6e89760631dddbb475d9ef59d
-      EXPECTED_SOURCE_SHA: 84b168b8dda1d1c6e89760631dddbb475d9ef59d
-      EXPECTED_APK_SHA256: 26851485b4dc7b3b1fa840f24276ed21fe9a0a4a388fbc69199a8d7b5d97ecfc
+      ARTIFACT_RUN_ID: '40613885226'
+      ARTIFACT_ID: '12785090689'
+      ARTIFACT_NAME: aquaword-native-diagnostic-df65aa2d92881f34160eadbbfcc0a96dd5f859ab
+      EXPECTED_SOURCE_SHA: df65aa2d92881f34160eadbbfcc0a96dd5f859ab
+      EXPECTED_APK_SHA256: 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc
     steps:
       - name: Checkout test harness at the current feature branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

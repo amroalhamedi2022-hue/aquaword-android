@@ -1,1 +1,11 @@
-One-shot request: run the already-built ARM64 diagnostic APK through Android API 30 ARM64 emulator smoke. This is not a rebuild and the APK source SHA is intentionally recorded as older than current branch fixes.
+One-shot request (2026-10-28): run the already-built ARM64 diagnostic APK through the Android API 30 ARM64 emulator smoke. This is NOT a rebuild.
+
+Artifact run: 40613885226
+Artifact ID: 12785090689
+Artifact name: aquaword-native-diagnostic-df65aa2d92881f34160eadbbfcc0a96dd5f859ab
+Build source SHA: df65aa2d92881f34160eadbbfcc0a96dd5f859ab
+Expected APK SHA-256: 6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc
+
+Test question: does this existing ARM64 package install and launch on an ARM64 Android emulator, open a real generated Arabic DOCX in native Writer, save a real edit, survive force-stop/cold reopen with exact bytes, and remain alive under a simulated 16:10 landscape viewport? Source/JVM tests cannot answer these runtime questions.
+
+Limitations: this artifact predates the latest documentation and test-only commits; runtime evidence is baseline-only for the native save/reopen path. It does not certify a physical Xiaomi Pad 5, arbitrary user SAF providers, print/PDF, or the current source's full release acceptance.
