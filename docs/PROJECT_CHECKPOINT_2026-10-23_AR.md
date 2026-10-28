@@ -684,3 +684,15 @@
 - **ما زال NOT TESTED:** تثبيت وتشغيل APK، مزود SAF حقيقي يرفض أو يقتطع الكتابة، دورة Writer عربية/إنجليزية حفظ/إغلاق/إعادة فتح، استعادة بعد موت العملية، الطباعة/PDF، القبول البصري والأداء على Xiaomi Pad 5.
 - **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Google Docs/Drive في هذه البيئة، ولم يُعدّل المستند المحدد.
 - **نقطة الاستئناف:** انتظر نتيجة run #40613885226، وثّق SHA والـartifact وسجلات التحقق إن وُجدت، ولا تكرر البناء بعد ظهور النتيجة. يبقى PR #7 Draft، ولا تعديل لـ`main` أو دمج.
+
+
+## 2026-10-28 — نتيجة البناء التشخيصي ARM64 (تحديث لاحق للحالة المعلّقة)
+
+- **الميلستون:** `M-NATIVE-01 — ARM64 Native Build & Writer Roundtrip` ما زال **OPEN**؛ نجاح التغليف لا يعني قبول التطبيق على الجهاز.
+- **سؤال الاختبار:** هل يجتاز المصدر المصرّح به بناء Collabora/LibreOffice ARM64، ودمج Android/Gradle، والتحقق من ABI والتوقيع وسلامة APK؟ اختبارات JVM لا تختبر سلسلة الربط والتغليف الأصلية.
+- **النتيجة:** [Android Native Diagnostic #40613885226 — PASS](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226)، على مصدر/تفويض SHA `df65aa2d92881f34160eadbbfcc0a96dd5f859ab`. نجح بناء المحرك الأصلي وتغليف APK والتحقق من معرّف الحزمة وتوقيع v2 وبنية ZIP.
+- **APK تشخيصي مؤقت:** [artifact #12785090689](https://github.com/amroalhamedi2022-hue/aquaword-android/actions/runs/40613885226/artifacts/12785090689)، الاسم `AquaWord-app-arm64-v8a-debug.apk`، **APK SHA-256** `6ccbc0011c46056bf1fea1b7df8305f3da644ec780f050a6f2099b958e2a3ccc`. SHA-256 لمكتبة `liblo-native-code.so` ذات ELF64/AArch64 هو `ba55c821ea3c199758da0d819109ded923deebc68c3e69669a401d68f4124fa2`. SHA-256 لملف ZIP الخاص بالـartifact هو `1520e5bf3bffd6d0af55ddbe2ecbc9d6ca88f575af7167cd138c3051c3bd7937`. الاحتفاظ مؤقت وينتهي في 2026-10-29 01:24 UTC تقريبًا؛ نزّل artifact من صفحة التشغيل قبل انتهاء الصلاحية.
+- **حدود الدليل:** خطوات المحاكي/التثبيت/التشغيل تم تخطيها عمدًا. لم يُختبر بعد تثبيت APK وتشغيله، مزود SAF حقيقي، تحرير DOCX عربي/إنجليزي وإعادة فتحه، الاسترداد بعد موت العملية، الطباعة/PDF، أو Xiaomi Pad 5. هذا APK debug تشخيصي وليس إصدار تسليم نهائيًا.
+- **CI المصدر/التعافي/التكامل السابق:** PASS على الرأس `0160bed77339e2ef05fa4948e3adff3e1deb310f`; هذا ليس بديلًا عن اختبارات الجهاز. يجب فحص أي تشغيلات جديدة على رأسها الفعلي.
+- **Google Drive AquaWord — HANDOFF:** **FAILED / NOT AVAILABLE**؛ لا يوجد موصل كتابة Docs/Drive في هذه البيئة، فلم يتم تحديث المستند المحدد.
+- **نقطة الاستئناف:** استعمل artifact التشخيصي لاختبار تثبيت/تشغيل حقيقي عند توفر بيئة Android؛ لا تعِد البناء لمجرد التكرار. أبقِ PR #7 Draft و`main` دون تغيير حتى اجتياز دورة Writer/SAF/الاسترداد والطباعة وXiaomi Pad 5.
